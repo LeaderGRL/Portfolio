@@ -6,6 +6,10 @@ module.exports = {
       fontFamily: {
         'GalanoGrotesqueAlt-Bold': ['GalanoGrotesqueAlt-Bold'],
       },
+      letterSpacing: {
+        'widest2' : '0.4em',
+        'widest3' : '0.75em',
+      }
     },
   },
   plugins: [],
