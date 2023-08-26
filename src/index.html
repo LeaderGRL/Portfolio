@@ -12,19 +12,39 @@
     </head>
     <body>
         <div class="Home bg-[#F15BB5] w-screen h-screen">
-            <nav class="px-14 mx-auto text-white font-GalanoGrotesqueAlt-Bold">
-                <div class="flex justify-between py-10 px-3">
-                    <div class="flex items-center space-x-10 tracking-widest2">
-                        <a href="#Home">Home</a>
-                        <a href="#Experience">Experience</a>
-                        <a href="#Projets">Projets</a>
-                        <a href="#Contact">Contact</a>
+            <nav>
+                <div class="px-14 mx-auto text-white font-GalanoGrotesqueAlt-Bold">
+                    <div class="flex justify-between py-10">
+                        <div class="flex space-x-4">
+                            <div class="hidden md:flex items-center space-x-10 tracking-widest2  px-3">
+                                <a href="#Home">Home</a>
+                                <a href="#Experience">Experience</a>
+                                <a href="#Projets">Projets</a>
+                                <a href="#Contact">Contact</a>
+                            </div>
+                        </div>
+                         <!--Mobile button-->
+                        <div class="md:hidden flex items-center">
+                            <button class="mobile-menu-button">
+                                <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                                </svg>            
+                            </button>      
+                        </div>
                     </div>
+                        <!--Mobile menu-->
+                        <div class="mobile-menu justify-items-center hidden md:hidden">
+                            <a href="#" class="block py-2 text-sm text-center">Home</a>
+                            <a href="#" class="block py-2 text-sm text-center">Experience</a>
+                            <a href="#" class="block py-2 text-sm text-center">Projets</a>
+                            <a href="#" class="block py-2 text-sm text-center">Contact</a>
+                        </div>
                 </div>
             </nav>
             
+            
             <div class="content">
-                <div class="title">
+                <!-- <div class="title">
                     <h1>Jordan Grilly</h1>
                     <h2>Concepteur de jeux</h2>
                 </div>
@@ -34,7 +54,7 @@
                 <div class="social">
                     <a href="https://www.linkedin.com/in/jordan-grilly-9b1b0b1a4/" target="_blank"><img src="img/linkedin.png" alt="linkedin"></a>
                 </div>
-            </div>
+            </div> -->
         </div>
         <div class="Experience">
 
@@ -45,6 +65,6 @@
         <div class="Contact">
 
         </div>
-        <script src="js/scripts.js"></script>
+        <script src="js/NavBar.js"></script>
     </body>
 </html>
