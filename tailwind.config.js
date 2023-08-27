@@ -5,6 +5,7 @@ module.exports = {
     extend: { 
       fontFamily: {
         'GalanoGrotesqueAlt-Bold': ['GalanoGrotesqueAlt-Bold'],
+        'GalanoGrotesqueAlt-Medium': ['GalanoGrotesqueAlt-Medium']
       },
       letterSpacing: {
         'widest2' : '0.4em',
