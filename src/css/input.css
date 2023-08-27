@@ -5,4 +5,28 @@
 @font-face {
     font-family: "GalanoGrotesqueAlt-Bold";
     src: url("../font/GalanoGrotesqueAlt-Bold.ttf");
+}
+
+/* use of id to override the icon package */
+#fa {
+  display: initial;
+  padding: 20px;
+  font-size: 30px;
+  width: 30px;
+  height: 30px;
+  text-align: center;
+  text-decoration: none;
+  margin: 5px 16px;
+  border-radius: 50%;
+  background: #F15BB5;
+  color: white;
+  border: solid 2px #ffffff;
+}
+
+@media screen and (max-width: 768px) {
+  #fa {
+    padding: 10px;
+    font-size: 20px;
+    margin: 6px;
   }
+}
