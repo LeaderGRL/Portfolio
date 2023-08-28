@@ -10,7 +10,10 @@ module.exports = {
       letterSpacing: {
         'widest2' : '0.4em',
         'widest3' : '0.75em',
-      }
+      },
+      height: {
+        '70' : '280px',
+      },
     },
   },
   plugins: [],
