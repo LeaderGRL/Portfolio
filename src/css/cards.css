@@ -65,17 +65,17 @@
 }
 
 .controller-previous::before{
-    border : solid black;
+    /* border : solid black;
     border-width: 0 5px 5px 0;
     content: '';
     display: inline-block;
-    height: 5px;
+    height: 5px; */
     left: -30px;
-    position: absolute;
-    top: 25%;
+    /* position: absolute;
+    top: 25%; */
     transform: rotate(135deg) translateY(-50%);
     transition: left 0.15s ease-in-out;
-    width: 5px;
+    /* width: 5px; */
 }
 
 .controller-previous:hover::before{
@@ -87,18 +87,18 @@
 }
 
 .controller-next::before{
-    border : solid black;
+    /* border : solid black;
     border-width: 0 5px 5px 0;
     content: '';
     display: inline-block;
     height: 5px;
     padding: 10px;
-    position: absolute;
+    position: absolute; */
     right: -30px;
     top: 45%;
     transform: rotate(-45deg) translateY(-50%);
     transition: right 0.15s ease-in-out;
-    width: 5px;
+    /* width: 5px; */
 }
 
 .controller-next:hover::before{

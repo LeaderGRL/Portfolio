@@ -1,6 +1,6 @@
-const galleryContainer = document.querySelector('.gallery');
+const galleryContainer = document.querySelector('.Project');
 const controller = document.querySelector('.controller');
-const controls = ['prev', 'next']
+const controls = ['left-arrow', 'right-arrow']
 const cards = document.querySelectorAll('.cards');
 
 class Carousel {
@@ -25,7 +25,7 @@ class Carousel {
     }
 
     setCurrentState(direction) {
-        if (direction.className == 'controller-previous'){
+        if (direction.className.includes('controller-previous')){
             this.cards.unshift(this.cards.pop());
         } else {
             this.cards.push(this.cards.shift());
@@ -45,9 +45,10 @@ class Carousel {
     }
 
     useControls() {
-        const triggers = [...this.container.childNodes];
+        const triggers = [...this.container.querySelector('.arrow-container').childNodes];
         triggers.forEach(control => {
             control.addEventListener('click', e => {
+                console.log(control);
                 e.preventDefault();
                 this.setCurrentState(control);
             });
@@ -56,5 +57,5 @@ class Carousel {
 }
 
 const carousel = new Carousel(galleryContainer, cards, controls);
-carousel.setControls();
+//carousel.setControls();
 carousel.useControls();
