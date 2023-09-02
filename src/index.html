@@ -191,7 +191,7 @@
         </div>
         
         
-        <div class="Project flex bg-[#F15BB5] min-h-screen">
+        <div class="Project flex flex-col bg-[#F15BB5] min-h-screen">
             <div class="gallery flex flex-1 justify-center items-center space-x-7">
                 <div class="cards card-1 w-64 h-3/5 bg-white flex flex-col">
                     <div class="image-container h-3/5 w-full bg-green-600">
@@ -299,8 +299,28 @@
                     </div>
                 </div>
             </div>
-            <div class="controller"></div>
-        </div>
+            <div class="controller flex flex-col justify-center items-center self-center w-5/6 space-y-10">
+                <div class="bar w-full h-1 bg-[#9B5DE5]">
+                    <div class="progress w-1/5 h-full bg-[#ffffff]"></div>
+                </div>
+                <div class="content h-1/2 w-full flex justify-between items-center">
+                    <div class="project-number font-GalanoGrotesqueAlt-Bold flex items-center text-3xl">
+                        <p class="text-white">01/05</p>
+                    </div>
+                    <div class="arrow-container flex space-x-10">
+                        <div class="left-arrow flex items-center justify-center w-12 h-12 rounded-full bg-[#F15BB5] border-solid border-2 border-white">
+                            <svg class="w-6 h-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="right-arrow flex items-center justify-center w-12 h-12 rounded-full bg-[#F15BB5] border-solid border-2 border-white">
+                            <svg class="w-6 h-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>            
         <div class="Contact">
 
         </div>
