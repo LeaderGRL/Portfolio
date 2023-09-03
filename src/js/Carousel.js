@@ -39,7 +39,7 @@ class Carousel {
 
     updateProgressBar() {
         const progress = document.querySelector('.progress');
-        const progressWidth = (100 / numberOfCards) * (this.cards.indexOf(mainCard) + 1);
+        const progressWidth = (cardNumber / numberOfCards) * 100;
         progress.style.width = `${progressWidth}%`;
     }
 
@@ -63,7 +63,7 @@ class Carousel {
             this.updateCardNumber(true);
         }
         this.updateGallery();
-        //this.updateProgressBar();
+        this.updateProgressBar();
     }
     
 
