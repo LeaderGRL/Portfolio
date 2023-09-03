@@ -2,6 +2,7 @@ const galleryContainer = document.querySelector('.Project');
 const controller = document.querySelector('.controller');
 const controls = ['left-arrow', 'right-arrow']
 const cards = document.querySelectorAll('.cards');
+let mainCard = document.querySelector('.card-3');
 
 class Carousel {
     constructor(container, cards, controls) {
@@ -17,6 +18,7 @@ class Carousel {
             card.classList.remove('card-3');
             card.classList.remove('card-4');
             card.classList.remove('card-5');
+            card.querySelector('.button').removeEventListener('click', this.onButtonClick);
         });
         
         this.cards.slice(0, 5).forEach((card, index) => {
@@ -26,6 +28,10 @@ class Carousel {
             //     this.addCircle(card.classList.includes('card-3'));
             // }
         });
+
+        mainCard = document.querySelector('.card-3');
+        this.buttonClickEvent();
+
     }
 
     setCurrentState(direction) {
@@ -59,13 +65,17 @@ class Carousel {
         });
     }
 
-    addCircle(card) {
-        const circle = document.createElement('div');
-        circle.className = 'circle';
-        card.appendChild(circle);
+    buttonClickEvent() {
+        mainCard.querySelector('.button').addEventListener('click', this.onButtonClick);
     }
+
+    onButtonClick() {
+        console.log('clicked');
+    }
+
 }
 
 const carousel = new Carousel(galleryContainer, cards, controls);
 //carousel.setControls();
 carousel.useControls();
+carousel.buttonClickEvent();
