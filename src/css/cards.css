@@ -26,6 +26,31 @@
     left: 50%;
     transform: translateX(-50%);
     z-index: 2;
+
+    .info
+    {
+        .button-container
+        {
+            .button{
+                border : solid 2px #9B5DE5;
+                border-radius: 9999px;
+                display: flex;
+                align-items: center;
+                height: 48px;
+
+                .text{
+                    padding-left: 20px;
+
+                }
+
+                .circle
+                {
+                    display: flex;
+                }
+
+            }
+        }
+    }
 }
 
 .card-4{
@@ -126,4 +151,17 @@
 .gallery-nav li.gallery-item-selected{
     background: #555;
 }
+
+/* .circle
+{
+    background-color: #9B5DE5;
+    border-radius: 100%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-left: auto;
+    margin-right : 8px;
+} */
 

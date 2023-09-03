@@ -21,6 +21,10 @@ class Carousel {
         
         this.cards.slice(0, 5).forEach((card, index) => {
             card.classList.add(`card-${index + 1}`);
+
+            // if (card.classList.includes('card-3')) {
+            //     this.addCircle(card.classList.includes('card-3'));
+            // }
         });
     }
 
@@ -53,6 +57,12 @@ class Carousel {
                 this.setCurrentState(control);
             });
         });
+    }
+
+    addCircle(card) {
+        const circle = document.createElement('div');
+        circle.className = 'circle';
+        card.appendChild(circle);
     }
 }
 
