@@ -8,10 +8,10 @@ datasource db {
 }
 
 model Projects {
-    id          String  @id @default(cuid()) @map("_id")
-    name        String
+    id          String  @id @default(auto()) @map("_id") @db.ObjectId
     description String
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
+    name        String
+    // createdAt   DateTime @default(now())
+    // updatedAt   DateTime @updatedAt
     imageUrl    String
 }

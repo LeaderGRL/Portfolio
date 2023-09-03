@@ -6,11 +6,11 @@ router.get('/projects', projectsController.getAllProjects);
 
 router.get('/projects/:id', projectsController.getProjectById);
 
-router.get('/projects/:name', projectsController.getProjectByName);
+router.get('/projects/name/:name', projectsController.getProjectByName);
 
 router.post('/projects', projectsController.createProject);
 
-router.put('/projects/:id', projectsController.updateProject);
+router.put('/projects/id/:id', projectsController.updateProject);
 
 router.delete('/projects/:id', projectsController.deleteProject);
 
