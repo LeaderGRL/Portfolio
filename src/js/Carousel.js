@@ -2,7 +2,9 @@ const galleryContainer = document.querySelector('.Project');
 const controller = document.querySelector('.controller');
 const controls = ['left-arrow', 'right-arrow']
 const cards = document.querySelectorAll('.cards');
+
 let mainCard = document.querySelector('.card-3');
+let numberOfCards = cards.length;
 
 class Carousel {
     constructor(container, cards, controls) {
@@ -13,26 +15,30 @@ class Carousel {
 
     updateGallery() {
         this.cards.forEach(card => {
-            card.classList.remove('card-1');
-            card.classList.remove('card-2');
-            card.classList.remove('card-3');
-            card.classList.remove('card-4');
-            card.classList.remove('card-5');
-            card.querySelector('.button').removeEventListener('click', this.onButtonClick);
+            for (let i = 1; i <= numberOfCards; i++) {
+                card.classList.remove(`card-${i}`);
+            }
+
+            const button = card.querySelector('.button');
+            if (button) {
+                button.removeEventListener('click', this.onButtonClick);
+            }
+        });
+
+        // Add new 'card-x' class names to the first 5 cards
+        this.cards.slice(0, numberOfCards).forEach((card, index) => {
+            card.classList.add(`card-${index + 1}`);
         });
         
-        this.cards.slice(0, 5).forEach((card, index) => {
-            card.classList.add(`card-${index + 1}`);
-
-            // if (card.classList.includes('card-3')) {
-            //     this.addCircle(card.classList.includes('card-3'));
-            // }
-        });
-
         mainCard = document.querySelector('.card-3');
         this.buttonClickEvent();
 
     }
+
+    updateBar() {
+        
+    }
+
 
     setCurrentState(direction) {
         if (direction.className.includes('controller-previous')){
