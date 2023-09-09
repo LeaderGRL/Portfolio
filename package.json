@@ -4,9 +4,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon index.js",
-    "build": "tailwindcss build src/css/input.css -o src/dist/output.css",
-    "dev": "concurrently \"nodemon src/index.js\" \"tailwindcss -i src/css/input.css -o src/dist/output.css --watch\""
+    "start": "nodemon src/index.js",
+    "build": "tailwindcss build src/public/css/input.css -o src/public/dist/output.css",
+    "dev": "concurrently \"nodemon src/index.js\" \"tailwindcss -i src/public/css/input.css -o src/public/dist/output.css --watch\""
   },
   "author": "Leader",
   "license": "ISC",
@@ -32,5 +32,5 @@
   },
   "homepage": "https://github.com/LeaderGRL/Portfolio#readme",
   "description": "",
-  "tailwind:css": "postcss src/css/input.css -o src/dist/output.css --watch"
+  "tailwind:css": "postcss src/public/css/input.css -o src/public/dist/output.css --watch"
 }

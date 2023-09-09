@@ -3,34 +3,28 @@ const app = express();
 const projectsRoutes = require('./api/routes/projectsRoutes');
 const projectsController = require('./api/controllers/projectsController');
 
-app.set('views', __dirname + '/src/views');
+app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use((req, _, next) => {
-    console.log(`Incoming request: ${req.method} ${req.path}`);
-    console.log('Headers:', req.headers);
-    console.log('Body:', req.body);
-    next();
-});
+// app.use((req, _, next) => {
+//     console.log(`Incoming request: ${req.method} ${req.path}`);
+//     console.log('Headers:', req.headers);
+//     console.log('Body:', req.body);
+//     next();
+// });
 
-app.use(express.static(__dirname ));
+app.use(express.static(__dirname + '/public'));
 
 app.get('/', async (req, res) => {
-  const projects = await projectsController.getAllProjects();
-  const projectsList = projects.map(project => {
-    return {
-      id: project.id,
-      name: project.name,
-      description: project.description,
-      date: project.date,
-      imageUrl: project.imageUrl
-    }
-  });
-  res.render('index', { projects: projectsList });
-  // res.sendFile(__dirname + '/index.html');
+  try {
+    const projects = await projectsController.getAllProjects();
+    res.render('index', { projects: projects });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
 });
 
 app.use("/api", projectsRoutes);
