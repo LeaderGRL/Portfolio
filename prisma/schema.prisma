@@ -11,7 +11,7 @@ model Projects {
     id          String  @id @default(auto()) @map("_id") @db.ObjectId
     description String
     name        String
-    // createdAt   DateTime @default(now())
+    date        String
     // updatedAt   DateTime @updatedAt
     imageUrl    String
 }
