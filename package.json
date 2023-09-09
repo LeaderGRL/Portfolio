@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon index.js"
+    "start": "nodemon index.js",
+    "build": "tailwindcss build src/css/input.css -o src/dist/output.css",
+    "dev": "concurrently \"nodemon src/index.js\" \"tailwindcss -i src/css/input.css -o src/dist/output.css --watch\""
   },
   "author": "Leader",
   "license": "ISC",
@@ -16,7 +18,8 @@
     "autoprefixer": "^10.4.15",
     "express": "^4.18.2",
     "nodemon": "^3.0.1",
-    "postcss": "^8.4.28",
+    "postcss": "^8.4.29",
+    "postcss-cli": "^10.1.0",
     "prisma": "^5.2.0"
   },
   "repository": {
@@ -27,5 +30,6 @@
     "url": "https://github.com/LeaderGRL/Portfolio/issues"
   },
   "homepage": "https://github.com/LeaderGRL/Portfolio#readme",
-  "description": ""
+  "description": "",
+  "tailwind:css": "postcss src/css/input.css -o src/dist/output.css --watch"
 }

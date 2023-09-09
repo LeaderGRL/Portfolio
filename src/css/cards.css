@@ -36,19 +36,37 @@
                 border-radius: 9999px;
                 display: flex;
                 align-items: center;
-                height: 48px;
+                height: 24px;
 
                 .text{
                     padding-left: 20px;
+                    font-size: xx-small;
 
+                    @media screen and (min-width: 1536px) {
+                        font-size: large;
+                    }
                 }
 
                 .circle
                 {
                     display: flex;
+                    width: 8px;
+                    height: 8px;
+
+                    @media screen and (min-width: 1536px) {
+                        width: 24px;
+                        height: 24px;
+                    }
                 }
 
-            }
+                @media screen and (min-width: 1536px) {
+                    border : solid 2px #9B5DE5;
+                    border-radius: 9999px;
+                    display: flex;
+                    align-items: center;
+                    height: 48px;
+                }
+            }    
         }
     }
 }
