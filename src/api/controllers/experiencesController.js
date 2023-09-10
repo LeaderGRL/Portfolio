@@ -44,8 +44,6 @@ exports.createExperience = async (body) => {
                 description,
                 name,
                 date,
-                imageUrl,
-                link
             }
         });
     } catch (error) {

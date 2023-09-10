@@ -35,7 +35,7 @@ router.get('/experiences/name/:name', async (req, res) => {
 
 router.post('/experiences', async (req, res) => {
     try {
-        const { description, name, date, imageUrl } = req.body;
+        const { description, name, date} = req.body;
         const experience = await experiencesController.createExperience(req.body);
         res.status(200).json(experience);
     }
