@@ -21,6 +21,9 @@ module.exports = {
       padding: {
         '18' : '72px',
       },
+      screens: {
+        '3xl': '1600px',
+      },
     },
   },
   plugins: [],
