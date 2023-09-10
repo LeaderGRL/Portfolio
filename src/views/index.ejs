@@ -205,21 +205,21 @@
             <div class="gallery flex flex-1 justify-center items-center">
                 <% projects.forEach(function(element, index){ %>
                     <div class="cards card-<%= index+1 %> 2xl:w-64 w-44 h-3/5 bg-white flex flex-col">
-                        <div class="image-container h-3/5 w-full bg-green-600">
+                        <div class="image-container h-full w-full bg-green-600">
                             <img src="<%= element.imageUrl %>" alt="placeholder" class="h-full w-full object-cover">
                         </div>
                         <div class="info flex justify-center h-full w-full flex-col px-10">
                             <div class="date h-1/3 w-full bg-white flex flex-col-reverse">
-                                <p class="text-[#9B5DE5] font-GalanoGrotesqueAlt-Medium text-[10px] text-xs"><%= element.date %></p>
+                                <p class="text-[#9B5DE5] font-GalanoGrotesqueAlt-Medium text-[8px] text-xs"><%= element.date %></p>
                             </div>
                             <div class="title bg-white h-full font-GalanoGrotesqueAlt-Bold flex items-center">
-                                <h1 class="text-[#9B5DE5] text-sm 2xl:text-2xl"><%= element.name %></h1>
+                                <h1 class="text-[#9B5DE5] text-[10px] 2xl:text-2xl"><%= element.name %></h1>
                             </div>
                             <div class="button-container h-1/2 w-full bg-white">
-                              <div class="button flex items-center h-6 2xl:h-12">
+                              <a href="<% element.link %>" class="button flex items-center h-6 2xl:h-12">
                                   <p class="text font-GalanoGrotesqueAlt-Medium text-[#9B5DE5] 2xl:text-base text-sm">Read More</p>
                                   <div class="circle bg-[#9B5DE5] w-8 h-8 rounded-full items-center justify-center ml-auto mr-2 hidden"></div>
-                              </div>
+                              </a>
                             </div>
                         </div>
                     </div> 

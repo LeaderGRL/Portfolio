@@ -33,6 +33,7 @@ class Carousel {
         });
         
         mainCard = document.querySelector('.card-3');
+
         this.buttonClickEvent();
 
     }
