@@ -79,10 +79,10 @@
                             </div>
                         </div>
                         <div class="experiences flex flex-col space-y-14 px-32 w-2/3 py-12">
-                            <div class="experience max-w-4xl">
-                                <h1 class="title font-GalanoGrotesqueAlt-Bold text-white text-6xl py-4"><%= element.name %></h1>
-                                <h2 class="subtitle font-GalanoGrotesqueAlt-Bold text-[#FEE440] text-3xl"><%= element.date %></h2>
-                                <ul class="text font-GalanoGrotesqueAlt-Medium text-white"><% element.description.forEach(el => { %>
+                            <div class="experience max-w-lg 2xl:max-w-4xl">
+                                <h1 class="title font-GalanoGrotesqueAlt-Bold text-white text-2xl 2xl:text-4xl py-4"><%= element.name %></h1>
+                                <h2 class="subtitle font-GalanoGrotesqueAlt-Bold text-[#FEE440] text-base 2xl:text-2xl"><%= element.date %></h2>
+                                <ul class="text font-GalanoGrotesqueAlt-Medium text-white text-xs 2xl:text-base"><% element.description.forEach(el => { %>
                                     <li><%= el %></li>%>    
                             <%}); %></ul> 
                             </div>
