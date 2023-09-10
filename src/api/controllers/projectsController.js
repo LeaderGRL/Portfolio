@@ -38,13 +38,14 @@ exports.getProjectByName = async (req, res) => {
 exports.createProject = async (body) => {
     console.log(body);
     try {
-        const {description, name, date, imageUrl } = body;
+        const {description, name, date, imageUrl, link } = body;
         return await prisma.Projects.create({
             data: {
                 description,
                 name,
                 date,
-                imageUrl
+                imageUrl,
+                link
             }
         });
     } catch (error) {
