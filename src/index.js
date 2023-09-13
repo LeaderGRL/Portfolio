@@ -37,6 +37,6 @@ app.get('/', async (req, res) => {
 app.use("/api", projectsRoutes, experiencesRoutes);
 // app.use("/api", projectsController);
 
-app.listen(22, () => {
+app.listen(3000, '0.0.0.0', () => {
   console.log('Server is running on port 22');
 });
