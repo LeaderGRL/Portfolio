@@ -35,17 +35,30 @@ exports.getProjectByName = async (req, res) => {
     }
 };
 
+exports.getProjectOrderByDate = async (req, res) => {
+    try {
+        return await prisma.Projects.findMany({
+            orderBy: {
+                sortDate: 'desc'
+            }
+        });
+    } catch (error) {
+        throw new Error(error.message);
+    }
+};
+
 exports.createProject = async (body) => {
     console.log(body);
     try {
-        const {description, name, date, imageUrl, link } = body;
+        const {description, name, date, imageUrl, link, sortDate } = body;
         return await prisma.Projects.create({
             data: {
                 description,
                 name,
                 date,
                 imageUrl,
-                link
+                link,
+                sortDate
             }
         });
     } catch (error) {

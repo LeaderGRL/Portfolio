@@ -15,6 +15,7 @@ model Projects {
     // updatedAt   DateTime @updatedAt
     imageUrl    String
     link        String
+    sortDate    DateTime
 }
 
 model Experiences {

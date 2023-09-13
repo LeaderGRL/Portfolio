@@ -24,7 +24,7 @@ app.use(express.static(__dirname + '/public'));
 
 app.get('/', async (req, res) => {
   try {
-    const projects = await projectsController.getAllProjects();
+    const projects = await projectsController.getProjectOrderByDate();
     const experiences = await experiencesController.getAllExperiences();
     res.render('index', { projects: projects,
                           experiences: experiences 
