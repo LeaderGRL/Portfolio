@@ -4,6 +4,8 @@ import { JSDOM } from 'jsdom'
 const html = fs.readFileSync('dist/index.html', 'utf8')
 const rasterSource = fs.readFileSync('src/article-rasteriser.js', 'utf8')
 const displayCss = fs.readFileSync('src/display.css', 'utf8')
+const crtBypassCss = fs.readFileSync('src/crt-bypass.css', 'utf8')
+const mainSource = fs.readFileSync('src/main.js', 'utf8')
 const interactionSource = fs.readFileSync('src/article-interaction.js', 'utf8')
 const contentPlugin = fs.readFileSync('plugins/content.js', 'utf8')
 const ecsArticle = fs.readFileSync('content/articles/02-ecs-rust-data-oriented-design.md', 'utf8')
@@ -59,6 +61,14 @@ check(displayCss.includes('.tube.is-fallback[data-display-mode="article"] #artic
 check(displayCss.includes('display:block !important'), 'fallback source becomes visible')
 check(displayCss.includes('.article-interact-trigger'), 'interaction trigger styles bundled')
 check(displayCss.includes('.article-interaction'), 'interaction surface styles bundled')
+
+check(mainSource.includes("import './crt-bypass.css'"), 'CRT bypass styles are bundled')
+check(crtBypassCss.includes('.tube.is-crt-off #gl'), 'CRT off hides WebGL composite')
+check(crtBypassCss.includes('#article-source'), 'CRT off exposes article source directly')
+check(crtBypassCss.includes('#fallback2d'), 'CRT off exposes terminal source directly')
+check(crtBypassCss.includes('filter:none !important'), 'CRT off removes native embed optics')
+check(crtBypassCss.includes('document-inline-integration--youtube::before'), 'CRT off removes inline scanline overlays')
+check(crtBypassCss.includes('bottom:16px'), 'inline YouTube reserves media breathing room')
 
 check(ecsArticle.includes('<iframe'), 'legacy Godbolt iframe still authored')
 check(contentPlugin.includes('function parseRawIframe'), 'raw iframe parser exists')
