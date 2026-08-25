@@ -34,13 +34,29 @@ export class InlineIntegrationController {
     return !this.tube?.classList.contains('is-powered-off')
   }
 
+  _neutralBarrelMap() {
+    // A neutral 50% R/G displacement map. It keeps the filter graph valid in
+    // limited environments (tests, old browsers, constrained WebViews) while
+    // naturally disabling only the barrel displacement effect.
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="rgb(128,128,128)"/></svg>'
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+  }
+
   _makeBarrelMap() {
     const size = 64
     const canvas = document.createElement('canvas')
     canvas.width = size
     canvas.height = size
-    const ctx = canvas.getContext('2d')
-    const image = ctx.createImageData(size, size)
+    const ctx = canvas.getContext?.('2d')
+    if (!ctx) return this._neutralBarrelMap()
+
+    let image = null
+    try {
+      image = ctx.createImageData?.(size, size)
+    } catch {}
+    if (!image?.data || image.data.length < size * size * 4) {
+      return this._neutralBarrelMap()
+    }
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -57,8 +73,13 @@ export class InlineIntegrationController {
       }
     }
 
-    ctx.putImageData(image, 0, 0)
-    return canvas.toDataURL('image/png')
+    try {
+      ctx.putImageData?.(image, 0, 0)
+      const uri = canvas.toDataURL?.('image/png')
+      return uri || this._neutralBarrelMap()
+    } catch {
+      return this._neutralBarrelMap()
+    }
   }
 
   _ensureOpticsFilter() {
