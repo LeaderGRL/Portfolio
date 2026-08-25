@@ -97,22 +97,15 @@ function renderBlock(block) {
       if (block.alt) figure.append(make('figcaption', '', block.alt))
       return figure
     }
-    case 'embed': {
-      const frame = make('div', 'article-reader__embed')
-      // Provider adapters own remote integrations. The semantic mirror only
-      // creates a native iframe when the block supplied an explicit URL.
-      if (block.src) {
-        const iframe = make('iframe')
-        iframe.src = block.src
-        iframe.title = block.title || block.label || 'Document integration'
-        iframe.loading = 'lazy'
-        iframe.referrerPolicy = 'strict-origin-when-cross-origin'
-        iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups')
-        frame.append(iframe)
-      }
-      if (block.label) frame.append(make('p', 'article-reader__caption', block.label))
-      return frame
-    }
+    case 'embed':
+      // The visible iframe is mounted by InlineIntegrationController. Keeping
+      // only a semantic footprint here avoids loading a second hidden YouTube,
+      // Sketchfab or Miro instance while preserving the document scroll range.
+      return richSpacer(
+        block,
+        Number(block.height) || 214,
+        block.title || block.label || 'Interactive integration',
+      )
     case 'note':
       return make('aside', 'article-reader__note', block.body || '')
     case 'figure': {
@@ -120,10 +113,6 @@ function renderBlock(block) {
       pre.textContent = [block.cols, block.body].filter(Boolean).join('\n')
       return pre
     }
-
-    // Rich compositions are visually owned by BlockRegistry. The semantic DOM
-    // deliberately mirrors only their approximate footprint and accessible
-    // label so scroll ratios stay aligned without duplicating visual layout.
     case 'hero':
       return richSpacer(block, Number(block.height) || 242, block.title || block.eyebrow || 'Project hero')
     case 'gallery': {
