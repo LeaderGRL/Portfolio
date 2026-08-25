@@ -27,7 +27,7 @@ export function createDefaultIntegrationRegistry({ local3d }) {
 
       const help = document.createElement('div')
       help.className = 'article-interaction__model-help'
-      help.textContent = 'DRAG ROTATE · WHEEL ZOOM · ESC CLOSE'
+      help.textContent = 'DRAG ROTATE · WHEEL ZOOM'
       host.append(help)
 
       return () => {
@@ -42,12 +42,12 @@ export function createDefaultIntegrationRegistry({ local3d }) {
   registry.register('youtube', iframeAdapter(block => {
     if (block.src) return block.src
     const id = block.id || block.uid || ''
-    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?rel=0`
+    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?rel=0&enablejsapi=1&playsinline=1`
   }))
   registry.register('sketchfab', iframeAdapter(block => {
     if (block.src) return block.src
     const uid = block.uid || block.id || ''
-    return `https://sketchfab.com/models/${encodeURIComponent(uid)}/embed?autostart=1&ui_hint=0&ui_infos=0`
+    return `https://sketchfab.com/models/${encodeURIComponent(uid)}/embed?autostart=1&ui_hint=0&ui_infos=0&scrollwheel=0`
   }))
   registry.register('miro', iframeAdapter(block => block.src))
   registry.register('google', iframeAdapter(block => block.src))
