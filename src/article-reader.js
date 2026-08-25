@@ -1,9 +1,8 @@
-/* Rich article surface inside the physical CRT aperture.
+/* Rich semantic document surface inside the physical CRT aperture.
  *
- * The raster terminal remains the canonical navigation and accessibility
- * representation. Article detail gets this DOM layer so authored media can
- * retain the semantics a canvas cannot provide: selectable code, native video
- * controls, responsive images, and sandboxed third-party embeds.
+ * Visible pixels come from the raster/CRT pipeline. This DOM mirror owns
+ * semantics, native media controls and the scroll range used by long-form
+ * ARTICLES and PROJECTS.
  */
 
 const make = (tag, className, text) => {
@@ -41,6 +40,14 @@ function appendInline(node, value = '') {
 }
 
 const makeRich = (tag, className, text) => appendInline(make(tag, className), text)
+
+function richSpacer(block, height, label) {
+  const section = make('section', 'article-reader__rich-spacer')
+  section.style.minHeight = `${height}px`
+  section.dataset.blockType = block.type
+  section.setAttribute('aria-label', label)
+  return section
+}
 
 function renderBlock(block) {
   switch (block.type) {
@@ -92,13 +99,17 @@ function renderBlock(block) {
     }
     case 'embed': {
       const frame = make('div', 'article-reader__embed')
-      const iframe = make('iframe')
-      iframe.src = block.src
-      iframe.title = block.title || block.label || 'Article integration'
-      iframe.loading = 'lazy'
-      iframe.referrerPolicy = 'strict-origin-when-cross-origin'
-      iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups')
-      frame.append(iframe)
+      // Provider adapters own remote integrations. The semantic mirror only
+      // creates a native iframe when the block supplied an explicit URL.
+      if (block.src) {
+        const iframe = make('iframe')
+        iframe.src = block.src
+        iframe.title = block.title || block.label || 'Document integration'
+        iframe.loading = 'lazy'
+        iframe.referrerPolicy = 'strict-origin-when-cross-origin'
+        iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups')
+        frame.append(iframe)
+      }
       if (block.label) frame.append(make('p', 'article-reader__caption', block.label))
       return frame
     }
@@ -109,6 +120,25 @@ function renderBlock(block) {
       pre.textContent = [block.cols, block.body].filter(Boolean).join('\n')
       return pre
     }
+
+    // Rich compositions are visually owned by BlockRegistry. The semantic DOM
+    // deliberately mirrors only their approximate footprint and accessible
+    // label so scroll ratios stay aligned without duplicating visual layout.
+    case 'hero':
+      return richSpacer(block, Number(block.height) || 242, block.title || block.eyebrow || 'Project hero')
+    case 'gallery': {
+      const count = String(block.body || '').split('\n').filter(line => line.trim()).length
+      const cols = Math.max(1, Math.min(3, Number(block.columns) || 2))
+      return richSpacer(block, Math.max(166, Math.ceil(count / cols) * 146 + 20), block.label || 'Project gallery')
+    }
+    case 'timeline': {
+      const count = String(block.body || '').split('\n').filter(line => line.trim()).length
+      return richSpacer(block, Math.max(82, count * 34 + 22), block.label || 'Project timeline')
+    }
+    case 'compare':
+      return richSpacer(block, 224, block.label || 'Before and after comparison')
+    case 'model3d':
+      return richSpacer(block, 248, block.label || block.title || 'Interactive 3D model')
     default:
       return null
   }
@@ -133,7 +163,7 @@ export function syncArticleReader(item) {
   reader.replaceChildren()
 
   const header = make('header', 'article-reader__header')
-  header.append(make('p', 'article-reader__eyebrow', 'ARTICLE / LOCAL ARCHIVE'))
+  header.append(make('p', 'article-reader__eyebrow', 'DOCUMENT / LOCAL ARCHIVE'))
   header.append(make('h1', 'article-reader__title', item.label))
   if (item.sub) header.append(make('p', 'article-reader__sub', item.sub))
   reader.append(header)
