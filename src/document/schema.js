@@ -20,6 +20,7 @@ export const BLOCK_DEFINITIONS = Object.freeze({
 
   hero: Object.freeze({ kind: 'composition', assetFields: ['media', 'poster'] }),
   facts: Object.freeze({ kind: 'composition' }),
+  system: Object.freeze({ kind: 'composition' }),
   pipeline: Object.freeze({ kind: 'composition' }),
   gallery: Object.freeze({ kind: 'composition' }),
   timeline: Object.freeze({ kind: 'composition' }),
