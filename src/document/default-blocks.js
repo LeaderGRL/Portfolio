@@ -105,17 +105,44 @@ export function createDefaultBlockRegistry({ local3d }) {
         g.strokeStyle = 'rgba(47,208,109,.38)'
         g.strokeRect(x + .5, y + .5, cellW - 1, cellH - 1)
 
-        env.drawLines(
-          [String(item.value || '').toUpperCase()],
-          x + 7,
-          y + 14,
-          7,
-          9,
-          env.colors.amber,
-          700,
-        )
+        env.drawLines([String(item.value || '').toUpperCase()], x + 7, y + 14, 7, 9, env.colors.amber, 700)
         const valueLines = env.wrap(item.label || '', cellW - 14, 9, 700)
         env.drawLines(valueLines.slice(0, 2), x + 7, y + 32, 9, 11, env.colors.core, 700)
+      })
+    },
+  })
+
+  registry.register('system', {
+    measure(_ctx, block) {
+      const items = parsePipeRows(block.body)
+      const columns = Math.max(1, Math.min(2, Number(block.columns) || 2))
+      const rows = Math.max(1, Math.ceil(items.length / columns))
+      return { height: rows * 78 + 20, meta: { items, columns } }
+    },
+    paint(g, block, layout, env) {
+      const items = layout.meta?.items || parsePipeRows(block.body)
+      const columns = layout.meta?.columns || 2
+      const gap = 10
+      const cellW = (layout.width - gap * (columns - 1)) / columns
+      const cellH = 68
+
+      items.forEach((item, index) => {
+        const col = index % columns
+        const row = Math.floor(index / columns)
+        const x = layout.x + col * (cellW + gap)
+        const y = layout.y + row * 78
+
+        g.fillStyle = index === 0 ? 'rgba(5,23,13,.82)' : 'rgba(2,14,8,.68)'
+        g.fillRect(x, y, cellW, cellH)
+        g.strokeStyle = index === 0 ? 'rgba(185,255,201,.46)' : 'rgba(47,208,109,.28)'
+        g.strokeRect(x + .5, y + .5, cellW - 1, cellH - 1)
+
+        g.fillStyle = index === 0 ? env.colors.amber : env.colors.dim
+        g.fillRect(x, y, 3, cellH)
+
+        env.drawLines([String(item.value || '').toUpperCase()], x + 11, y + 18, 8, 10, env.colors.core, 700)
+        const detail = env.wrap(item.label || '', cellW - 22, 8, 600)
+        env.drawLines(detail.slice(0, 3), x + 11, y + 38, 8, 10, env.colors.mid, 600)
       })
     },
   })
@@ -152,9 +179,7 @@ export function createDefaultBlockRegistry({ local3d }) {
 
         g.fillStyle = 'rgba(2,13,7,.72)'
         g.fillRect(nodeX, y, nodeW, nodeH)
-        g.strokeStyle = index === items.length - 1
-          ? 'rgba(185,255,201,.58)'
-          : 'rgba(47,208,109,.36)'
+        g.strokeStyle = index === items.length - 1 ? 'rgba(185,255,201,.58)' : 'rgba(47,208,109,.36)'
         g.strokeRect(nodeX + .5, y + .5, nodeW - 1, nodeH - 1)
 
         const left = String(item.value || '').toUpperCase()
@@ -238,10 +263,7 @@ export function createDefaultBlockRegistry({ local3d }) {
       const gap = 8
       const half = (layout.width - gap) / 2
       const mediaH = layout.height - 34
-      const entries = [
-        [block.before, block.beforeLabel || 'BEFORE'],
-        [block.after, block.afterLabel || 'AFTER'],
-      ]
+      const entries = [[block.before, block.beforeLabel || 'BEFORE'], [block.after, block.afterLabel || 'AFTER']]
       entries.forEach(([src, label], index) => {
         const x = layout.x + index * (half + gap)
         g.fillStyle = '#020c06'
@@ -258,11 +280,7 @@ export function createDefaultBlockRegistry({ local3d }) {
     measure(_ctx, block) {
       return { height: Number(block.height) || 214 }
     },
-    paint() {
-      // Intentionally blank. The native integration is mounted inline above the
-      // CRT framebuffer at this exact layout slot, so no black placeholder is
-      // painted underneath it.
-    },
+    paint() {},
     getInteraction(block) {
       return { provider: block.provider || 'iframe', block, inline: true }
     },
