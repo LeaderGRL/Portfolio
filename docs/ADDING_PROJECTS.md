@@ -65,7 +65,20 @@ ROLE | GAMEPLAY + SYSTEMS
 
 `facts` is a compact visual summary. Use `1`, `2` or `3` columns depending on the amount of information. The left side of each row is the fact name; the right side is the value.
 
-### System pipeline
+### System overview
+
+```md
+::system{columns=2 label="AI SYSTEM"}
+DIRECTOR AI | MONITORS PACING AND GLOBAL PRESSURE
+CREATURE AI | OWNS LOCAL PERCEPTION AND DECISIONS
+PERCEPTION | HEARING, SIGHT AND PLAYER EVIDENCE
+SEARCH STATE | INVESTIGATES WITHOUT PERFECT INFORMATION
+::
+```
+
+Use `system` for architecture, responsibilities, state groups and subsystems that coexist rather than happen in a strict order. It intentionally renders as an editorial grid with **no arrows**. Prefer this for AI architecture, gameplay subsystems, service boundaries and technical breakdowns.
+
+### Sequential pipeline
 
 ```md
 ::pipeline{label="INPUT LOOP"}
@@ -76,7 +89,7 @@ PLAYER FEEDBACK | SLIDER + CAMERA RESPONSE
 ::
 ```
 
-`pipeline` renders a reusable connected sequence. It is suitable for gameplay loops, AI pipelines, rendering pipelines, networking flows, authoring workflows and hardware/software chains.
+Use `pipeline` only when the ordering is meaningful: input chains, rendering passes, network flows, authoring workflows or an actual gameplay loop. Do not use it just to make a technical section look more visual. If the rows could be rearranged without changing the meaning, `system`, `facts`, prose or a table-like block is usually a better choice.
 
 ### Image
 
@@ -166,6 +179,7 @@ A short callout or engineering takeaway.
 4. Do not add project-specific CSS or JavaScript. Add a reusable block, layout option or theme token if a genuinely new capability is needed.
 5. Keep filenames descriptive. Prefer `control-panel.webp` over exported UUID filenames.
 6. A rich project should still explain your contribution, engineering decisions and lessons learned. Visual spectacle supports the story; it does not replace it.
+7. Avoid decorative flowcharts. Arrows imply causality or sequence; use them only when that relationship is actually part of the system.
 
 ## Validation rule
 
