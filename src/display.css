@@ -1,11 +1,18 @@
 /* ============================================================================
    SHARED DISPLAY COMPOSITOR
 
-   This layer is intentionally separate from style.css. The chassis stylesheet
-   owns the physical machine; this file owns what can be mounted inside the
-   glass. Keeping the boundary explicit lets fullscreen, software, games and
-   future Canvas/WebGL/WASM surfaces reuse the same optical stack.
+   The chassis stylesheet owns the physical machine. This file owns the content
+   surface mounted behind the glass, so articles, games, software, WebGL/WASM
+   views and fullscreen mode all inherit the same optical contract.
    ============================================================================ */
+
+.display-optics-defs{
+  position:absolute;
+  width:0;
+  height:0;
+  overflow:hidden;
+  pointer-events:none;
+}
 
 .display-surface{
   position:absolute;
@@ -20,9 +27,13 @@
   pointer-events:auto;
 }
 
-/* The article keeps its native scroll/selection/video/iframe behaviour. Its
-   previous z-index was relative to the tube; it is now relative to the common
-   surface root instead. */
+/* Native DOM pixels receive the same analogue character as the terminal: a
+   restrained bloom plus RGB edge separation. Hit testing still happens on the
+   original DOM geometry; only the composited pixels are filtered. */
+.tube.has-dom-surface:not(.is-crt-off) .display-surface{
+  filter:url("#display-crt-optics");
+}
+
 .display-surface .article-reader{
   z-index:1;
 }
@@ -36,12 +47,12 @@
   display:block;
   pointer-events:none;
   opacity:1;
+  mix-blend-mode:normal;
   transition:opacity .18s ease;
 }
 
-/* The old article-only CSS scanline/grille stack is superseded by the shared
-   transparent WebGL overlay. Disable only those pseudo layers so existing
-   article typography and media treatment remain untouched. */
+/* The old article-only pseudo scanlines are replaced by the shared renderer.
+   Keeping both would double the pitch and make authored media excessively dark. */
 .tube.has-dom-surface::before,
 .tube.has-dom-surface::after,
 .tube.has-dom-surface .article-reader::before,
@@ -49,6 +60,10 @@
   content:none !important;
   display:none !important;
   animation:none !important;
+}
+
+.tube.is-crt-off .display-surface{
+  filter:none;
 }
 
 .tube.is-crt-off .crt-overlay,
@@ -60,9 +75,16 @@
   pointer-events:none;
 }
 
-/* Fullscreen is already part of the compositor API even though no physical
-   button invokes it yet. The same screen node becomes the viewport, preserving
-   the exact glass/overlay ordering instead of rebuilding a second CRT UI. */
+/* Media should still communicate the work itself. The global CRT optics now
+   provide the analogue treatment, so the old destructive monochrome conversion
+   is softened instead of stacking another full phosphor conversion on top. */
+.tube.has-dom-surface:not(.is-crt-off) .article-reader__media img,
+.tube.has-dom-surface:not(.is-crt-off) .article-reader__media video{
+  filter:contrast(1.08) brightness(.93) saturate(.82) sepia(.18) hue-rotate(58deg);
+}
+
+/* Fullscreen reuses the exact same screen and compositor instead of creating a
+   parallel rendering path. This is important for future games and software. */
 .screen:fullscreen{
   width:100vw !important;
   height:100vh !important;
