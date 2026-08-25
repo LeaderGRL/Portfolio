@@ -3,7 +3,7 @@ import { BLOCK_TYPES, DIRECTIVE_TYPES, hasBlockType } from '../src/document/sche
 
 let failed = 0
 const check = (condition, label) => {
-  console.log(`  ${label.padEnd(52)}: ${condition ? 'OK' : 'WRONG'}`)
+  console.log(`  ${label.padEnd(56)}: ${condition ? 'OK' : 'WRONG'}`)
   if (!condition) failed++
 }
 
@@ -17,6 +17,8 @@ const inlineIntegrations = fs.readFileSync('src/document/inline-integrations.js'
 const local3d = fs.readFileSync('src/document/local-3d.js', 'utf8')
 const bridge = fs.readFileSync('src/article-crt-bridge.js', 'utf8')
 const reader = fs.readFileSync('src/article-reader.js', 'utf8')
+const interaction = fs.readFileSync('src/article-interaction.js', 'utf8')
+const displayCss = fs.readFileSync('src/display.css', 'utf8')
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'))
 const penw = fs.readFileSync('content/projects/penw/index.md', 'utf8')
 
@@ -29,7 +31,7 @@ check(DIRECTIVE_TYPES.includes('model3d'), 'model3d is authorable directive')
 check(DIRECTIVE_TYPES.includes('gallery'), 'gallery is authorable directive')
 check(plugin.includes('DIRECTIVE_TYPES'), 'parser consumes shared schema')
 check(plugin.includes('normalizeBlocks'), 'parser normalizes imported markdown headings')
-check(plugin.includes("line.trim()"), 'heading parser tolerates indentation')
+check(plugin.includes('line.trim()'), 'heading parser tolerates indentation')
 check(!plugin.includes("new Set(['image', 'video'"), 'parser has no duplicated directive list')
 check(plugin.includes("join(path, 'index.md')"), 'project folder index.md supported')
 check(plugin.includes("'.glb': 'model/gltf-binary'"), 'local GLB asset inlining supported')
@@ -51,6 +53,12 @@ check(integrations.includes("registry.register('sketchfab'"), 'Sketchfab adapter
 check(integrations.includes("registry.register('local-3d'"), 'local 3D adapter registered')
 check(inlineIntegrations.includes('class InlineIntegrationController'), 'inline integration controller exists')
 check(inlineIntegrations.includes('_position(host, entry)'), 'inline integrations follow raster layout')
+check(inlineIntegrations.includes("shield.addEventListener('wheel'"), 'inline embeds preserve document wheel scrolling')
+check(inlineIntegrations.includes('_setActive(instance, true)'), 'inline embeds activate directly in place')
+check(inlineIntegrations.includes('feDisplacementMap'), 'native integrations get compositor distortion')
+check(displayCss.includes('#document-crt-native-optics'), 'native integration CRT filter is applied')
+check(displayCss.includes('repeating-linear-gradient(0deg'), 'native integration scanlines are applied')
+check(interaction.includes('!descriptor.inline'), 'modal trigger ignores inline integrations')
 
 check(local3d.includes('GLTFLoader'), 'local 3D uses GLTFLoader')
 check(local3d.includes('OrbitControls'), 'local 3D uses OrbitControls')
@@ -64,7 +72,8 @@ check(reader.includes("case 'hero'"), 'semantic mirror accounts for hero height'
 check(reader.includes("case 'model3d'"), 'semantic mirror accounts for 3D height')
 check(reader.includes("case 'embed'"), 'semantic mirror accounts for embed height')
 
-check(penw.includes('::hero{'), 'PENW uses generic hero block')
+check(!penw.includes('::hero{'), 'PENW does not reserve an empty hero slot')
+check(penw.includes('## THE EXPERIENCE'), 'PENW uses markdown section headings')
 check(penw.includes('provider=youtube'), 'PENW uses generic YouTube adapter')
 check(penw.includes('provider=sketchfab'), 'PENW uses generic Sketchfab adapter')
 check(penw.includes('::timeline'), 'PENW uses generic timeline block')
