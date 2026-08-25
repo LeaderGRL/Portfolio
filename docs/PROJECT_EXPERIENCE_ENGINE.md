@@ -57,6 +57,11 @@ ENGINE | UNITY
 ROLE | GAMEPLAY + SYSTEMS
 ::
 
+::system{columns=2}
+AI DIRECTOR | GLOBAL PACING
+CREATURE AI | LOCAL DECISIONS
+::
+
 ::pipeline
 INPUT | ROTARY ENCODER
 GAME STATE | UNITY
@@ -88,6 +93,7 @@ media
 composition
 ├── hero
 ├── facts
+├── system
 ├── pipeline
 ├── gallery
 ├── compare
@@ -109,7 +115,24 @@ A reusable block may provide:
 
 If a future project needs a capability that another project could plausibly reuse, add a block. Do not branch on the project id.
 
-### 3. Integrations are adapters
+### 3. Visual grammar must reflect information structure
+
+Do not turn every technical idea into a flowchart.
+
+`pipeline` is for relationships where order, causality or data flow is genuinely meaningful. `system` is for responsibilities, states and subsystems that coexist without implying a sequence.
+
+A useful rule:
+
+```text
+Can the rows be reordered without changing the meaning?
+
+YES -> system / facts / prose / comparison
+NO  -> pipeline may be appropriate
+```
+
+Arrows are semantic marks, not decoration. Repeated generic cards, nodes and arrows make unrelated projects look artificially similar and reduce the credibility of the technical presentation.
+
+### 4. Integrations are adapters
 
 Provider-specific behavior lives in `IntegrationRegistry`, not project documents or the rasteriser.
 
@@ -131,7 +154,7 @@ The document only declares intent:
 ::embed{provider=miro src="..."}
 ```
 
-### 4. Local 3D is preferred over remote 3D
+### 5. Local 3D is preferred over remote 3D
 
 When a redistributable local `.glb` is available, use `::model3d`.
 
@@ -149,7 +172,7 @@ When a redistributable local `.glb` is available, use `::model3d`.
 
 Use Sketchfab when the local model is unavailable, the public hosted model is itself useful, or Sketchfab-specific features matter.
 
-### 5. Content, composition and display are separate
+### 6. Content, composition and display are separate
 
 Content says what exists:
 
@@ -176,7 +199,7 @@ same CRT
 
 Blocks must not create their own fullscreen architecture.
 
-### 6. Long-form navigation is automatic
+### 7. Long-form navigation is automatic
 
 Projects and articles should not require authors to maintain a separate table of contents.
 
@@ -189,7 +212,7 @@ Projects and articles should not require authors to maintain a separate table of
 
 Because it is painted into the source canvas, this UI receives the real CRT shader too.
 
-### 7. Graceful degradation is mandatory
+### 8. Graceful degradation is mandatory
 
 Failure of one optional visual capability must not make the document disappear.
 
@@ -244,20 +267,35 @@ PERIOD | 2021 — 2023
 ::
 ```
 
-### Pipeline
+### System
 
-Generic connected flow for systems thinking.
+Non-linear editorial breakdown for architecture, responsibilities and states.
 
 ```md
-::pipeline{label="AI PRESSURE ARCHITECTURE"}
-DIRECTOR AI | MONITORS MACRO PRESSURE
-PRESSURE SIGNAL | GUIDES THREAT LOCATION
-CREATURE AI | LOCAL SENSORS + BEHAVIOURS
-PLAYER RESPONSE | HIDE + DIVERT + ESCAPE
+::system{columns=2 label="AI SYSTEM"}
+DIRECTOR AI | GLOBAL PACING + PRESSURE
+CREATURE AI | LOCAL PERCEPTION + DECISIONS
+PERCEPTION | SIGHT + HEARING + RECENT EVIDENCE
+SEARCH STATE | INVESTIGATES WITHOUT PERFECT KNOWLEDGE
 ::
 ```
 
-The same primitive currently represents PENW hardware/input flow and LEAK Director/Creature AI flow. That is exactly the kind of reuse this architecture is aiming for.
+The renderer deliberately uses no arrows.
+
+### Pipeline
+
+Connected flow for actual ordered processes.
+
+```md
+::pipeline{label="INPUT LOOP"}
+PHYSICAL INPUT | ROTARY ENCODER
+INPUT BRIDGE | HARDWARE SIGNAL
+GAME STATE | UNITY INPUT SYSTEM
+PLAYER FEEDBACK | SLIDER + CAMERA
+::
+```
+
+PENW hardware/input and level-authoring workflows are good examples because the order is part of the system. LEAK's survival loop is also sequential. LEAK's Adaptive AI architecture is **not** a pipeline and therefore uses `system`.
 
 ### Gallery / compare / timeline
 
@@ -356,8 +394,8 @@ There is **no PENW-specific runtime code**.
 LEAK intentionally stresses a different shape of project:
 
 - horror/gameplay metadata;
-- survival loop with `pipeline`;
-- Director AI + Creature AI architecture with the same block;
+- survival loop with `pipeline` because it is ordered;
+- Director AI + Creature AI architecture with arrow-free `system`;
 - body-cam/player systems as `facts`;
 - optimization facts;
 - multiple YouTube videos;
@@ -445,6 +483,7 @@ References:
 - [x] Power OFF hides native integration surfaces.
 - [x] PENW can be authored with no PENW-specific runtime code.
 - [x] LEAK can be authored with no Leak-specific runtime code.
+- [x] Non-linear technical architecture can be represented without decorative arrows.
 - [x] npm lockfile includes the Three.js dependency for `npm ci`.
 - [x] Smoke tests cover schema, integrations, 3D contract and both reference projects.
 - [ ] Curated PENW binary assets are committed and referenced by the document.
