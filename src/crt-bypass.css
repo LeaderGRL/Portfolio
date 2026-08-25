@@ -1,13 +1,10 @@
 /* ============================================================================
    CRT OFF BYPASS
 
-   The physical CRT switch should be authoritative. When it is OFF, show the
-   currently selected source canvas directly instead of the WebGL composite.
-   This guarantees that bloom, phosphor persistence, barrel distortion,
-   aberration, scanlines, aperture grille and shader vignette are all absent.
-
-   The photographic glass/bezel remain part of the physical machine; only the
-   electronic CRT treatment is bypassed.
+   The physical CRT switch is authoritative. When it is OFF, show the selected
+   source canvas directly instead of the WebGL composite and remove the optical
+   glass overlays. The bezel remains because it is part of the machine, but the
+   picture itself becomes a neutral digital display for inspecting media.
    ============================================================================ */
 
 .tube.is-crt-off #gl{
@@ -33,8 +30,16 @@
   display:none !important;
 }
 
+/* Shade/gloss are optical CRT treatment too. Leaving them enabled made images
+   look bloomed or washed out even though the electronic shader was bypassed. */
+.tube.is-crt-off .tube__shade,
+.tube.is-crt-off .tube__gloss{
+  opacity:0 !important;
+  visibility:hidden !important;
+}
+
 /* Native cross-origin integrations cannot be sampled by FRAG_CRT. Their
-   compositor optics must therefore follow the same physical CRT switch. */
+   compositor optics therefore follow the same physical CRT switch. */
 .tube.is-crt-off .document-inline-integration__surface{
   filter:none !important;
 }
@@ -57,5 +62,5 @@
    so scrolling / interaction geometry stays synchronized. */
 .document-inline-integration--youtube .document-inline-integration__surface,
 .document-inline-integration--youtube .document-inline-integration__activation{
-  bottom:16px;
+  bottom:22px;
 }
