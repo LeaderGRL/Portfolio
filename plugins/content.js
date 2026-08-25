@@ -6,7 +6,7 @@
  * so authoring validation and rendering cannot silently drift apart.
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
-import { join, extname, basename, resolve, dirname, relative } from 'node:path'
+import { join, extname, basename, resolve, dirname } from 'node:path'
 import { DIRECTIVE_TYPES, getBlockDefinition } from '../src/document/schema.js'
 
 const VIRTUAL = 'virtual:content'
@@ -202,6 +202,19 @@ function inlineLocalAsset(value, file) {
   return `data:${mime};base64,${readFileSync(path).toString('base64')}`
 }
 
+function resolveGalleryBody(body, file) {
+  return String(body || '')
+    .split('\n')
+    .map(line => {
+      if (!line.trim()) return line
+      const [rawSrc, ...rest] = line.split('|')
+      const src = rawSrc.trim()
+      const resolved = src && !isExternal(src) ? inlineLocalAsset(src, file) : src
+      return [resolved, ...rest].join(' | ')
+    })
+    .join('\n')
+}
+
 function resolveMedia(blocks, file) {
   for (const block of blocks) {
     const definition = getBlockDefinition(block.type)
@@ -216,13 +229,14 @@ function resolveMedia(blocks, file) {
         continue
       }
 
-      // Large videos stay external by design. Existing flat content/media URLs
-      // remain backward-compatible. Project-local video should be placed in
-      // public/media (or another public path) and authored with an absolute URL.
       if (block.type === 'video' && field === 'src') {
         block[field] = `/media/${basename(value)}`
       }
     }
+
+    // Gallery sources live in the directive body rather than named fields.
+    // Resolve only the first pipe-separated cell; captions remain untouched.
+    if (block.type === 'gallery') block.body = resolveGalleryBody(block.body, file)
   }
   return blocks
 }
@@ -236,10 +250,6 @@ function readDocument(path, id) {
   }
 }
 
-/**
- * Collections support both the legacy flat form (`frogbyte.md`) and the new
- * self-contained form (`penw/index.md` + `penw/assets/*`).
- */
 function readCollection(dir) {
   if (!existsSync(dir)) return []
   const documents = []
