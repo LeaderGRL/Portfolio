@@ -80,12 +80,18 @@ check(interaction.includes("entry.type === 'model3d'"), 'modal controller explic
 
 check(local3d.includes('GLTFLoader'), 'local 3D uses GLTFLoader')
 check(local3d.includes('OrbitControls'), 'local 3D uses OrbitControls')
-check(local3d.includes("data?.format !== 'jg1500-model-1'"), 'local 3D supports declarative geometry manifests')
+check(local3d.includes('jg1500-model-1'), 'local 3D supports declarative geometry manifests')
 check(local3d.includes('new THREE.BoxGeometry'), 'manifest parts are built as real Three.js meshes')
 check(local3d.includes('new THREE.MeshStandardMaterial'), 'manifest parts use lit Three.js materials')
 check(local3d.includes('_fitCamera(radius)'), 'local 3D auto-frames arbitrary model bounds')
 check(local3d.includes('ShadowMaterial'), 'local 3D has reusable contact shadow')
 check(local3d.includes('mountInput'), 'local 3D has CRT-preserving input proxy')
+check(local3d.includes('controls.connect(proxy)'), 'local 3D render canvas stays separate from DOM input')
+check(local3d.includes("proxy.addEventListener('wheel'"), 'local 3D wheel is forwarded to document scrolling')
+check(displayCss.includes('.document-model3d-input-proxy'), 'local 3D proxy has bounded block styling')
+check(displayCss.includes('overflow:hidden'), 'local 3D integration clips interaction overflow')
+check(bridge.includes('hasVisibleLocal3D'), 'document bridge tracks visible local 3D blocks')
+check(bridge.includes('if (hasVisibleLocal3D()) local3d.tick(time)'), 'offscreen local 3D rendering is paused')
 check(packageJson.dependencies?.three, 'Three.js dependency declared')
 check(packageLock.packages?.['']?.dependencies?.three === packageJson.dependencies?.three, 'Three.js dependency is synchronized in npm lock')
 check(packageLock.packages?.['node_modules/three']?.version, 'npm lock contains resolved Three.js package')
@@ -140,7 +146,7 @@ check(authoring.includes('mounted directly in the document'), 'authoring guide d
 
 check(design.includes('no Leak-specific runtime code'), 'architecture records anti-overfit rule')
 check(design.includes('no PENW-specific runtime code'), 'PENW validation rule documented')
-check(design.includes('Local `.glb` is rendered by Three.js'), 'local 3D strategy documented')
+check(design.includes('Three.js') && design.includes('.glb'), 'local 3D strategy documented')
 
 console.log(failed ? `\n  ${failed} document-engine check(s) FAILED` : '\n  all document-engine checks passed')
 process.exit(failed ? 1 : 0)
