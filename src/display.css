@@ -49,6 +49,14 @@
   image-rendering:pixelated;
 }
 
+.document-inline-optics-defs{
+  position:absolute;
+  width:0;
+  height:0;
+  overflow:hidden;
+  pointer-events:none;
+}
+
 /* Inline third-party integrations. The layer itself never blocks the tube;
    only the currently visible provider boxes receive input. */
 .document-inline-integrations{
@@ -68,9 +76,24 @@
   pointer-events:auto;
   overflow:hidden;
   background:transparent;
+  isolation:isolate;
+  transform:translateZ(0);
+  clip-path:inset(.3% round 1.4%);
 }
 
-.document-inline-integration .article-interaction__embed{
+.document-inline-integration__surface,
+.document-inline-integration__activation{
+  position:absolute;
+  inset:0;
+}
+
+.document-inline-integration__surface{
+  z-index:1;
+  overflow:hidden;
+  filter:url(#document-crt-native-optics) contrast(1.045) saturate(.94) brightness(.96);
+}
+
+.document-inline-integration__surface .article-interaction__embed{
   display:block;
   width:100%;
   height:100%;
@@ -78,8 +101,48 @@
   background:transparent;
 }
 
-/* A very light optical texture visually ties native iframes back to the CRT.
-   It is deliberately weaker than the real FRAG_CRT used by local pixels. */
+/* Passive by default: wheel belongs to the document, click activates the
+   embedded app directly in place. No separate OPEN INTEGRATION button. */
+.document-inline-integration__activation{
+  z-index:4;
+  cursor:pointer;
+  background:transparent;
+  outline:0;
+}
+
+.document-inline-integration__activation:focus-visible{
+  box-shadow:inset 0 0 0 1px rgba(107,243,154,.7);
+}
+
+.document-inline-integration.is-active .document-inline-integration__surface{
+  pointer-events:auto;
+}
+
+/* We cannot sample cross-origin iframe pixels inside FRAG_CRT, but CSS/SVG
+   compositor filters can still bend and soften the composed iframe surface.
+   These overlays restore the strongest tube cues on top of the native pixels. */
+.document-inline-integration--youtube::before,
+.document-inline-integration--sketchfab::before,
+.document-inline-integration--miro::before,
+.document-inline-integration--google::before,
+.document-inline-integration--iframe::before{
+  content:"";
+  position:absolute;
+  z-index:2;
+  inset:0;
+  pointer-events:none;
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(255,70,70,.030) 0 1px,
+      rgba(70,255,130,.025) 1px 2px,
+      rgba(80,120,255,.030) 2px 3px),
+    repeating-linear-gradient(0deg,
+      rgba(0,3,1,.20) 0 1px,
+      transparent 1px 3px);
+  mix-blend-mode:multiply;
+  opacity:.72;
+}
+
 .document-inline-integration--youtube::after,
 .document-inline-integration--sketchfab::after,
 .document-inline-integration--miro::after,
@@ -87,11 +150,20 @@
 .document-inline-integration--iframe::after{
   content:"";
   position:absolute;
+  z-index:3;
   inset:0;
   pointer-events:none;
   background:
-    repeating-linear-gradient(0deg, rgba(0,6,3,.10) 0 1px, transparent 1px 3px),
-    radial-gradient(ellipse at center, transparent 58%, rgba(0,18,8,.12) 100%);
+    linear-gradient(90deg,
+      rgba(55,255,120,.045),
+      transparent 4%,
+      transparent 96%,
+      rgba(55,255,120,.035)),
+    radial-gradient(ellipse at center,
+      transparent 54%,
+      rgba(0,18,8,.11) 76%,
+      rgba(0,8,4,.27) 100%);
+  box-shadow:inset 0 0 14px rgba(50,255,130,.055);
   mix-blend-mode:multiply;
 }
 
@@ -100,6 +172,11 @@
 .document-inline-integration--local-3d{
   background:transparent;
   overflow:visible;
+  clip-path:none;
+}
+
+.document-inline-integration--local-3d .document-inline-integration__surface{
+  filter:none;
 }
 
 .article-interact-trigger{
