@@ -16,7 +16,7 @@ Project Echo: Neon Wave was designed as a complete arcade experience rather than
 
 The core loop asks the player to destroy notes in rhythm while handling long notes, directional movement and rotary-controlled sliders. Camera motion and visual feedback reinforce the musical structure instead of existing only as decoration.
 
-::embed{provider=youtube id=gchRNrRPOwI label="PLAY GAMEPLAY DEMO" title="Project Echo: Neon Wave gameplay"}
+::embed{provider=youtube id=gchRNrRPOwI title="Project Echo: Neon Wave gameplay" height=216}
 
 ## THE MACHINE
 
@@ -24,7 +24,7 @@ The project eventually became a real custom arcade cabinet. An existing wooden c
 
 The 3D cabinet below is the original project model hosted on Sketchfab. It uses the same generic integration block that any future portfolio project can reuse.
 
-::embed{provider=sketchfab uid=d1fa122dc2d4447a949b151b83e7df02 label="EXPLORE ARCADE CABINET IN 3D" title="Project Echo arcade cabinet"}
+::embed{provider=sketchfab uid=d1fa122dc2d4447a949b151b83e7df02 title="Project Echo arcade cabinet" height=236}
 
 ## INPUT SYSTEM
 
@@ -64,5 +64,3 @@ The important lesson was not simply producing more assets, but learning to compa
 PENW forced me to think beyond the boundary of the game engine. A bug could come from Unity code, an input device, physical mounting, a level authoring workflow or simply poor visual feedback. Solving those problems required treating the entire installation as one system.
 
 That systems view — tools, runtime, hardware, UX and iteration cost — is the part of the project that still influences my engineering work the most.
-
-::embed{provider=iframe src="https://view.genial.ly/64fdc15eac974500112211b1/interactive-content-copie-project-echo-neon-wave" label="OPEN ORIGINAL 2023 PRESENTATION" title="Original Project Echo presentation"}
