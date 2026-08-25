@@ -3,20 +3,20 @@ import { ArticleRasteriser } from './article-rasteriser.js'
 import { DisplayPipeline } from './display-pipeline.js'
 
 /* ========================================================================== *
- * ArticleCRTBridge
+ * Document CRT bridge
  *
- * Adapts the existing App without creating a second tube. App still owns the
- * animation loop, power state and CRT instance. This bridge switches between
- * the terminal and article 480x360 pixel sources and coordinates the explicit
- * native interaction surface used by video controls and external embeds.
+ * Historical file/class names are retained temporarily to minimize migration
+ * risk, but the bridge now serves every long-form document detail (articles
+ * and projects). Both kinds use the same 480x360 source, CRT shader, scrolling
+ * and native interaction surface.
  * ========================================================================== */
 export function attachArticleCRT(app) {
   if (!app || app.__articleCRTBridge) return app?.__articleCRTBridge || null
 
   const tube = document.getElementById('tube')
   const reader = document.getElementById('article-reader')
-  const articleCanvas = document.getElementById('article-source')
-  if (!tube || !reader || !articleCanvas || !app.crt || !app.raster) return null
+  const documentCanvas = document.getElementById('article-source')
+  if (!tube || !reader || !documentCanvas || !app.crt || !app.raster) return null
 
   const terminalCanvas = app.raster.canvas
   const terminalPaint = app.raster.paint.bind(app.raster)
@@ -24,41 +24,44 @@ export function attachArticleCRT(app) {
     crt: app.crt,
     sources: {
       terminal: terminalCanvas,
-      article: articleCanvas,
+      document: documentCanvas,
     },
   })
 
   let interaction = null
-  const articleRaster = new ArticleRasteriser(articleCanvas, reader, () => {
+  const documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
     app.dirty = true
     interaction?.sync()
   })
-  interaction = new ArticleInteractionController({ tube, reader, rasteriser: articleRaster })
+  interaction = new ArticleInteractionController({ tube, reader, rasteriser: documentRaster })
 
-  const isArticle = () => app.state?.route === 'articles' && Boolean(app.state?.item)
+  const isDocument = () => (
+    (app.state?.route === 'articles' || app.state?.route === 'projects') &&
+    Boolean(app.state?.item)
+  )
 
   const syncSource = () => {
-    const article = isArticle() ? app.state.item : null
-    const itemChanged = articleRaster.setItem(article)
+    const documentItem = isDocument() ? app.state.item : null
+    const itemChanged = documentRaster.setItem(documentItem)
     if (itemChanged && interaction.isOpen) interaction.close(false)
 
-    const nextId = article ? 'article' : 'terminal'
+    const nextId = documentItem ? 'document' : 'terminal'
     if (pipeline.setSource(nextId)) {
       app.dirty = true
       app.state.static = Math.max(app.state.static || 0, 0.7)
     }
 
-    tube.dataset.displayMode = nextId
-    tube.classList.toggle('has-dom-surface', Boolean(article))
-    if (!article && interaction.isOpen) interaction.close(false)
+    // Keep the legacy CSS value until display.css is migrated; it describes a
+    // rasterised long-form document now, not specifically an article.
+    tube.dataset.displayMode = documentItem ? 'article' : 'terminal'
+    tube.classList.toggle('has-dom-surface', Boolean(documentItem))
+    if (!documentItem && interaction.isOpen) interaction.close(false)
     interaction.sync()
   }
 
-  // App calls this whenever its source image is dirty. In article mode the
-  // same call now paints the authored article into the CRT source canvas.
   app.raster.paint = (term, reveal, cursorOn) => {
     syncSource()
-    if (isArticle()) return articleRaster.paint(true)
+    if (isDocument()) return documentRaster.paint(true)
     return terminalPaint(term, reveal, cursorOn)
   }
 
@@ -69,16 +72,12 @@ export function attachArticleCRT(app) {
     return result
   }
 
-  // Native video needs fresh source pixels while playing. Static articles do
-  // not force a continuous source upload. The interaction affordance is also
-  // synced here so smooth DOM scrolling updates it without waiting for a route
-  // render.
   let raf = 0
   const mediaFrame = () => {
     raf = requestAnimationFrame(mediaFrame)
-    if (!isArticle()) return
+    if (!isDocument()) return
     interaction.sync()
-    if (articleRaster.videoNodes.some(video => !video.paused && !video.ended && video.readyState >= 2)) {
+    if (documentRaster.videoNodes.some(video => !video.paused && !video.ended && video.readyState >= 2)) {
       app.dirty = true
     }
   }
@@ -87,7 +86,9 @@ export function attachArticleCRT(app) {
   syncSource()
 
   const bridge = {
-    articleRaster,
+    documentRaster,
+    // Backward-compatible alias while callers/tests migrate.
+    articleRaster: documentRaster,
     interaction,
     pipeline,
     syncSource,
