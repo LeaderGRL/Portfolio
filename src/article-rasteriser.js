@@ -198,26 +198,38 @@ export class ArticleRasteriser {
   _drawMediaFrame(entry, y, source) {
     const g = this.ctx
     const x = entry.x
-    const w = entry.width
-    const h = entry.height - 24
-    g.fillStyle = '#010805'
-    g.fillRect(x, y, w, h)
-    g.strokeStyle = COLORS.dim
-    g.lineWidth = 1
-    g.strokeRect(x + .5, y + .5, w - 1, h - 1)
+    const maxW = entry.width
+    const maxH = entry.height - 24
 
     if (source && (source.complete || source.readyState >= 2)) {
       const sw = source.videoWidth || source.naturalWidth || source.width || 1
       const sh = source.videoHeight || source.naturalHeight || source.height || 1
-      const scale = Math.min((w - 4) / sw, (h - 4) / sh)
+      const scale = Math.min(maxW / sw, maxH / sh)
       const dw = sw * scale
       const dh = sh * scale
-      const dx = x + (w - dw) * .5
-      const dy = y + (h - dh) * .5
+      const dx = x + (maxW - dw) * .5
+      const dy = y + (maxH - dh) * .5
+
+      // The frame follows the rendered media bounds. Filling the whole article
+      // column here would create artificial black letterboxing around portrait
+      // images, which is not part of the authored asset.
+      g.fillStyle = '#010805'
+      g.fillRect(dx, dy, dw, dh)
       try { g.drawImage(source, dx, dy, dw, dh) } catch {}
-    } else {
-      this._drawLines(['MEDIA LOADING...'], x + 12, y + h * .5, 9, 12, COLORS.dim, 600)
+
+      g.strokeStyle = COLORS.dim
+      g.lineWidth = 1
+      g.strokeRect(dx + .5, dy + .5, Math.max(0, dw - 1), Math.max(0, dh - 1))
+      return
     }
+
+    const placeholderW = Math.min(maxW, 190)
+    const placeholderH = 48
+    const px = x + (maxW - placeholderW) * .5
+    const py = y + (maxH - placeholderH) * .5
+    g.strokeStyle = COLORS.dim
+    g.strokeRect(px + .5, py + .5, placeholderW - 1, placeholderH - 1)
+    this._drawLines(['MEDIA LOADING...'], px + 12, py + 28, 9, 12, COLORS.dim, 600)
   }
 
   paint(force = false) {
