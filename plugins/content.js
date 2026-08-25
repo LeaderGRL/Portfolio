@@ -10,25 +10,16 @@
  *
  * FORMAT
  * Front matter between --- fences, then a body of blocks separated by blank
- * lines. Three block kinds:
- *
- *   prose      any paragraph
- *   heading    a Markdown heading (# through ######)
- *   directive  ::name{key=value key=value} with an optional body, closed by ::
- *
- * The directive syntax is the extension point. Adding a block type later —
- * a WASM demo, a live benchmark, an embedded shader — means writing one
- * renderer in pages.js and one entry in KNOWN_DIRECTIVES. Nothing about the
- * parser changes, and existing content keeps parsing.
+ * lines. Supported blocks include prose, headings, fenced code, lists, typed
+ * directives and legacy raw <iframe> embeds. Raw iframes are normalized into
+ * the same `embed` block shape as ::embed so the runtime stays HTML-agnostic.
  */
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, extname, basename, resolve } from 'node:path'
 
 const VIRTUAL = 'virtual:content'
 const RESOLVED = '\0' + VIRTUAL
 
-/** Directives the renderer knows how to lay out. Anything else is a build error
- *  rather than a silent blank on the screen. */
 const KNOWN_DIRECTIVES = new Set(['image', 'video', 'figure', 'note', 'embed'])
 
 function parseFrontMatter(raw) {
@@ -63,6 +54,50 @@ function parseDirectiveHead(line) {
   return { name: m[1], attrs }
 }
 
+function parseHtmlAttributes(source) {
+  const attrs = {}
+  const re = /([:\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g
+  let match
+  while ((match = re.exec(source))) {
+    attrs[match[1].toLowerCase()] = match[2] ?? match[3] ?? match[4] ?? ''
+  }
+  return attrs
+}
+
+/**
+ * Normalize legacy raw HTML iframes into a typed embed block. We deliberately
+ * support iframe only rather than arbitrary HTML: authored content remains
+ * declarative and the runtime never has to parse or trust random markup.
+ */
+function parseRawIframe(lines, start) {
+  if (!/^\s*<iframe\b/i.test(lines[start] || '')) return null
+
+  const html = []
+  let i = start
+  while (i < lines.length) {
+    html.push(lines[i])
+    if (/<\/iframe\s*>/i.test(lines[i])) break
+    i++
+  }
+
+  const markup = html.join('\n')
+  const open = /<iframe\b([^>]*)>/i.exec(markup)
+  if (!open) return null
+  const attrs = parseHtmlAttributes(open[1])
+  if (!attrs.src) return null
+
+  return {
+    block: {
+      type: 'embed',
+      src: attrs.src,
+      title: attrs.title || attrs['aria-label'] || 'Interactive integration',
+      width: attrs.width,
+      height: attrs.height,
+    },
+    next: Math.min(lines.length, i + 1),
+  }
+}
+
 function parseBody(body, file) {
   const blocks = []
   const lines = body.split('\n')
@@ -90,6 +125,14 @@ function parseBody(body, file) {
       }
       if (i < lines.length) i++
       blocks.push({ type: 'code', language, body: inner.join('\n') })
+      continue
+    }
+
+    const rawIframe = parseRawIframe(lines, i)
+    if (rawIframe) {
+      flushPara()
+      blocks.push(rawIframe.block)
+      i = rawIframe.next
       continue
     }
 
@@ -127,19 +170,14 @@ function parseBody(body, file) {
       if (!KNOWN_DIRECTIVES.has(head.name)) {
         throw new Error(
           `${file}: unknown directive "::${head.name}". ` +
-          `Add a renderer in src/pages.js and register it in plugins/content.js.`)
+          `Add a renderer and register it in plugins/content.js.`)
       }
-      // A directive with a body is followed immediately by its content and
-      // closed with ::. One followed by a blank line is void. Without that
-      // rule a void directive scans forward for a terminator that never
-      // arrives and swallows the rest of the file — which is exactly what it
-      // did to every block after the first ::image.
       const hasBody = i + 1 < lines.length && lines[i + 1].trim() !== ''
       const inner = []
       i++
       if (hasBody) {
         while (i < lines.length && lines[i].trim() !== '::') { inner.push(lines[i]); i++ }
-        i++                                      // consume the closing ::
+        if (i < lines.length) i++
       }
       blocks.push({ type: head.name, ...head.attrs, body: inner.join('\n').trim() })
       continue
@@ -156,20 +194,11 @@ const MEDIA_DIR = 'content/media'
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
                '.webp': 'image/webp', '.gif': 'image/gif' }
 
-/**
- * Images are inlined as data URIs so the built page stays one file.
- * Video is not: a clip large enough to be worth showing is large enough to
- * make base64 a bad trade, so videos are referenced from public/media/ and
- * ship alongside. That is the one place the single-file promise bends, and
- * it bends on purpose.
- */
 function resolveMedia(blocks, file) {
   for (const b of blocks) {
     if (b.type === 'image') {
       const path = join(MEDIA_DIR, b.src)
-      if (!existsSync(path)) {
-        throw new Error(`${file}: image not found: ${path}`)
-      }
+      if (!existsSync(path)) throw new Error(`${file}: image not found: ${path}`)
       const mime = MIME[extname(b.src).toLowerCase()]
       if (!mime) throw new Error(`${file}: unsupported image type: ${b.src}`)
       b.src = `data:${mime};base64,${readFileSync(path).toString('base64')}`
@@ -206,11 +235,6 @@ export default function contentPlugin(root = 'content') {
         projects: readCollection(join(root, 'projects')),
         articles: readCollection(join(root, 'articles')),
       }
-      // addWatchFile needs ABSOLUTE paths. Given a relative one, Vite treats
-      // it as an import specifier of the virtual module and tries to resolve
-      // it — which fails outright on Windows, where join() produces
-      // "content\\pages\\about.md" and the dev server reports it as a missing
-      // import from virtual:content.
       watched = []
       for (const d of ['pages', 'projects', 'articles']) {
         const dir = join(root, d)
@@ -221,9 +245,8 @@ export default function contentPlugin(root = 'content') {
       watched.forEach(f => this.addWatchFile(f))
       return `export default ${JSON.stringify(bundle)}`
     },
-    /** Editing any .md re-runs the load above and hot-reloads the screen. */
     handleHotUpdate({ file, server }) {
-      if (!resolve(file).startsWith(resolve(root))) return   // path separators differ per OS
+      if (!resolve(file).startsWith(resolve(root))) return
       const mod = server.moduleGraph.getModuleById(RESOLVED)
       if (mod) server.moduleGraph.invalidateModule(mod)
       server.ws.send({ type: 'full-reload' })
