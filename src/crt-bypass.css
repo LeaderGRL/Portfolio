@@ -30,6 +30,18 @@
   display:none !important;
 }
 
+/* Power state always wins over display mode. The direct source used by CRT
+   bypass must disappear too, otherwise the rocker changes state while the
+   last framebuffer remains visibly frozen on the tube. */
+.tube.is-powered-off.is-crt-off #article-source,
+.tube.is-powered-off.is-crt-off #fallback2d,
+.tube.is-powered-off.is-crt-off #gl{
+  display:none !important;
+  opacity:0 !important;
+  visibility:hidden !important;
+  pointer-events:none !important;
+}
+
 /* Shade/gloss are optical CRT treatment too. Leaving them enabled made images
    look bloomed or washed out even though the electronic shader was bypassed. */
 .tube.is-crt-off .tube__shade,
