@@ -70,7 +70,6 @@ export class App {
   }
 
   _bindControls() {
-    // --- CRT effects switch ---
     const sw = document.getElementById("crt-switch");
     sw.addEventListener("click", () => {
       const on = sw.getAttribute("aria-checked") !== "true";
@@ -80,7 +79,6 @@ export class App {
       foley.ensure(); foley.clunk(1.4);
     });
 
-    // --- volume ---
     const slider = document.getElementById("volume");
     const thumb = document.getElementById("volume-thumb");
     const set = (v) => {
@@ -97,8 +95,6 @@ export class App {
     };
     slider.addEventListener("pointerdown", e => {
       foley.ensure();
-      // Optional: not every engine implements it, and losing capture only
-      // means the drag stops at the element's edge rather than throwing.
       slider.setPointerCapture?.(e.pointerId);
       slider.dataset.drag = "1"; set(fromEvent(e));
     });
@@ -112,12 +108,8 @@ export class App {
     });
     requestAnimationFrame(() => set(0.35));
 
-    // --- power rocker ---
     const rocker = document.getElementById("power");
     const tube = document.getElementById("tube");
-    // The display boots powered on, so the physical rocker, its ARIA state and
-    // its ARIA state must begin on the same throw. Keeping this explicit also
-    // makes the first click animate from ON to OFF.
     const initiallyOn = this.state.powerTarget >= 0.5;
     rocker.classList.toggle("is-on", initiallyOn);
     rocker.setAttribute("aria-pressed", String(initiallyOn));
@@ -141,8 +133,6 @@ export class App {
       const num = "12345".indexOf(k);
       if (num >= 0) { this.navKeys[ROUTES[num + 1].id].tap(); this.go(ROUTES[num + 1].id); return; }
       if (k === "0" || k === "h") { this.navKeys.home.tap(); this.go("home"); return; }
-      // On a list the arrows move the selection; on a detail page there is
-      // nothing to select, so they scroll the document instead.
       if (k === "ArrowDown") { e.preventDefault(); this.state.item ? this.scrollBy(2) : this.move(1); }
       else if (k === "ArrowUp") { e.preventDefault(); this.state.item ? this.scrollBy(-2) : this.move(-1); }
       else if (k === "PageDown") { e.preventDefault(); if (!articleReaderScroll('down')) this.scrollBy(this.term.rows - 2); }
@@ -156,7 +146,6 @@ export class App {
     });
   }
 
-
   _fit() {
     const machine = document.getElementById("machine");
     const compact = innerWidth < 980 || innerWidth / innerHeight < 1.05;
@@ -165,17 +154,11 @@ export class App {
 
     const dw = compact ? 941 : 1920;
     const dh = compact ? 1672 : 1080;
-    // The photographed desktop plate is authored at exact 16:9 resolutions,
-    // so cover fitting preserves its geometry and keeps the texture full bleed.
-    // The portrait plate is likewise cover-fitted: no bars, no stretching,
-    // and the photographed surface always reaches every edge of the phone.
     const fit = compact
       ? Math.max(innerWidth / dw, innerHeight / dh)
       : Math.max(innerWidth / dw, innerHeight / dh);
     document.documentElement.style.setProperty("--fit", fit.toFixed(4));
 
-    // Backing store follows the tube's real layout box, so the compact chassis
-    // gets a correctly sized framebuffer without a second set of magic numbers.
     if (this.crt.ok) {
       const tube = document.getElementById("tube");
       this.crt.resize(tube.offsetWidth || 740, tube.offsetHeight || 576,
@@ -183,7 +166,6 @@ export class App {
     }
   }
 
-  /* -------------------------------------------------------------- routing */
   go(route) {
     foley.ensure();
     if (this.state.route === route && !this.state.item) return;
@@ -196,11 +178,6 @@ export class App {
     this._syncKeys();
   }
 
-  /* -------------------------------------------------------------- SCROLL
-   * The Terminal owns the document/window split, so the app only nudges an
-   * offset and repaints. Scrolling must not re-run the reveal animation,
-   * hence render(false).
-   */
   scrollBy(rows) {
     if (!this.term || !this.term.maxScroll) return;
     if (this.term.scrollBy(rows)) { foley.blip && foley.blip(); this.render(false); }
@@ -260,18 +237,22 @@ export class App {
     for (const r of ROUTES) this.navKeys[r.id].classList.toggle("is-on", r.id === this.state.route);
   }
 
-  /* ---------------------------------------------------------------- paint */
   render(retype = false) {
     const st = this.state;
     const keepScroll = this.term.scroll;
     this.term.clear();
     const page = st.item ? PAGES.detail : (PAGES[st.route] || PAGES.home);
     page(this.term, st);
-    const article = st.route === 'articles' && st.item ? st.item : null;
-    syncArticleReader(article);
-    document.getElementById('tube').classList.toggle('is-reading', Boolean(article));
-    // A navigation starts at the top; a repaint caused by scrolling or by a
-    // video frame keeps where the reader was.
+
+    // Articles and projects are both long-form documents now. The same DOM
+    // mirror supplies semantics, native media elements and scroll state while
+    // the visible pixels continue to come from the raster/CRT pipeline.
+    const documentItem = (st.route === 'articles' || st.route === 'projects') && st.item
+      ? st.item
+      : null;
+    syncArticleReader(documentItem);
+    document.getElementById('tube').classList.toggle('is-reading', Boolean(documentItem));
+
     this.term.scroll = retype ? 0 : Math.min(keepScroll, this.term.maxScroll);
     this.total = this.term.countGlyphs();
     if (retype) { this.reveal = 0; this._announce(); }
@@ -279,8 +260,6 @@ export class App {
     this.dirty = true;
   }
 
-  /** Mirror the tube into an aria-live region: the terminal stays readable
-   *  to screen readers even though it is painted into a canvas. */
   _announce() {
     const lines = [];
     for (let y = 0; y < this.term.docRows; y++) {
@@ -298,7 +277,7 @@ export class App {
   boot() {
     const t = this.term;
     t.clear();
-    this.state.route = "boot";   // transient, so go("home") is not a no-op
+    this.state.route = "boot";
     const lines = [
       "JG-1500 TERMINAL — FIRMWARE 2.6.1",
       "",
@@ -327,7 +306,6 @@ export class App {
     }, REDUCED ? 400 : 2400);
   }
 
-  /* ----------------------------------------------------------------- loop */
   frame(ms) {
     requestAnimationFrame(t => this.frame(t));
     const st = this.state;
@@ -336,14 +314,12 @@ export class App {
     this._last = t;
     st.time = t;
 
-    // eased control state
     st.power = lerp(st.power, st.powerTarget, 1 - Math.pow(0.001, dt * 1.6));
     st.crt = lerp(st.crt, st.crtTarget, 1 - Math.pow(0.001, dt * 3));
     st.degauss = Math.max(0, st.degauss - dt * 0.9);
     st.static = Math.max(0, st.static - dt * 4.5);
     st.warm = Math.min(1, st.warm + dt * 0.55);
 
-    // clock / uptime readouts
     const d = new Date();
     const pad = n => String(n).padStart(2, "0");
     const clock = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
@@ -354,7 +330,6 @@ export class App {
       if (!this.booting && st.route === "home" && !st.item) this.render();
     }
 
-    // teletype reveal
     if (this.reveal < this.revealTarget) {
       const speed = REDUCED ? 100000 : 900;
       const before = Math.floor(this.reveal);
@@ -365,7 +340,6 @@ export class App {
       }
     }
 
-    // cursor blink
     const blink = Math.floor(t * 2) % 2 === 0;
     if (blink !== this._blink) { this._blink = blink; this.dirty = true; }
 
@@ -378,12 +352,5 @@ export class App {
   }
 }
 
-/* The module is a library; main.js owns the entry point.
- *
- * This used to boot itself here as well, which was harmless in the single-file
- * build and fatal once main.js existed: two App instances appended two sets of
- * keys, the nav column outgrew its grid row, and the chassis burst its own
- * frame. The guard makes a second call a no-op rather than a second machine.
- */
 let instance = null;
 export const start = () => (instance ||= new App());
