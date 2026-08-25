@@ -41,8 +41,9 @@ surface, so the controls read as one moulded assembly. A small integrated LED
 at the upper-right owns route selection without recolouring the entire face.
 CSS owns layout, travel, focus, and responsive composition.
 The glass specular is anchored slightly inside the tube's upper-left curvature:
-its broad shoulder follows the top and left glass edges instead of collapsing
-to a point or floating over terminal content.
+one enlarged, blurred copy of the photographic gloss supplies the softbox
+halo, while a second sharper copy preserves the bright glass streak. Both
+follow the top and left curvature instead of floating over terminal content.
 The live tube deliberately bleeds 10–12 design pixels behind the photographic
 moulding. The moulding remains the visual mask, while the raster no longer
 exposes dead bands or unfilled corners at the measured aperture boundary.
@@ -99,5 +100,6 @@ match the reference hardware legends.
 - CRT scanlines stay sub-pixel-thin and restrained. Long-form article content
   receives the same glass, fine scanline, grille and CRT toggle treatment as
   the terminal canvas.
-- The shader's aperture fade starts outside the visible canvas; edge falloff
-  may shape the beam but must never create a black border inside the moulding.
+- The shader never owns the corner radius. It paints through the complete
+  rectangular backing surface; only the photographic chassis alpha defines
+  the visible glass silhouette, so there can be no competing corner shapes.

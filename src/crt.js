@@ -71,19 +71,6 @@ vec2 curve(vec2 uv){
   return uv * 0.5 + 0.5;
 }
 
-// Soft rounded-rectangle edge, matched to the aperture the bezel leaves
-// (superellipse exponent measured at 5.4). Only needed so the raster does not
-// square off inside a rounded hole; the hard masking is the bezel's job.
-float aperture(vec2 uv){
-  vec2 p = abs(uv * 2.0 - 1.0);
-  float d = pow(pow(p.x, 5.4) + pow(p.y, 5.4), 1.0 / 5.4);
-  // The canvas already matches the aperture bounding box. Keeping the fade
-  // inside d=1 darkened the visible edge before the photographic moulding
-  // could mask it. Move the soft cut outside the box: the live raster now
-  // reaches every edge, while the frame still owns the final silhouette.
-  return 1.0 - smoothstep(1.04, 1.14, d);
-}
-
 vec3 bloom(vec2 uv, float r){
   vec3 s = vec3(0.0);
   const int N = 10;
@@ -180,8 +167,6 @@ void main(){
   // double the vignette and crush the corners.
   vec2 vg = cuv * (1.0 - cuv.yx);
   col *= mix(1.0, pow(clamp(vg.x * vg.y * 90.0, 0.0, 1.0), 0.10), 0.35 * uCrt + 0.10);
-
-  col *= aperture(vUv);
 
   // ---- collapse flash: the line and dot a tube leaves behind --------------
   float lineGlow = (1.0 - vS) * hS * exp(-abs(vUv.y - 0.5) * 220.0) * 1.2;

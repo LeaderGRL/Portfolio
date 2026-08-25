@@ -329,10 +329,18 @@ img{ display:block; -webkit-user-drag:none; user-select:none; pointer-events:non
 
 .tube__shade{ position:absolute; inset:0; width:100%; height:100%; z-index:4; mix-blend-mode:multiply; pointer-events:none; }
 .tube__gloss{
-  position:absolute; inset:0; width:100%; height:100%; z-index:5;
-  mix-blend-mode:screen; opacity:1; pointer-events:none;
-  transform:translate(1.6%,1.25%) scale(.985); transform-origin:0 0;
-  filter:brightness(1.22) contrast(1.08) saturate(.88);
+  position:absolute; inset:0; width:100%; height:100%; pointer-events:none;
+  mix-blend-mode:screen; transform-origin:0 0;
+}
+.tube__gloss--soft{
+  z-index:5; opacity:.46;
+  transform:translate(1.2%,1%) scale(1.5);
+  filter:blur(14px) brightness(2.1) saturate(.52);
+}
+.tube__gloss--core{
+  z-index:6; opacity:1;
+  transform:translate(1.3%,1.05%) scale(1.24);
+  filter:brightness(1.58) contrast(1.06) saturate(.64);
 }
 .screen__bezel{ display:none; position:absolute; inset:0; width:100%; height:100%; z-index:3; }
 

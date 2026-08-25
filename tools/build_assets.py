@@ -145,7 +145,7 @@ def chassis_assets(source, meta):
     print('  chassis         1920x1080 + 3840x2160 (no stretch)')
 
 
-def glass_maps(im, size, spec_gain=1.35, spec_shift=(-0.030, -0.022), spec_blur=0.011):
+def glass_maps(im, size, spec_gain=1.48, spec_shift=(-0.030, -0.022), spec_blur=0.009):
     """Decompose a rendered glass face into multiply and screen layers.
 
     A render of glass is ambient tint times shading, plus specular. Separating
@@ -182,7 +182,11 @@ def glass_maps(im, size, spec_gain=1.35, spec_shift=(-0.030, -0.022), spec_blur=
     # the whole upper half instead of leaving a defined streak.
     spec = np.clip(lum - shading * 1.15, 0, None)
     spec = spec / max(spec.max(), 1e-6)
-    spec = np.clip(spec * spec_gain, 0, 1) ** 1.25
+    # Preserve the long, low-energy shoulder of the real softbox reflection.
+    # A gamma above 1 kept only the tiny white core and made the lighting look
+    # like a pin highlight; the lower gamma retains the photographic taper
+    # down the left-hand curvature without inventing a CSS light source.
+    spec = np.clip(spec * spec_gain, 0, 1) ** 0.72
 
     # The reflection of a softbox has no hard edge. Extracting it by frequency
     # leaves one, because the subtraction clips: blurring puts it back.
