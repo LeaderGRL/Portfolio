@@ -1,9 +1,9 @@
 /* ============================================================================
    SHARED DISPLAY PIPELINE
 
-   `#gl` is the primary electronic picture. Terminal and article sources feed
-   the same CRT shader. Native video/iframe UI is only exposed explicitly while
-   the user interacts with those surfaces.
+   `#gl` is the primary electronic picture. Terminal and document sources feed
+   the same CRT shader. Native interaction is exposed explicitly only when a
+   block needs controls that cannot live inside the raster source itself.
    ============================================================================ */
 
 .display-pixel-source{
@@ -27,8 +27,6 @@
   z-index:1;
 }
 
-/* In normal article mode the authored DOM is used only for semantics and scroll
-   state. Its pixels must not cover the raster source processed by FRAG_CRT. */
 .tube[data-display-mode="article"] .display-surface{
   opacity:0;
 }
@@ -38,8 +36,6 @@
   pointer-events:none;
 }
 
-/* WebGL fallback: article-source becomes the visible tube picture directly.
-   Terminal fallback continues to use fallback2d as before. */
 .tube.is-fallback[data-display-mode="article"] #fallback2d{
   opacity:0;
 }
@@ -53,8 +49,6 @@
   image-rendering:pixelated;
 }
 
-/* Explicit entry point for native controls. This is intentionally visible and
-   never relies on invisible hit targets in the article DOM. */
 .article-interact-trigger{
   position:absolute;
   z-index:3;
@@ -95,7 +89,7 @@
 
 .article-interaction__close{
   position:absolute;
-  z-index:2;
+  z-index:5;
   top:8px;
   right:8px;
   border:1px solid rgba(107,243,154,.62);
@@ -124,8 +118,6 @@
   background:#000;
 }
 
-/* A faint optical texture keeps native interaction mode visually integrated
-   with the CRT without intercepting controls. */
 .article-interaction::after{
   content:"";
   position:absolute;
@@ -136,8 +128,65 @@
   opacity:.40;
 }
 
-/* Remove the old article-specific imitation CRT. The real FRAG_CRT receives
-   article pixels directly during normal reading. */
+/* Local Three.js interaction is different from iframe interaction. The visible
+   model remains in #article-source -> FRAG_CRT. This overlay only captures
+   pointer/wheel input, so its renderer canvas is intentionally near-invisible. */
+.article-interaction.is-model3d-interaction{
+  inset:0;
+  border:0;
+  background:transparent;
+  box-shadow:none;
+  overflow:visible;
+}
+
+.article-interaction.is-model3d-interaction::after{
+  display:none;
+}
+
+.article-interaction.is-model3d-interaction .article-interaction__content{
+  inset:0;
+  padding:0;
+  display:block;
+}
+
+.document-model3d-input{
+  width:100%;
+  height:100%;
+  display:block;
+  touch-action:none;
+}
+
+.document-model3d-input--mounted{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  opacity:.001;
+  cursor:grab;
+  pointer-events:auto;
+}
+
+.document-model3d-input--mounted:active{
+  cursor:grabbing;
+}
+
+.article-interaction__model-help{
+  position:absolute;
+  z-index:4;
+  left:50%;
+  bottom:18px;
+  transform:translateX(-50%);
+  pointer-events:none;
+  white-space:nowrap;
+  padding:7px 10px;
+  border:1px solid rgba(107,243,154,.48);
+  background:rgba(1,12,6,.78);
+  color:#b9ffc9;
+  font:700 9px/1 ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  letter-spacing:.07em;
+  box-shadow:0 0 14px rgba(47,208,109,.14);
+}
+
 .tube.has-dom-surface::before,
 .tube.has-dom-surface::after,
 .tube.has-dom-surface .article-reader::before,
@@ -147,8 +196,6 @@
   animation:none !important;
 }
 
-/* Power-off is a hard visual boundary. JS closes native interaction state, and
-   CSS also hides it immediately so no iframe/video can flash over a dead tube. */
 .tube.is-powered-off .display-surface,
 .tube.is-powered-off .article-interact-trigger,
 .tube.is-powered-off .article-interaction{
@@ -160,7 +207,6 @@
   display:none !important;
 }
 
-/* Fullscreen enlarges the same physical display. */
 .screen:fullscreen{
   width:100vw !important;
   height:100vh !important;
