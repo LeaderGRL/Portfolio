@@ -9,58 +9,6 @@
 </head>
 <body>
 
-<!-- GPU-composited optics for native DOM surfaces. The filter processes the
-     visible DOM group itself, so text, images, native video and iframe pixels
-     receive bloom and chromatic separation while keeping their native input
-     behaviour. The procedural WebGL layer remains a separate pass above it. -->
-<svg class="display-optics-defs" width="0" height="0" aria-hidden="true" focusable="false">
-  <defs>
-    <filter id="display-crt-optics"
-            x="-8%" y="-8%" width="116%" height="116%"
-            color-interpolation-filters="sRGB">
-      <!-- Keep the authored image as the canonical source. -->
-      <feColorMatrix in="SourceGraphic" type="matrix"
-        values="1.035 0     0     0 0
-                0     1.055 0     0 0
-                0     0     1.025 0 0
-                0     0     0     1 0"
-        result="base"/>
-
-      <!-- Beam bloom. A narrow green-biased copy is screened back over the
-           source instead of blurring the readable layer itself. -->
-      <feGaussianBlur in="base" stdDeviation="1.05" result="blur"/>
-      <feColorMatrix in="blur" type="matrix"
-        values="0.10 0.16 0.04 0 0
-                0.18 0.84 0.13 0 0
-                0.05 0.18 0.05 0 0
-                0    0    0    .22 0"
-        result="glow"/>
-
-      <!-- Small red/blue channel offsets reproduce the edge separation of the
-           terminal shader without moving the interactive hit targets. -->
-      <feColorMatrix in="base" type="matrix"
-        values="1 0 0 0 0
-                0 0 0 0 0
-                0 0 0 0 0
-                0 0 0 .24 0"
-        result="red"/>
-      <feOffset in="red" dx="0.85" dy="0" result="red-shift"/>
-
-      <feColorMatrix in="base" type="matrix"
-        values="0 0 0 0 0
-                0 0 0 0 0
-                0 0 1 0 0
-                0 0 0 .22 0"
-        result="blue"/>
-      <feOffset in="blue" dx="-0.85" dy="0" result="blue-shift"/>
-
-      <feBlend in="base" in2="red-shift" mode="screen" result="with-red"/>
-      <feBlend in="with-red" in2="blue-shift" mode="screen" result="chroma"/>
-      <feBlend in="chroma" in2="glow" mode="screen"/>
-    </filter>
-  </defs>
-</svg>
-
 <div id="stage">
   <div class="machine" id="machine">
 
@@ -73,7 +21,6 @@
       <img alt="" data-asset="chassis-frame-mobile">
     </picture>
 
-    <!-- ── nameplate ──────────────────────────────────────────────────── -->
     <div class="plate-row">
       <div class="rail"><span></span><span></span><span></span></div>
       <div class="nameplate">
@@ -86,28 +33,23 @@
       <div class="rail rail--r"><span></span><span></span><span></span></div>
     </div>
 
-    <!-- ── navigation ─────────────────────────────────────────────────── -->
     <div class="panel panel--left">
       <div class="group" id="nav-keys"></div>
     </div>
 
-    <!-- ── tube ───────────────────────────────────────────────────────────
-         The display has two content paths that share one physical glass stack:
-         the terminal owns the full WebGL post-process, while DOM/interactive
-         surfaces stay native and receive GPU DOM optics plus a transparent CRT
-         WebGL pass. Future games, software, WebGL/WASM demos and fullscreen
-         mode mount through the same display-surface instead of adding another
-         one-off layer.                                                       -->
-    <div class="screen">
+    <!-- One physical CRT, multiple pixel sources. `gl` is always the visible
+         output. `fallback2d` and `article-source` are source canvases feeding
+         the exact same CRT shader. The DOM article remains as an invisible
+         interaction/accessibility layer above the picture. -->
+    <div class="screen" id="screen">
       <div class="tube" id="tube" data-display-mode="terminal">
         <canvas id="gl"></canvas>
         <canvas id="fallback2d"></canvas>
+        <canvas class="display-pixel-source" id="article-source" aria-hidden="true"></canvas>
 
         <div class="display-surface" id="display-surface">
           <article class="article-reader" id="article-reader" tabindex="0" hidden></article>
         </div>
-
-        <canvas class="crt-overlay" id="crt-overlay" aria-hidden="true"></canvas>
 
         <img class="tube__shade" alt="" data-asset="glass-shade">
         <img class="tube__gloss tube__gloss--soft" alt="" data-asset="glass-gloss">
@@ -116,14 +58,10 @@
       <img class="screen__bezel" alt="" data-asset="bezel">
     </div>
 
-    <!-- ── controls ───────────────────────────────────────────────────── -->
     <div class="panel panel--right">
       <div class="stack" id="action-keys"></div>
-
       <div class="rule"></div>
 
-      <!-- Wrappers the compact layout turns into rows. On desktop they are
-           plain blocks and change nothing. -->
       <div class="controls-row">
       <div class="control">
         <div class="caption">CRT EFFECTS</div>
@@ -149,8 +87,7 @@
           <span class="tiny">HIGH</span>
         </div>
       </div>
-
-      </div><!-- /controls-row -->
+      </div>
 
       <div class="bottom-row">
       <div class="grille"><img alt="" data-asset="grille"></div>
@@ -164,10 +101,9 @@
           </span>
         </button>
       </div>
-      </div><!-- /bottom-row -->
+      </div>
     </div>
 
-    <!-- ── foot ───────────────────────────────────────────────────────── -->
     <div class="foot">
       <span class="badge">MODEL JG-1500 · MADE IN FRANCE</span>
       <div class="vents"></div>
