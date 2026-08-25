@@ -62,23 +62,31 @@ function renderBlock(block) {
     }
     case 'image': {
       const figure = make('figure', 'article-reader__media')
+      const frame = make('div', 'article-reader__frame')
       const image = make('img')
       image.src = block.src
       image.alt = block.alt || ''
       image.loading = 'lazy'
-      figure.append(image)
+      frame.append(image)
+      figure.append(frame)
       if (block.alt) figure.append(make('figcaption', '', block.alt))
       return figure
     }
     case 'video': {
       const figure = make('figure', 'article-reader__media')
+      const frame = make('div', 'article-reader__frame')
       const video = make('video')
       video.src = block.src
       video.controls = true
       video.preload = 'metadata'
       video.playsInline = true
-      if (block.loop !== undefined) video.loop = true
-      figure.append(video)
+      if (block.loop) {
+        video.loop = true
+        video.autoplay = true
+        video.muted = true
+      }
+      frame.append(video)
+      figure.append(frame)
       if (block.alt) figure.append(make('figcaption', '', block.alt))
       return figure
     }

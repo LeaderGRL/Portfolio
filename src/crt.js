@@ -77,7 +77,11 @@ vec2 curve(vec2 uv){
 float aperture(vec2 uv){
   vec2 p = abs(uv * 2.0 - 1.0);
   float d = pow(pow(p.x, 5.4) + pow(p.y, 5.4), 1.0 / 5.4);
-  return 1.0 - smoothstep(0.965, 1.02, d);
+  // The canvas already matches the aperture bounding box. Keeping the fade
+  // inside d=1 darkened the visible edge before the photographic moulding
+  // could mask it. Move the soft cut outside the box: the live raster now
+  // reaches every edge, while the frame still owns the final silhouette.
+  return 1.0 - smoothstep(1.04, 1.14, d);
 }
 
 vec3 bloom(vec2 uv, float r){
@@ -120,9 +124,31 @@ void main(){
   col.g = texture(uTex, cuv).g;
   col.b = texture(uTex, cuv - off * ab).b;
 
+  // A real electron beam loses focus progressively toward the rim. Smear
+  // along the tube radius rather than applying a uniform blur, preserving the
+  // crisp centre and avoiding the flat, digitally sharp corners of a canvas.
+  float rr = dot(off, off);
+  float defocus = smoothstep(0.05, 0.30, rr) * uCrt;
+  if (defocus > 0.001) {
+    vec2 dir = normalize(off + vec2(1e-5)) * (0.0022 + rr * 0.006) * defocus;
+    vec3 smear = texture(uTex, cuv + dir).rgb
+               + texture(uTex, cuv - dir).rgb
+               + texture(uTex, cuv + dir * 2.0).rgb
+               + texture(uTex, cuv - dir * 2.0).rgb;
+    col = mix(col, smear * 0.25, defocus * 0.62);
+  }
+
+  // Horizontal overshoot gives bright glyph edges the slight analogue ring
+  // produced by the video amplifier without shifting the underlying layout.
+  float lead  = texture(uTex, cuv - vec2(1.35 / uSrc.x, 0.0)).g;
+  float trail = texture(uTex, cuv + vec2(1.35 / uSrc.x, 0.0)).g;
+  col += vec3(0.72, 1.0, 0.82) * (col.g - lead) * 0.30 * uCrt;
+  col -= vec3(0.55, 0.80, 0.62) * max(trail - col.g, 0.0) * 0.16 * uCrt;
+
   // ---- glow --------------------------------------------------------------
   col += bloom(cuv, 0.006 + 0.004 * uCrt) * (0.55 + 0.35 * uCrt);
   col += bloom(cuv, 0.020) * 0.28 * uCrt;
+  col += bloom(cuv, 0.055) * vec3(0.30, 0.40, 0.34) * 0.55 * uCrt;
 
   // ---- scanlines locked to the source line count -------------------------
   float scanWave = 0.5 + 0.5 * cos(cuv.y * uSrc.y * 6.2831853);
@@ -153,7 +179,7 @@ void main(){
   // real edge darkening on the layer above, so doing it again here would
   // double the vignette and crush the corners.
   vec2 vg = cuv * (1.0 - cuv.yx);
-  col *= mix(1.0, pow(clamp(vg.x * vg.y * 34.0, 0.0, 1.0), 0.16), 0.5 * uCrt + 0.2);
+  col *= mix(1.0, pow(clamp(vg.x * vg.y * 90.0, 0.0, 1.0), 0.10), 0.35 * uCrt + 0.10);
 
   col *= aperture(vUv);
 

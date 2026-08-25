@@ -43,6 +43,9 @@ CSS owns layout, travel, focus, and responsive composition.
 The glass specular is anchored slightly inside the tube's upper-left curvature:
 its broad shoulder follows the top and left glass edges instead of collapsing
 to a point or floating over terminal content.
+The live tube deliberately bleeds 10–12 design pixels behind the photographic
+moulding. The moulding remains the visual mask, while the raster no longer
+exposes dead bands or unfilled corners at the measured aperture boundary.
 
 ## Geometry
 
@@ -96,3 +99,5 @@ match the reference hardware legends.
 - CRT scanlines stay sub-pixel-thin and restrained. Long-form article content
   receives the same glass, fine scanline, grille and CRT toggle treatment as
   the terminal canvas.
+- The shader's aperture fade starts outside the visible canvas; edge falloff
+  may shape the beam but must never create a black border inside the moulding.
