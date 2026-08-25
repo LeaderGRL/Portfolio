@@ -9,12 +9,10 @@ import { SRC_H, SRC_W } from '../core.js'
  *
  * Interaction policy:
  * - integrations are visible immediately;
- * - pointer input is passive by default so wheel scrolling keeps working;
- * - clicking anywhere on the integration activates it in place;
- * - moving the pointer outside deactivates it and restores document scrolling.
- *
- * This avoids modal buttons while solving the classic cross-origin iframe
- * problem where wheel events disappear inside the child browsing context.
+ * - wheel always belongs to the document while the shield is active;
+ * - YouTube stays shielded permanently and is controlled through postMessage;
+ * - integrations that require direct pointer input can still opt into a short
+ *   active state, restored to scroll mode when the pointer leaves.
  * ========================================================================== */
 export class InlineIntegrationController {
   constructor({ tube, rasteriser, registry }) {
@@ -147,19 +145,36 @@ export class InlineIntegrationController {
     reader.scrollTop += deltaY
   }
 
+  _postYouTube(instance, command) {
+    const iframe = instance?.surface?.querySelector('iframe')
+    iframe?.contentWindow?.postMessage?.(
+      JSON.stringify({ event: 'command', func: command, args: [] }),
+      '*',
+    )
+  }
+
+  _toggleYouTube(instance) {
+    instance.youtubePlaying = !instance.youtubePlaying
+    this._postYouTube(instance, instance.youtubePlaying ? 'playVideo' : 'pauseVideo')
+    instance.host.classList.toggle('is-playing', instance.youtubePlaying)
+  }
+
   _setActive(instance, active) {
     if (!instance) return
+
+    // YouTube intentionally never receives raw pointer/wheel input. The shield
+    // remains above the iframe and controls playback via the documented iframe
+    // postMessage API so document scrolling still works while the video plays.
+    if (instance.descriptor.provider === 'youtube') {
+      instance.host.classList.remove('is-active')
+      instance.shield.hidden = false
+      instance.surface.style.pointerEvents = 'none'
+      return
+    }
+
     instance.host.classList.toggle('is-active', active)
     instance.shield.hidden = active
     instance.surface.style.pointerEvents = active ? 'auto' : 'none'
-
-    if (active && instance.descriptor.provider === 'youtube') {
-      const iframe = instance.surface.querySelector('iframe')
-      iframe?.contentWindow?.postMessage?.(
-        JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-        '*',
-      )
-    }
   }
 
   _mount(entry, descriptor) {
@@ -179,7 +194,12 @@ export class InlineIntegrationController {
     shield.className = 'document-inline-integration__activation'
     shield.tabIndex = 0
     shield.setAttribute('role', 'button')
-    shield.setAttribute('aria-label', 'Activate embedded integration')
+    shield.setAttribute(
+      'aria-label',
+      resolved.provider === 'youtube'
+        ? 'Play or pause embedded video; use the wheel to scroll the document'
+        : 'Activate embedded integration',
+    )
 
     host.append(surface, shield)
     this.layer.append(host)
@@ -197,6 +217,7 @@ export class InlineIntegrationController {
       cleanup: typeof cleanup === 'function' ? cleanup : null,
       entry,
       descriptor,
+      youtubePlaying: false,
     }
 
     shield.addEventListener('wheel', event => {
@@ -205,11 +226,15 @@ export class InlineIntegrationController {
       this._scrollDocument(event.deltaY)
     }, { passive: false })
 
-    shield.addEventListener('click', () => this._setActive(instance, true))
+    shield.addEventListener('click', () => {
+      if (descriptor.provider === 'youtube') this._toggleYouTube(instance)
+      else this._setActive(instance, true)
+    })
     shield.addEventListener('keydown', event => {
       if (event.key !== 'Enter' && event.key !== ' ') return
       event.preventDefault()
-      this._setActive(instance, true)
+      if (descriptor.provider === 'youtube') this._toggleYouTube(instance)
+      else this._setActive(instance, true)
     })
     host.addEventListener('pointerleave', () => this._setActive(instance, false))
 
