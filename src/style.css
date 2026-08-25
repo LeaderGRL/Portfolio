@@ -611,22 +611,22 @@ img{ display:block; -webkit-user-drag:none; user-select:none; pointer-events:non
 /* The portable reference is a real vertical control panel, not the desktop
    layout squeezed into a two-column card grid. */
 .is-compact .panel--left{
-  position:absolute; left:213px; top:870px;
-  width:515px; height:auto; padding:0; align-items:stretch; justify-content:flex-start;
+  position:absolute; left:233px; top:870px;
+  width:475px; height:auto; padding:0; align-items:stretch; justify-content:flex-start;
   transform:none;
   transition:opacity .18s ease, transform .22s cubic-bezier(.2,.8,.2,1);
 }
 .is-compact #nav-keys{ display:flex; flex-direction:column; gap:5px; }
 .is-compact .panel--right{
-  position:absolute; left:141px; top:1272px;
-  width:659px; height:220px; padding:0; display:block;
+  position:absolute; left:210px; top:1272px;
+  width:520px; height:250px; padding:0; display:block;
 }
 .is-compact .panel--right .controls-row,.is-compact .panel--right .bottom-row{
   position:relative; left:auto; top:auto; transform:none;
 }
 .is-compact .stack,.is-compact .rule{ display:none; }
 .is-compact .key,
-.is-compact .key--sm{ width:515px; height:56px; }
+.is-compact .key--sm{ width:475px; height:56px; }
 .is-compact .key__legend{
   font-size:15px; letter-spacing:.08em;
   padding-left:60px;
@@ -641,28 +641,30 @@ img{ display:block; -webkit-user-drag:none; user-select:none; pointer-events:non
 .is-compact .key.is-on .key__icon{ color:#315a3e; }
 
 .is-compact .controls-row{
-  display:grid; grid-template-columns:260px 260px; column-gap:139px; align-items:end;
+  display:grid; grid-template-columns:220px 220px; column-gap:80px; align-items:end;
   position:relative;
 }
 .is-compact .controls-row::before{
   content:none; display:none;
 }
-.is-compact .control{ width:260px; }
-.is-compact .control__row{ margin-top:13px; gap:12px; }
+.is-compact .control{ width:220px; }
+.is-compact .control__row{ justify-content:center; margin-top:13px; gap:0; }
 .is-compact .control:first-child .caption{ font-size:0; }
 .is-compact .control:first-child .caption::before{ content:"CRT"; font-size:15px; }
 .is-compact .caption{ justify-content:center; font-size:15px; letter-spacing:.06em; text-indent:0; color:var(--ink-hard); }
 .is-compact .caption::after{ display:none; }
 .is-compact .tiny{ font-size:12px; letter-spacing:.08em; color:var(--ink-hard); }
+.is-compact .control__row .tiny,
+.is-compact .slider-row .tiny{ display:none; }
 .is-compact .switch{ width:82px; }
-.is-compact .slider-row{ margin-top:15px; gap:12px; }
+.is-compact .slider-row{ justify-content:center; margin-top:15px; gap:0; }
 .is-compact .slider{ width:142px; margin:0; }
 
 .is-compact .bottom-row{
-  display:block; margin-top:22px;
+  display:block; margin-top:40px;
 }
 .is-compact .grille{ display:none; }
-.is-compact .panel--right .bottom-row .power{ width:max-content; margin:25px auto 0; transform:none; }
+.is-compact .panel--right .bottom-row .power{ width:max-content; margin:34px auto 0; transform:none; }
 .is-compact .power::before{
   content:"POWER"; position:absolute; left:50%; top:-35px; translate:-50% 0;
   font-size:15px; font-weight:650; letter-spacing:.08em; color:var(--ink-hard);

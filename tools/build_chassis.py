@@ -1,41 +1,19 @@
 """Prepare the supplied moulded desktop/mobile chassis without distortion."""
 import json
-import math
 import shutil
 import time
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "assets" / "src" / "chassis-moulding-desktop.png"
 FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-desktop.png"
 MOBILE_SOURCE = ROOT / "assets" / "src" / "chassis-moulding-mobile.png"
+MOBILE_FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-mobile.png"
 EXPORT = ROOT / "assets" / "chassis"
 BUILD = ROOT / "assets" / "build"
-
-MOBILE_APERTURE = (246, 298, 694, 779)
-MOBILE_APERTURE_EXPONENT = 4.8
-
-
-def opening_mask(size, box, exponent, supersample=4):
-    """Antialiased superellipse matching the CRT glass inside the moulding."""
-    width, height = size
-    x0, y0, x1, y1 = box
-    cx, cy = (x0 + x1) * .5, (y0 + y1) * .5
-    rx, ry = (x1 - x0) * .5, (y1 - y0) * .5
-    points = []
-    for step in range(720):
-        angle = step / 720 * math.tau
-        c, s = math.cos(angle), math.sin(angle)
-        x = cx + rx * math.copysign(abs(c) ** (2 / exponent), c)
-        y = cy + ry * math.copysign(abs(s) ** (2 / exponent), s)
-        points.append((round(x * supersample), round(y * supersample)))
-    mask = Image.new("L", (width * supersample, height * supersample), 0)
-    ImageDraw.Draw(mask).polygon(points, fill=255)
-    return mask.resize((width, height), Image.Resampling.LANCZOS)
-
 
 def aperture_from_mask(mask):
     ys, xs = np.nonzero(np.asarray(mask, dtype=np.float32) > 127)
@@ -48,14 +26,7 @@ def aperture_from_mask(mask):
     ]
 
 
-def transparent_frame(plate, hole):
-    hole_array = np.asarray(hole, dtype=np.float32) / 255
-    frame = plate.convert("RGBA")
-    frame.putalpha(Image.fromarray(np.clip((1 - hole_array) * 255, 0, 255).astype(np.uint8)))
-    return frame
-
-
-def supplied_desktop_frame(path):
+def supplied_frame(path):
     """Use the artist-cut alpha aperture verbatim, normalising only opacity.
 
     The supplied PNG carries alpha 253 rather than 255 over most of the cream
@@ -108,7 +79,7 @@ def main():
         crop_height = width * 9 / 16
         crop_box = (0, (height - crop_height) / 2, width, (height + crop_height) / 2)
 
-    desktop_frame = supplied_desktop_frame(FRAME_SOURCE)
+    desktop_frame = supplied_frame(FRAME_SOURCE)
     if desktop_frame.size != source.size:
         raise ValueError(
             f"desktop frame must match source {source.size}, got {desktop_frame.size}"
@@ -128,10 +99,12 @@ def main():
             aperture = aperture_from_mask(hole)
 
     mobile = Image.open(MOBILE_SOURCE).convert("RGB")
-    mobile_hole = opening_mask(
-        mobile.size, MOBILE_APERTURE, MOBILE_APERTURE_EXPONENT
-    )
-    mobile_frame = transparent_frame(mobile, mobile_hole)
+    mobile_frame = supplied_frame(MOBILE_FRAME_SOURCE)
+    if mobile_frame.size != mobile.size:
+        raise ValueError(
+            f"mobile frame must match source {mobile.size}, got {mobile_frame.size}"
+        )
+    mobile_hole = Image.fromarray(255 - np.asarray(mobile_frame)[:, :, 3])
     save_webp_atomic(mobile, EXPORT / "chassis-mobile.webp")
     save_webp_atomic(mobile_frame, BUILD / "chassis-frame-mobile.webp")
 
@@ -148,6 +121,7 @@ def main():
         "aspect": round(mobile.width / mobile.height, 6),
         "aperture": aperture_from_mask(mobile_hole),
         "source_size": [mobile.width, mobile.height],
+        "frame_source": MOBILE_FRAME_SOURCE.name,
     }
     metadata_tmp = metadata_path.with_name(metadata_path.name + ".tmp")
     metadata_tmp.write_text(json.dumps(metadata, indent=1), encoding="utf-8")

@@ -13,12 +13,17 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const scripts = [join(here, 'build_assets.py'), join(here, 'build_chassis.py')]
-const candidates = process.platform === 'win32'
-  ? ['py -3', 'python', 'python3']
-  : ['python3', 'python']
+const candidates = [
+  ...(process.env.JG1500_PYTHON ? [process.env.JG1500_PYTHON] : []),
+  ...(process.platform === 'win32'
+    ? ['py -3', 'python', 'python3']
+    : ['python3', 'python']),
+]
 
 for (const cmd of candidates) {
-  const [bin, ...pre] = cmd.split(' ')
+  const [bin, ...pre] = cmd.includes(' ') && !cmd.endsWith('.exe')
+    ? cmd.split(' ')
+    : [cmd]
   const probe = spawnSync(bin, [...pre, '-c', 'import PIL, numpy, scipy'], { stdio: 'ignore' })
   if (probe.status !== 0) continue
   let status = 0

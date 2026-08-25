@@ -14,10 +14,10 @@ green phosphor. It is restrained, tactile, technical, and never card-based.
   `assets/src/chassis-moulding-desktop.png` at 1672 × 941. It is cropped
   symmetrically by less than one source pixel vertically, never stretched, and
   exported at 1920 × 1080 and 3840 × 2160.
-- Portable/mobile: user-supplied `assets/src/chassis-moulding-mobile.png` at
-  941 × 1672.
-  It is used as a full-bleed portrait plate without stretching; its black
-  opening becomes a transparent aperture for the live CRT.
+- Portable/mobile: user-supplied `assets/src/chassis-moulding-mobile.png` and
+  artist-cut `assets/src/chassis-frame-mobile.png`, both at 941 × 1672.
+  They are used full bleed without stretching; the supplied frame alpha is the
+  exact aperture for the live CRT and must not be replaced by a CSS radius.
 
 ## Palette and material
 
@@ -68,7 +68,8 @@ Portable uses the portrait plate's native 941 × 1672 surface with a cover fit.
 Its order is nameplate, large CRT, six full-width navigation keys, paired
 CRT/volume controls, then power. Navigation never becomes a two-column grid
 and stays directly accessible; there is no hamburger/menu control. The live
-glass occupies 26.1424–73.7513% horizontally and 17.823–46.5909% vertically.
+glass follows the measured alpha of `chassis-frame-mobile.png` (roughly
+26.1–73.8% horizontally and 18.1–46.5% vertically).
 The photographic frame ends before the navigation begins, leaving a deliberate
 65px design-space gap and preventing the keys from touching the moulding.
 
@@ -105,5 +106,6 @@ match the reference hardware legends.
   the visible glass silhouette, so there can be no competing corner shapes.
 - Chassis alpha is published only by `tools/build_chassis.py`. Desktop uses the
   artist-cut transparency from `assets/src/chassis-frame-desktop.png` verbatim;
-  code must not approximate that silhouette with a second superellipse. The
-  live tube may overscan behind this alpha, never in front of the moulding.
+  mobile follows the same rule with `assets/src/chassis-frame-mobile.png`.
+  Code must not approximate either silhouette with a second superellipse. The
+  live tube may overscan behind these alpha cuts, never in front of the moulding.

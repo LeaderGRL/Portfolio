@@ -200,4 +200,61 @@ No actionable P0, P1 or P2 findings remain.
 
 No actionable P0, P1 or P2 findings remain.
 
+## Artist-cut mobile aperture and control-density audit — 2026-08-25
+
+- Source visual truth:
+  `C:/Users/jorda/Downloads/ChatGPT Image 25 août 2026, 13_01_44 (1).png`,
+  941 × 1672 RGBA. Repository source: `assets/src/chassis-frame-mobile.png`.
+- Browser implementation:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-mobile-alpha-controls-430.png`,
+  CSS viewport and screenshot 430 × 900, DPR 1, HOME state.
+- Same-canvas normalized comparison:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-mobile-comparison.png`.
+  The 941 × 1672 source was centre-cover-cropped to the visible 799 × 1672
+  design region and downsampled without stretching to 430 × 900.
+- Focused frame/corner comparison:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-mobile-corners-zoom.png`.
+- Article implementation:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-mobile-article-crt.png`,
+  first local article with the CRT scanline, grille, vignette, flicker and
+  photographic glass layers active.
+
+### Findings and fixes
+
+- P1 — mobile used a generated superellipse instead of the supplied aperture.
+  Fix: `build_chassis.py` now publishes the artist-cut mobile alpha exactly,
+  normalising only near-opaque plate pixels. The focused comparison shows the
+  live phosphor fully behind the four inner corners with no secondary radius.
+- P2 — mobile control rail was too spread out and carried redundant endpoint
+  labels. Fix: reduce navigation width from 515 to 475 design pixels, reduce
+  the CRT/Volume grid from 659 to 520 pixels, hide visual OFF/ON and LOW/HIGH
+  endpoints while preserving ARIA state/value, and lower Power by 27 design
+  pixels. All controls remain native and keyboard accessible.
+
+### Required fidelity surfaces
+
+- Fonts and typography: legends keep the established industrial type system;
+  hiding redundant endpoint copy does not remove the accessible labels.
+- Spacing and layout rhythm: six keys remain one centered column, CRT and
+  Volume now form one related group, and Power has a distinct lower tier.
+  No frame, key or control overlap is visible at 430 × 900.
+- Colors and visual tokens: unchanged cream hardware, black moulding and P1
+  phosphor palette.
+- Image quality and asset fidelity: supplied RGBA source is used at its native
+  aspect ratio; no CSS-drawn or generated corner replacement remains.
+- Copy and content: HOME/ABOUT/RESUME/PROJECTS/ARTICLES/CONTACT and control
+  titles are unchanged; only redundant endpoint captions are visually hidden.
+
+### Browser verification
+
+- Page identity, meaningful DOM and framework-overlay check: passed.
+- Console errors/warnings: none.
+- Power interaction: ON → OFF → ON, `aria-pressed=false/true` passed.
+- CRT interaction: ON → OFF → ON, `aria-checked=false/true` passed.
+- ARTICLES → first detail: passed; semantic article, headings and selectable
+  code render beneath the fixed CRT overlays.
+- Full-view and focused same-canvas comparisons: passed.
+
+No actionable P0, P1 or P2 findings remain.
+
 final result: passed
