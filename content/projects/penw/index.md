@@ -36,7 +36,7 @@ The core loop asks the player to destroy notes in rhythm while handling long not
 
 The project eventually became a real custom arcade cabinet. An existing wooden cabinet was measured, adapted and redesigned around the game. The recovered structure used 19 mm MDF, and the control panel had to be rebuilt around the mechanics rather than forcing the game into an existing layout.
 
-::gallery{columns=2}
+::gallery{columns=2 fit=contain}
 /media/penw/cabinet-photo.webp | Recovered wooden cabinet used as the physical starting point
 /media/penw/cabinet-plan.webp | Measurements used to redesign the machine around the game
 ::
@@ -56,9 +56,9 @@ The cabinet below is rendered locally with Three.js from the original project ge
 
 The original control surface did not match the mechanics, so measurements became a new panel designed around the actual buttons and rotary encoders rather than around the shape of the recovered cabinet.
 
-::compare{before=/media/penw/control-panel-plan.webp after=/media/penw/control-panel-design.webp beforeLabel="MEASUREMENTS" afterLabel="NEW CONTROL PANEL"}
+::compare{before=/media/penw/control-panel-plan.webp after=/media/penw/control-panel-design.webp beforeLabel="MEASUREMENTS" afterLabel="NEW CONTROL PANEL" fit=contain}
 
-::gallery{columns=2}
+::gallery{columns=2 fit=contain}
 /media/penw/control-panel-detail.webp | Control layout and dimensions
 /media/penw/cabinet-wrap.webp | Visual wrap explored for the physical cabinet
 ::
@@ -82,7 +82,7 @@ SYSTEM DESIGN — SOFTWARE, HARDWARE AND GAMEPLAY WERE ITERATED AS ONE INPUT LOO
 
 A dedicated web level editor was created to import music, inspect its audio structure and place notes against the timeline. This tooling became important because content iteration speed directly affected the quality of the rhythm design.
 
-::gallery{columns=1}
+::gallery{columns=1 fit=contain}
 /media/penw/level-editor.webp | JavaScript level editor — waveform inspection and note authoring
 ::
 
