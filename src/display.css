@@ -1,0 +1,181 @@
+/* ============================================================================
+   SHARED DISPLAY PIPELINE
+
+   `#gl` is the primary electronic picture. Terminal and article sources feed
+   the same CRT shader. Native video/iframe UI is only exposed explicitly while
+   the user interacts with those surfaces.
+   ============================================================================ */
+
+.display-pixel-source{
+  display:none !important;
+}
+
+.display-surface{
+  position:absolute;
+  inset:0;
+  z-index:2;
+  overflow:hidden;
+  isolation:isolate;
+  pointer-events:none;
+}
+
+.display-surface > *{
+  pointer-events:auto;
+}
+
+.display-surface .article-reader{
+  z-index:1;
+}
+
+/* In normal article mode the authored DOM is used only for semantics and scroll
+   state. Its pixels must not cover the raster source processed by FRAG_CRT. */
+.tube[data-display-mode="article"] .display-surface{
+  opacity:0;
+}
+
+.tube[data-display-mode="terminal"] .display-surface{
+  visibility:hidden;
+  pointer-events:none;
+}
+
+/* WebGL fallback: article-source becomes the visible tube picture directly.
+   Terminal fallback continues to use fallback2d as before. */
+.tube.is-fallback[data-display-mode="article"] #fallback2d{
+  opacity:0;
+}
+
+.tube.is-fallback[data-display-mode="article"] #article-source{
+  display:block !important;
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  image-rendering:pixelated;
+}
+
+/* Explicit entry point for native controls. This is intentionally visible and
+   never relies on invisible hit targets in the article DOM. */
+.article-interact-trigger{
+  position:absolute;
+  z-index:3;
+  left:50%;
+  bottom:24px;
+  transform:translateX(-50%);
+  border:1px solid rgba(107,243,154,.72);
+  background:rgba(2,20,10,.90);
+  color:#b9ffc9;
+  font:700 11px/1 ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  letter-spacing:.08em;
+  padding:9px 13px;
+  box-shadow:0 0 10px rgba(47,208,109,.20), inset 0 0 8px rgba(47,208,109,.08);
+  cursor:pointer;
+}
+
+.article-interact-trigger:hover,
+.article-interact-trigger:focus-visible{
+  background:rgba(7,48,25,.96);
+  outline:1px solid #6bf39a;
+  outline-offset:2px;
+}
+
+.article-interaction{
+  position:absolute;
+  inset:26px 34px 30px;
+  z-index:3;
+  background:rgba(1,8,5,.96);
+  border:1px solid rgba(47,208,109,.72);
+  box-shadow:0 0 20px rgba(47,208,109,.18), inset 0 0 34px rgba(0,0,0,.48);
+  overflow:hidden;
+}
+
+.article-interaction[hidden],
+.article-interact-trigger[hidden]{
+  display:none !important;
+}
+
+.article-interaction__close{
+  position:absolute;
+  z-index:2;
+  top:8px;
+  right:8px;
+  border:1px solid rgba(107,243,154,.62);
+  background:rgba(2,18,9,.94);
+  color:#b9ffc9;
+  font:700 10px/1 ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  letter-spacing:.08em;
+  padding:7px 9px;
+  cursor:pointer;
+}
+
+.article-interaction__content{
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  padding:34px 10px 10px;
+}
+
+.article-interaction__video,
+.article-interaction__embed{
+  display:block;
+  width:100%;
+  height:100%;
+  border:0;
+  background:#000;
+}
+
+/* A faint optical texture keeps native interaction mode visually integrated
+   with the CRT without intercepting controls. */
+.article-interaction::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,4,2,.13) 0 1px,transparent 1px 3px);
+  mix-blend-mode:multiply;
+  opacity:.40;
+}
+
+/* Remove the old article-specific imitation CRT. The real FRAG_CRT receives
+   article pixels directly during normal reading. */
+.tube.has-dom-surface::before,
+.tube.has-dom-surface::after,
+.tube.has-dom-surface .article-reader::before,
+.tube.has-dom-surface .article-reader::after{
+  content:none !important;
+  display:none !important;
+  animation:none !important;
+}
+
+/* Power-off is a hard visual boundary. JS closes native interaction state, and
+   CSS also hides it immediately so no iframe/video can flash over a dead tube. */
+.tube.is-powered-off .display-surface,
+.tube.is-powered-off .article-interact-trigger,
+.tube.is-powered-off .article-interaction{
+  pointer-events:none;
+}
+
+.tube.is-powered-off .article-interact-trigger,
+.tube.is-powered-off .article-interaction{
+  display:none !important;
+}
+
+/* Fullscreen enlarges the same physical display. */
+.screen:fullscreen{
+  width:100vw !important;
+  height:100vh !important;
+  left:0 !important;
+  top:0 !important;
+  background:#010302;
+}
+
+.screen:fullscreen .tube{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+}
+
+.screen:fullscreen .article-reader{
+  inset:0;
+}
