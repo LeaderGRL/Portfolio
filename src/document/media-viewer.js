@@ -1,10 +1,14 @@
 /* ========================================================================== *
  * MediaViewer
  *
- * Media inspection is a CRT display mode, not a browser modal. The viewer owns
- * a dedicated high-resolution canvas registered in DisplayPipeline. Opening an
- * image switches the physical CRT to that canvas; closing it returns to the
- * document source without touching the reader scroll position.
+ * Media inspection is a CRT display mode, not a browser modal.
+ *
+ * Two synchronized canvases are used deliberately:
+ * - crtCanvas: 480x360, exactly matching the native CRT source resolution;
+ * - hiresCanvas: 1440x1080, displayed only when CRT effects are disabled.
+ *
+ * This keeps the WebGL CRT path stable while still giving the user a clean,
+ * high-resolution inspection surface in CRT-off mode.
  * ========================================================================== */
 export class MediaViewer {
   constructor({ tube, pipeline, onChange = () => {} }) {
@@ -17,15 +21,24 @@ export class MediaViewer {
     this.token = 0
     this.cache = new Map()
 
-    this.canvas = document.createElement('canvas')
-    this.canvas.id = 'media-inspect-source'
-    this.canvas.className = 'display-pixel-source'
-    this.canvas.width = 1440
-    this.canvas.height = 1080
-    this.canvas.setAttribute('aria-hidden', 'true')
-    this.ctx = this.canvas.getContext('2d', { alpha: false })
-    this.tube?.append(this.canvas)
-    this.pipeline?.registerSource('media', this.canvas)
+    this.crtCanvas = document.createElement('canvas')
+    this.crtCanvas.id = 'media-inspect-source'
+    this.crtCanvas.className = 'display-pixel-source'
+    this.crtCanvas.width = 480
+    this.crtCanvas.height = 360
+    this.crtCanvas.setAttribute('aria-hidden', 'true')
+    this.crtCtx = this.crtCanvas.getContext('2d', { alpha: false })
+
+    this.hiresCanvas = document.createElement('canvas')
+    this.hiresCanvas.id = 'media-inspect-hires'
+    this.hiresCanvas.className = 'display-pixel-source'
+    this.hiresCanvas.width = 1440
+    this.hiresCanvas.height = 1080
+    this.hiresCanvas.setAttribute('aria-hidden', 'true')
+    this.hiresCtx = this.hiresCanvas.getContext('2d', { alpha: false })
+
+    this.tube?.append(this.crtCanvas, this.hiresCanvas)
+    this.pipeline?.registerSource('media', this.crtCanvas)
 
     this.onKeyDown = event => {
       if (!this.isOpen) return
@@ -69,68 +82,40 @@ export class MediaViewer {
     return image
   }
 
-  _drawChrome(item) {
-    const g = this.ctx
-    const w = this.canvas.width
-    const h = this.canvas.height
-    const footerH = 56
-
-    g.fillStyle = '#010604'
-    g.fillRect(0, h - footerH, w, footerH)
-    g.strokeStyle = 'rgba(47,208,109,.42)'
-    g.beginPath()
-    g.moveTo(24, h - footerH + .5)
-    g.lineTo(w - 24, h - footerH + .5)
-    g.stroke()
-
-    g.font = '700 20px ui-monospace, "SFMono-Regular", Consolas, monospace'
-    g.textBaseline = 'middle'
-    g.fillStyle = '#6bf39a'
-    const label = String(item?.label || 'PROJECT MEDIA').toUpperCase()
-    g.fillText(label.slice(0, 74), 28, h - footerH * .5)
-
-    g.textAlign = 'right'
-    g.fillStyle = '#ffb347'
-    const count = this.items.length > 1 ? `${this.index + 1}/${this.items.length} · ` : ''
-    g.fillText(`${count}BACK / ESC RETURN`, w - 28, h - footerH * .5)
-    g.textAlign = 'left'
+  _paintLoading(ctx, width, height) {
+    ctx.fillStyle = '#010403'
+    ctx.fillRect(0, 0, width, height)
   }
 
-  _paintLoading(item) {
-    const g = this.ctx
-    g.fillStyle = '#020b06'
-    g.fillRect(0, 0, this.canvas.width, this.canvas.height)
-    g.font = '700 24px ui-monospace, "SFMono-Regular", Consolas, monospace'
-    g.fillStyle = '#2fd06d'
-    g.fillText('LOADING PROJECT MEDIA...', 48, 70)
-    this._drawChrome(item)
-    this.onChange()
-  }
-
-  _paintImage(image, item) {
-    const g = this.ctx
-    const w = this.canvas.width
-    const h = this.canvas.height
-    const footerH = 56
-    const pad = 24
-    const maxW = w - pad * 2
-    const maxH = h - footerH - pad * 2
-
-    g.fillStyle = '#010403'
-    g.fillRect(0, 0, w, h)
+  _paintImageTo(ctx, width, height, image) {
+    ctx.fillStyle = '#010403'
+    ctx.fillRect(0, 0, width, height)
 
     const sw = image.naturalWidth || image.width || 1
     const sh = image.naturalHeight || image.height || 1
+    const pad = Math.max(4, Math.round(Math.min(width, height) * 0.018))
+    const maxW = Math.max(1, width - pad * 2)
+    const maxH = Math.max(1, height - pad * 2)
     const scale = Math.min(maxW / sw, maxH / sh)
     const dw = Math.max(1, sw * scale)
     const dh = Math.max(1, sh * scale)
-    const dx = (w - dw) * .5
-    const dy = pad + (maxH - dh) * .5
+    const dx = (width - dw) * 0.5
+    const dy = (height - dh) * 0.5
 
-    g.imageSmoothingEnabled = true
-    g.imageSmoothingQuality = 'high'
-    g.drawImage(image, dx, dy, dw, dh)
-    this._drawChrome(item)
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(image, dx, dy, dw, dh)
+  }
+
+  _paintLoadingState() {
+    this._paintLoading(this.crtCtx, this.crtCanvas.width, this.crtCanvas.height)
+    this._paintLoading(this.hiresCtx, this.hiresCanvas.width, this.hiresCanvas.height)
+    this.onChange()
+  }
+
+  _paintResolved(image) {
+    this._paintImageTo(this.crtCtx, this.crtCanvas.width, this.crtCanvas.height, image)
+    this._paintImageTo(this.hiresCtx, this.hiresCanvas.width, this.hiresCanvas.height, image)
     this.onChange()
   }
 
@@ -141,11 +126,11 @@ export class MediaViewer {
 
     const request = ++this.token
     const image = this._image(item.src)
-    this._paintLoading(item)
+    this._paintLoadingState()
 
     const paint = () => {
       if (!this.isOpen || request !== this.token || this.items[this.index]?.src !== item.src) return
-      this._paintImage(image, item)
+      this._paintResolved(image)
     }
 
     if (image.complete && image.naturalWidth) {
@@ -156,14 +141,7 @@ export class MediaViewer {
     image.onload = paint
     image.onerror = () => {
       if (!this.isOpen || request !== this.token) return
-      const g = this.ctx
-      g.fillStyle = '#020b06'
-      g.fillRect(0, 0, this.canvas.width, this.canvas.height)
-      g.font = '700 24px ui-monospace, "SFMono-Regular", Consolas, monospace'
-      g.fillStyle = '#ffb347'
-      g.fillText('MEDIA UNAVAILABLE', 48, 70)
-      this._drawChrome(item)
-      this.onChange()
+      this._paintLoadingState()
     }
     image.src = item.src
   }
@@ -204,7 +182,8 @@ export class MediaViewer {
     this.tube?.removeEventListener('click', this.onTubeClick, true)
     if (this.pipeline?.activeId === 'media') this.pipeline.setSource('document')
     this.pipeline?.unregisterSource('media')
-    this.canvas.remove()
+    this.crtCanvas.remove()
+    this.hiresCanvas.remove()
     this.cache.clear()
   }
 }
