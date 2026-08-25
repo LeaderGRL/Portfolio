@@ -57,8 +57,6 @@
   pointer-events:none;
 }
 
-/* Inline third-party integrations. The layer itself never blocks the tube;
-   only the currently visible provider boxes receive input. */
 .document-inline-integrations{
   position:absolute;
   inset:0;
@@ -101,8 +99,6 @@
   background:transparent;
 }
 
-/* Passive by default: wheel belongs to the document, click activates the
-   embedded app directly in place. No separate OPEN INTEGRATION button. */
 .document-inline-integration__activation{
   z-index:4;
   cursor:pointer;
@@ -118,9 +114,6 @@
   pointer-events:auto;
 }
 
-/* We cannot sample cross-origin iframe pixels inside FRAG_CRT, but CSS/SVG
-   compositor filters can still bend and soften the composed iframe surface.
-   These overlays restore the strongest tube cues on top of the native pixels. */
 .document-inline-integration--youtube::before,
 .document-inline-integration--sketchfab::before,
 .document-inline-integration--miro::before,
@@ -167,16 +160,42 @@
   mix-blend-mode:multiply;
 }
 
-/* Local Three.js is different: the mounted canvas is only an input proxy. The
-   visible 3D pixels continue through article-source -> FRAG_CRT underneath. */
+/* Local Three.js never exposes its render canvas to the DOM. The visible model
+   remains article-source -> FRAG_CRT. Only this transparent proxy receives
+   pointer drag events, and it is strictly bounded to the visible model block. */
 .document-inline-integration--local-3d{
   background:transparent;
-  overflow:visible;
+  overflow:hidden;
   clip-path:none;
 }
 
 .document-inline-integration--local-3d .document-inline-integration__surface{
   filter:none;
+  overflow:hidden;
+}
+
+.document-model3d-input-proxy{
+  position:absolute;
+  inset:0;
+  display:block;
+  width:100%;
+  height:100%;
+  z-index:1;
+  background:transparent;
+  cursor:grab;
+  pointer-events:auto;
+  touch-action:none;
+  outline:0;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+.document-model3d-input-proxy:active{
+  cursor:grabbing;
+}
+
+.document-model3d-input-proxy:focus-visible{
+  box-shadow:inset 0 0 0 1px rgba(107,243,154,.48);
 }
 
 .article-interact-trigger{
@@ -263,7 +282,7 @@
   border:0;
   background:transparent;
   box-shadow:none;
-  overflow:visible;
+  overflow:hidden;
 }
 
 .article-interaction.is-model3d-interaction::after{
@@ -274,44 +293,6 @@
   inset:0;
   padding:0;
   display:block;
-}
-
-.document-model3d-input{
-  width:100%;
-  height:100%;
-  display:block;
-  touch-action:none;
-}
-
-.document-model3d-input--mounted{
-  position:absolute;
-  inset:0;
-  width:100%;
-  height:100%;
-  opacity:.001;
-  cursor:grab;
-  pointer-events:auto;
-}
-
-.document-model3d-input--mounted:active{
-  cursor:grabbing;
-}
-
-.article-interaction__model-help{
-  position:absolute;
-  z-index:4;
-  left:50%;
-  bottom:18px;
-  transform:translateX(-50%);
-  pointer-events:none;
-  white-space:nowrap;
-  padding:7px 10px;
-  border:1px solid rgba(107,243,154,.48);
-  background:rgba(1,12,6,.78);
-  color:#b9ffc9;
-  font:700 9px/1 ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
-  letter-spacing:.07em;
-  box-shadow:0 0 14px rgba(47,208,109,.14);
 }
 
 .tube.has-dom-surface::before,
