@@ -210,11 +210,14 @@ export class ArticleRasteriser {
       const dx = x + (maxW - dw) * .5
       const dy = y + (maxH - dh) * .5
 
-      // The frame follows the rendered media bounds. Filling the whole article
-      // column here would create artificial black letterboxing around portrait
-      // images, which is not part of the authored asset.
-      g.fillStyle = '#010805'
-      g.fillRect(dx, dy, dw, dh)
+      // Images may contain alpha. Drawing a dark rectangle first would turn
+      // every transparent pixel into black before the canvas reaches WebGL.
+      // Let image alpha composite directly over the article phosphor instead.
+      // Video remains an opaque presentation surface and keeps a dark backing.
+      if (entry.type === 'video') {
+        g.fillStyle = '#010805'
+        g.fillRect(dx, dy, dw, dh)
+      }
       try { g.drawImage(source, dx, dy, dw, dh) } catch {}
 
       g.strokeStyle = COLORS.dim
