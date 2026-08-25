@@ -611,22 +611,22 @@ img{ display:block; -webkit-user-drag:none; user-select:none; pointer-events:non
 /* The portable reference is a real vertical control panel, not the desktop
    layout squeezed into a two-column card grid. */
 .is-compact .panel--left{
-  position:absolute; left:233px; top:870px;
-  width:475px; height:auto; padding:0; align-items:stretch; justify-content:flex-start;
+  position:absolute; left:255px; top:910px;
+  width:430px; height:auto; padding:0; align-items:stretch; justify-content:flex-start;
   transform:none;
   transition:opacity .18s ease, transform .22s cubic-bezier(.2,.8,.2,1);
 }
-.is-compact #nav-keys{ display:flex; flex-direction:column; gap:5px; }
+.is-compact #nav-keys{ display:flex; flex-direction:column; gap:10px; }
 .is-compact .panel--right{
-  position:absolute; left:210px; top:1272px;
-  width:520px; height:250px; padding:0; display:block;
+  position:absolute; left:210px; top:1325px;
+  width:520px; height:280px; padding:0; display:block;
 }
 .is-compact .panel--right .controls-row,.is-compact .panel--right .bottom-row{
   position:relative; left:auto; top:auto; transform:none;
 }
 .is-compact .stack,.is-compact .rule{ display:none; }
 .is-compact .key,
-.is-compact .key--sm{ width:475px; height:56px; }
+.is-compact .key--sm{ width:430px; height:56px; }
 .is-compact .key__legend{
   font-size:15px; letter-spacing:.08em;
   padding-left:60px;
@@ -661,10 +661,10 @@ img{ display:block; -webkit-user-drag:none; user-select:none; pointer-events:non
 .is-compact .slider{ width:142px; margin:0; }
 
 .is-compact .bottom-row{
-  display:block; margin-top:40px;
+  display:block; margin-top:54px;
 }
 .is-compact .grille{ display:none; }
-.is-compact .panel--right .bottom-row .power{ width:max-content; margin:34px auto 0; transform:none; }
+.is-compact .panel--right .bottom-row .power{ width:max-content; margin:48px auto 0; transform:none; }
 .is-compact .power::before{
   content:"POWER"; position:absolute; left:50%; top:-35px; translate:-50% 0;
   font-size:15px; font-weight:650; letter-spacing:.08em; color:var(--ink-hard);

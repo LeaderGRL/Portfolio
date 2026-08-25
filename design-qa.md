@@ -258,3 +258,39 @@ No actionable P0, P1 or P2 findings remain.
 No actionable P0, P1 or P2 findings remain.
 
 final result: passed
+
+## Mobile vertical-rhythm refinement — 2026-08-25
+
+- Prior implementation:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-mobile-alpha-controls-430.png`.
+- Revised implementation:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-mobile-spacing-refined.png`,
+  CSS viewport and screenshot 430 × 900, DPR 1, HOME state.
+- Same-canvas comparison:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-mobile-spacing-comparison.png`.
+
+### Findings and fixes
+
+- P2 — navigation rail remained too wide and too close to the CRT. Fix: reduce
+  the mobile rail from 475 to 430 design pixels and lower its origin by 40
+  design pixels.
+- P2 — the six keys read as one dense slab. Fix: increase their vertical gap
+  from 5 to 10 design pixels without changing the 56px key height or touch
+  semantics.
+- P2 — Power remained visually attached to the adjustment controls. Fix: move
+  the complete control rail down by 53 design pixels and add 28 design pixels
+  of separation before Power, keeping it fully visible at 430 × 900.
+
+### Browser verification
+
+- Page identity and meaningful DOM: passed at `http://127.0.0.1:5173/`.
+- Framework overlay: absent; console errors/warnings: none.
+- Navigation HOME → ABOUT: passed and selected state remains visible.
+- Power ON → OFF → ON: passed (`aria-pressed=false/true`).
+- CRT effects ON → OFF → ON: passed (`aria-checked=false/true`).
+- Same-canvas visual comparison: revised navigation is narrower, lower and
+  more breathable; controls remain separated and no overlap is visible.
+
+No actionable P0, P1 or P2 findings remain.
+
+final result: passed

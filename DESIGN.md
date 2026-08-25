@@ -71,7 +71,10 @@ and stays directly accessible; there is no hamburger/menu control. The live
 glass follows the measured alpha of `chassis-frame-mobile.png` (roughly
 26.1–73.8% horizontally and 18.1–46.5% vertically).
 The photographic frame ends before the navigation begins, leaving a deliberate
-65px design-space gap and preventing the keys from touching the moulding.
+gap and preventing the keys from touching the moulding. The mobile navigation
+rail is a centred 430px-wide column with a 10px rhythm between the six keys;
+it begins noticeably below the CRT instead of visually attaching to its frame.
+CRT/Volume form a second lower tier, while Power sits on a distinct final tier.
 
 ## Typography and iconography
 
