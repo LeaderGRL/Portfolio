@@ -1,33 +1,27 @@
 /* ========================================================================== *
  * MediaViewer
  *
- * Media inspection is a CRT display mode, not a browser modal.
+ * Media inspection stays inside the physical CRT.
  *
- * Two synchronized canvases are used deliberately:
- * - crtCanvas: 480x360, exactly matching the native CRT source resolution;
- * - hiresCanvas: 1440x1080, displayed only when CRT effects are disabled.
+ * CRT ON deliberately reuses the proven document framebuffer (`article-source`)
+ * instead of switching WebGL to a third source. While inspection is open, the
+ * document rasteriser is paused and this viewer owns those 480x360 pixels.
+ * Closing the viewer simply lets the document repaint at the exact same scroll.
  *
- * This keeps the WebGL CRT path stable while still giving the user a clean,
- * high-resolution inspection surface in CRT-off mode.
+ * CRT OFF uses a separate 1440x1080 canvas so project media can be inspected
+ * cleanly at a substantially higher resolution.
  * ========================================================================== */
 export class MediaViewer {
-  constructor({ tube, pipeline, onChange = () => {} }) {
+  constructor({ tube, crtCanvas, onChange = () => {} }) {
     this.tube = tube
-    this.pipeline = pipeline
+    this.crtCanvas = crtCanvas
+    this.crtCtx = crtCanvas?.getContext?.('2d', { alpha: false }) || null
     this.onChange = onChange
     this.items = []
     this.index = 0
     this.isOpen = false
     this.token = 0
     this.cache = new Map()
-
-    this.crtCanvas = document.createElement('canvas')
-    this.crtCanvas.id = 'media-inspect-source'
-    this.crtCanvas.className = 'display-pixel-source'
-    this.crtCanvas.width = 480
-    this.crtCanvas.height = 360
-    this.crtCanvas.setAttribute('aria-hidden', 'true')
-    this.crtCtx = this.crtCanvas.getContext('2d', { alpha: false })
 
     this.hiresCanvas = document.createElement('canvas')
     this.hiresCanvas.id = 'media-inspect-hires'
@@ -36,9 +30,7 @@ export class MediaViewer {
     this.hiresCanvas.height = 1080
     this.hiresCanvas.setAttribute('aria-hidden', 'true')
     this.hiresCtx = this.hiresCanvas.getContext('2d', { alpha: false })
-
-    this.tube?.append(this.crtCanvas, this.hiresCanvas)
-    this.pipeline?.registerSource('media', this.crtCanvas)
+    this.tube?.append(this.hiresCanvas)
 
     this.onKeyDown = event => {
       if (!this.isOpen) return
@@ -82,18 +74,19 @@ export class MediaViewer {
     return image
   }
 
-  _paintLoading(ctx, width, height) {
+  _clear(ctx, width, height) {
+    if (!ctx) return
     ctx.fillStyle = '#010403'
     ctx.fillRect(0, 0, width, height)
   }
 
   _paintImageTo(ctx, width, height, image) {
-    ctx.fillStyle = '#010403'
-    ctx.fillRect(0, 0, width, height)
+    if (!ctx) return
+    this._clear(ctx, width, height)
 
     const sw = image.naturalWidth || image.width || 1
     const sh = image.naturalHeight || image.height || 1
-    const pad = Math.max(4, Math.round(Math.min(width, height) * 0.018))
+    const pad = Math.max(3, Math.round(Math.min(width, height) * 0.015))
     const maxW = Math.max(1, width - pad * 2)
     const maxH = Math.max(1, height - pad * 2)
     const scale = Math.min(maxW / sw, maxH / sh)
@@ -108,15 +101,20 @@ export class MediaViewer {
   }
 
   _paintLoadingState() {
-    this._paintLoading(this.crtCtx, this.crtCanvas.width, this.crtCanvas.height)
-    this._paintLoading(this.hiresCtx, this.hiresCanvas.width, this.hiresCanvas.height)
-    this.onChange()
+    this._clear(this.crtCtx, this.crtCanvas?.width || 480, this.crtCanvas?.height || 360)
+    this._clear(this.hiresCtx, this.hiresCanvas.width, this.hiresCanvas.height)
+    this.onChange({ open: true, resolved: false })
   }
 
   _paintResolved(image) {
-    this._paintImageTo(this.crtCtx, this.crtCanvas.width, this.crtCanvas.height, image)
+    this._paintImageTo(
+      this.crtCtx,
+      this.crtCanvas?.width || 480,
+      this.crtCanvas?.height || 360,
+      image,
+    )
     this._paintImageTo(this.hiresCtx, this.hiresCanvas.width, this.hiresCanvas.height, image)
-    this.onChange()
+    this.onChange({ open: true, resolved: true })
   }
 
   _renderCurrent() {
@@ -148,14 +146,12 @@ export class MediaViewer {
 
   open(items, index = 0) {
     const normalized = this._normalize(items)
-    if (!normalized.length) return false
+    if (!normalized.length || !this.crtCtx) return false
     this.items = normalized
     this.index = Math.max(0, Math.min(normalized.length - 1, Number(index) || 0))
     this.isOpen = true
     this.tube?.classList.add('is-media-inspecting')
-    this.pipeline?.setSource('media')
     this._renderCurrent()
-    this.onChange()
     return true
   }
 
@@ -171,8 +167,7 @@ export class MediaViewer {
     this.isOpen = false
     this.token++
     this.tube?.classList.remove('is-media-inspecting')
-    this.pipeline?.setSource('document')
-    this.onChange()
+    this.onChange({ open: false, resolved: false })
     return true
   }
 
@@ -180,9 +175,6 @@ export class MediaViewer {
     this.close()
     document.removeEventListener('keydown', this.onKeyDown, true)
     this.tube?.removeEventListener('click', this.onTubeClick, true)
-    if (this.pipeline?.activeId === 'media') this.pipeline.setSource('document')
-    this.pipeline?.unregisterSource('media')
-    this.crtCanvas.remove()
     this.hiresCanvas.remove()
     this.cache.clear()
   }
