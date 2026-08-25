@@ -28,7 +28,12 @@ year: 2026
 stack: [Unity, C#]
 ---
 
-::hero{media=assets/hero.webp eyebrow="GAME / TOOL / SYSTEM" title="MY PROJECT" subtitle="Short project pitch."}
+::facts{columns=2}
+TYPE | GAME / TOOL / SYSTEM
+ENGINE | UNITY
+ROLE | GAMEPLAY + SYSTEMS
+YEAR | 2026
+::
 
 ## THE PROJECT
 
@@ -45,7 +50,33 @@ No JavaScript registration is needed for a project. If you are about to create `
 ::hero{media=assets/hero.webp eyebrow="ARCADE SYSTEM" title="PROJECT TITLE" subtitle="Short pitch"}
 ```
 
-Use one hero near the beginning of a major project. `media` is optional.
+Use a hero only when it has useful visual media. Do not create an empty hero simply to reserve space.
+
+### Project facts
+
+```md
+::facts{columns=2 label="PROJECT SNAPSHOT"}
+GENRE | RHYTHM GAME
+ENGINE | UNITY
+PLATFORM | CUSTOM ARCADE CABINET
+ROLE | GAMEPLAY + SYSTEMS
+::
+```
+
+`facts` is a compact visual summary. Use `1`, `2` or `3` columns depending on the amount of information. The left side of each row is the fact name; the right side is the value.
+
+### System pipeline
+
+```md
+::pipeline{label="INPUT LOOP"}
+PHYSICAL INPUT | BUTTONS + ROTARY ENCODERS
+INPUT BRIDGE | HARDWARE SIGNAL
+GAME STATE | UNITY INPUT SYSTEM
+PLAYER FEEDBACK | SLIDER + CAMERA RESPONSE
+::
+```
+
+`pipeline` renders a reusable connected sequence. It is suitable for gameplay loops, AI pipelines, rendering pipelines, networking flows, authoring workflows and hardware/software chains.
 
 ### Image
 
@@ -94,26 +125,30 @@ Prefer this when the GLB belongs to the project and can be hosted with the portf
 ### YouTube
 
 ```md
-::embed{provider=youtube id=VIDEO_ID label="PLAY GAMEPLAY" title="Gameplay demo"}
+::embed{provider=youtube id=VIDEO_ID label="GAMEPLAY" title="Gameplay demo"}
 ```
 
 Use this when the original video file is not available. If you own a suitable local video, `::video` is visually better because its frames can stay in the real CRT raster pipeline.
 
+YouTube is mounted inline. Its input shield keeps the document wheel available while playback is controlled through the YouTube iframe API.
+
 ### Sketchfab
 
 ```md
-::embed{provider=sketchfab uid=MODEL_UID label="EXPLORE MODEL IN 3D" title="3D model"}
+::embed{provider=sketchfab uid=MODEL_UID label="ARCADE CABINET 3D" title="3D model"}
 ```
 
-Use Sketchfab when its hosted viewer, annotations or canonical public model are useful. Prefer `::model3d` for local GLB files when possible.
+Use Sketchfab when its hosted viewer, annotations or canonical public model are useful. Prefer `::model3d` for local GLB files when possible. Sketchfab disables its own wheel zoom by default so the surrounding document remains scrollable.
 
 ### Generic external integration
 
 ```md
-::embed{provider=iframe src="https://example.com/embed" label="OPEN TOOL" title="Interactive tool"}
+::embed{provider=iframe src="https://example.com/embed" label="INTERACTIVE TOOL" title="Interactive tool"}
 ```
 
 Miro and Google integrations use the same contract with `provider=miro` or `provider=google`.
+
+Third-party iframes are mounted directly in the document rather than behind an `OPEN INTEGRATION` modal. Because cross-origin iframe pixels cannot be sampled by the WebGL CRT shader, the engine applies compositor-level CRT optics while the photographic glass remains above them.
 
 ### Note
 
@@ -127,7 +162,7 @@ A short callout or engineering takeaway.
 
 1. Start from the exhaustive project report, but curate the portfolio version. A project page is an experience, not an archive dump.
 2. Prefer local raster/video/3D media when practical because local pixels can pass through the real CRT shader.
-3. External iframes are explicit interactions. They get a visible `OPEN INTEGRATION` action and never rely on invisible click targets.
+3. External integrations should be inline when their provider allows it. Keep document scrolling predictable and use provider adapters for unusual interaction behavior.
 4. Do not add project-specific CSS or JavaScript. Add a reusable block, layout option or theme token if a genuinely new capability is needed.
 5. Keep filenames descriptive. Prefer `control-panel.webp` over exported UUID filenames.
 6. A rich project should still explain your contribution, engineering decisions and lessons learned. Visual spectacle supports the story; it does not replace it.
