@@ -1,4 +1,5 @@
 import { SRC_H, SRC_W } from './core.js'
+import { getDocumentTheme } from './document/themes.js'
 
 const COLORS = {
   bg: '#031009',
@@ -8,6 +9,8 @@ const COLORS = {
   bright: '#6bf39a',
   core: '#b9ffc9',
   amber: '#ffb347',
+  glowInner: 'rgba(16,64,36,.36)',
+  glowOuter: 'rgba(2,10,5,0)',
 }
 
 const FONT = 'ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace'
@@ -57,6 +60,7 @@ export class ArticleRasteriser {
   setItem(item) {
     if (this.item?.id === item?.id) return false
     this.item = item || null
+    Object.assign(COLORS, getDocumentTheme(this.item?.theme))
     this.scroll = 0
     this.layout = []
     this.videoNodes = []
@@ -294,8 +298,8 @@ export class ArticleRasteriser {
     g.fillStyle = COLORS.bg
     g.fillRect(0, 0, SRC_W, SRC_H)
     const glow = g.createRadialGradient(SRC_W * .43, SRC_H * .35, 8, SRC_W * .5, SRC_H * .5, SRC_W * .62)
-    glow.addColorStop(0, 'rgba(16,64,36,.36)')
-    glow.addColorStop(1, 'rgba(2,10,5,0)')
+    glow.addColorStop(0, COLORS.glowInner)
+    glow.addColorStop(1, COLORS.glowOuter)
     g.fillStyle = glow
     g.fillRect(0, 0, SRC_W, SRC_H)
 
@@ -339,7 +343,7 @@ export class ArticleRasteriser {
           break
         case 'code': {
           const h = entry.height - 9
-          g.fillStyle = '#010b06'; g.fillRect(x, y, entry.width, h)
+          g.fillStyle = COLORS.panel; g.fillRect(x, y, entry.width, h)
           g.strokeStyle = COLORS.dim; g.strokeRect(x + .5, y + .5, entry.width - 1, h - 1)
           if (entry.language) {
             this._drawLines([entry.language.toUpperCase()], x + 9, y + 13, 7, 9, COLORS.amber, 700)
@@ -355,7 +359,7 @@ export class ArticleRasteriser {
           this._drawMediaFrame(entry, y, this.videoNodes[entry.videoIndex])
           break
         case 'embed': {
-          g.fillStyle = '#010b06'; g.fillRect(x, y, entry.width, entry.height - 10)
+          g.fillStyle = COLORS.panel; g.fillRect(x, y, entry.width, entry.height - 10)
           g.strokeStyle = COLORS.dim; g.strokeRect(x + .5, y + .5, entry.width - 1, entry.height - 11)
           this._drawLines(['EXTERNAL / INTERACTIVE SURFACE', entry.block.label || entry.block.title || 'OPEN EMBED'], x + 12, y + 28, 9, 18, COLORS.amber, 700)
           this._drawLines(['Use INTERACT when this block is visible.'], x + 12, y + 70, 8, 12, COLORS.mid, 500)
