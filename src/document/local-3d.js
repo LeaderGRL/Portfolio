@@ -38,8 +38,10 @@ class Local3DScene {
     this.renderer.setSize(this.canvas.width, this.canvas.height, false)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = Number(block.exposure) || 1.15
+    this.renderer.toneMappingExposure = Number(block.exposure) || 1.12
     this.renderer.setClearColor(0x000000, 0)
+    this.renderer.shadowMap.enabled = true
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
     this.scene = new THREE.Scene()
     this.camera = new THREE.PerspectiveCamera(34, this.canvas.width / this.canvas.height, 0.01, 100)
@@ -56,19 +58,35 @@ class Local3DScene {
       this.onDirty()
     })
 
-    const hemi = new THREE.HemisphereLight(0xd8fff0, 0x102018, 2.2)
+    const hemi = new THREE.HemisphereLight(0xd8fff0, 0x07130c, 1.65)
     this.scene.add(hemi)
 
-    const key = new THREE.DirectionalLight(0xffffff, 3.3)
-    key.position.set(3, 5, 4)
-    this.scene.add(key)
+    this.keyLight = new THREE.DirectionalLight(0xffffff, 3.1)
+    this.keyLight.position.set(3, 5, 4)
+    this.keyLight.castShadow = true
+    this.keyLight.shadow.mapSize.set(1024, 1024)
+    this.keyLight.shadow.bias = -0.0005
+    this.scene.add(this.keyLight)
 
-    const rim = new THREE.DirectionalLight(0x48ff9a, 2.4)
-    rim.position.set(-4, 2, -3)
+    const fill = new THREE.DirectionalLight(0x8ebdff, 1.0)
+    fill.position.set(-3, 1.5, 3)
+    this.scene.add(fill)
+
+    const rim = new THREE.DirectionalLight(0x48ff9a, 2.15)
+    rim.position.set(-4, 2.5, -3)
     this.scene.add(rim)
 
     this.root = new THREE.Group()
     this.scene.add(this.root)
+
+    this.shadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.22 }),
+    )
+    this.shadow.rotation.x = -Math.PI * 0.5
+    this.shadow.receiveShadow = true
+    this.shadow.visible = false
+    this.scene.add(this.shadow)
 
     this.loader = new GLTFLoader()
     this.loader.load(
@@ -83,24 +101,65 @@ class Local3DScene {
     )
   }
 
+  _fitCamera(radius) {
+    const safeRadius = Math.max(radius, 0.001)
+    const verticalFov = THREE.MathUtils.degToRad(this.camera.fov)
+    const horizontalFov = 2 * Math.atan(Math.tan(verticalFov * 0.5) * this.camera.aspect)
+    const limitingFov = Math.min(verticalFov, horizontalFov)
+    const distance = safeRadius / Math.sin(limitingFov * 0.5) * 1.14
+
+    const direction = new THREE.Vector3(1.18, 0.72, 1.45).normalize()
+    this.camera.position.copy(direction.multiplyScalar(distance))
+    this.camera.near = Math.max(0.001, distance / 100)
+    this.camera.far = Math.max(distance * 12, safeRadius * 20)
+    this.camera.updateProjectionMatrix()
+
+    this.controls.target.set(0, 0, 0)
+    this.controls.minDistance = Math.max(safeRadius * 1.15, distance * 0.36)
+    this.controls.maxDistance = distance * 3.2
+    this.controls.update()
+  }
+
+  _configureShadows(box, radius) {
+    const size = box.getSize(new THREE.Vector3())
+    const floorY = -size.y * 0.5 - Math.max(radius * 0.015, 0.001)
+    const planeSize = Math.max(radius * 4.5, size.x * 2.2, size.z * 2.2)
+
+    this.shadow.position.set(0, floorY, 0)
+    this.shadow.scale.set(planeSize, planeSize, 1)
+    this.shadow.visible = this.block.shadow !== 'off'
+
+    const shadowSpan = Math.max(radius * 2.6, 1)
+    this.keyLight.shadow.camera.left = -shadowSpan
+    this.keyLight.shadow.camera.right = shadowSpan
+    this.keyLight.shadow.camera.top = shadowSpan
+    this.keyLight.shadow.camera.bottom = -shadowSpan
+    this.keyLight.shadow.camera.near = 0.01
+    this.keyLight.shadow.camera.far = Math.max(radius * 10, 10)
+    this.keyLight.shadow.camera.updateProjectionMatrix()
+  }
+
   _accept(model) {
     this.root.clear()
+    this.root.rotation.set(0, Number(this.block.rotationY) || 0, 0)
     this.root.add(model)
 
-    const box = new THREE.Box3().setFromObject(model)
-    const size = box.getSize(new THREE.Vector3())
-    const center = box.getCenter(new THREE.Vector3())
-    const radius = Math.max(size.x, size.y, size.z, 0.001)
-
+    const initialBox = new THREE.Box3().setFromObject(model)
+    const center = initialBox.getCenter(new THREE.Vector3())
     model.position.sub(center)
-    this.controls.target.set(0, Math.max(0, size.y * 0.04), 0)
-    this.camera.near = Math.max(0.01, radius / 100)
-    this.camera.far = radius * 20
-    this.camera.position.set(radius * 1.45, radius * 0.9, radius * 1.75)
-    this.camera.updateProjectionMatrix()
-    this.controls.minDistance = radius * 0.8
-    this.controls.maxDistance = radius * 4.5
-    this.controls.update()
+
+    model.traverse(object => {
+      if (!object.isMesh) return
+      object.castShadow = true
+      object.receiveShadow = true
+    })
+
+    const centeredBox = new THREE.Box3().setFromObject(model)
+    const sphere = centeredBox.getBoundingSphere(new THREE.Sphere())
+    const radius = Math.max(sphere.radius, 0.001)
+
+    this._fitCamera(radius)
+    this._configureShadows(centeredBox, radius)
 
     this.ready = true
     this.render()
