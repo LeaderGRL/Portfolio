@@ -41,7 +41,19 @@ export class ArticleInteractionController {
     return Boolean(this.overlay && !this.overlay.hidden)
   }
 
+  get isPoweredOn() {
+    return !this.tube?.classList.contains('is-powered-off')
+  }
+
   sync() {
+    // Powering the physical tube off must also tear down native overlays.
+    // Otherwise an iframe/video could stay visible after the CRT picture dies.
+    if (!this.isPoweredOn) {
+      if (this.isOpen) this.close(false)
+      if (this.trigger) this.trigger.hidden = true
+      return
+    }
+
     if (this.isOpen) return
     const entry = this.rasteriser?.getVisibleInteractiveEntry?.() || null
     this.activeEntry = entry
@@ -59,7 +71,7 @@ export class ArticleInteractionController {
   }
 
   open(entry = this.activeEntry) {
-    if (!entry || !this.overlay || !this.content) return false
+    if (!this.isPoweredOn || !entry || !this.overlay || !this.content) return false
     this.close(false)
     this.openEntry = entry
     this.content.replaceChildren()
@@ -121,7 +133,10 @@ export class ArticleInteractionController {
     this.content?.replaceChildren()
     this.openEntry = null
     this.openMedia = null
-    this.sync()
+
+    // Avoid recursively reopening/closing while the tube is powered off.
+    if (this.isPoweredOn) this.sync()
+    else if (this.trigger) this.trigger.hidden = true
     return true
   }
 
