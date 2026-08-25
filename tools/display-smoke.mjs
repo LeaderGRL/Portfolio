@@ -5,12 +5,14 @@ const html = fs.readFileSync('dist/index.html', 'utf8')
 const rasterSource = fs.readFileSync('src/article-rasteriser.js', 'utf8')
 const displayCss = fs.readFileSync('src/display.css', 'utf8')
 const interactionSource = fs.readFileSync('src/article-interaction.js', 'utf8')
+const contentPlugin = fs.readFileSync('plugins/content.js', 'utf8')
+const ecsArticle = fs.readFileSync('content/articles/02-ecs-rust-data-oriented-design.md', 'utf8')
 const dom = new JSDOM(html)
 const document = dom.window.document
 
 let failed = 0
 const check = (condition, label) => {
-  console.log(`  ${label.padEnd(38)}: ${condition ? 'OK' : 'WRONG'}`)
+  console.log(`  ${label.padEnd(42)}: ${condition ? 'OK' : 'WRONG'}`)
   if (!condition) failed++
 }
 
@@ -57,6 +59,15 @@ check(displayCss.includes('.tube.is-fallback[data-display-mode="article"] #artic
 check(displayCss.includes('display:block !important'), 'fallback source becomes visible')
 check(displayCss.includes('.article-interact-trigger'), 'interaction trigger styles bundled')
 check(displayCss.includes('.article-interaction'), 'interaction surface styles bundled')
+
+check(ecsArticle.includes('<iframe'), 'legacy Godbolt iframe still authored')
+check(contentPlugin.includes('function parseRawIframe'), 'raw iframe parser exists')
+check(contentPlugin.includes("type: 'embed'"), 'raw iframe normalizes to embed')
+check(contentPlugin.includes("attrs.src"), 'raw iframe preserves source URL')
+check(interactionSource.includes('isPoweredOn'), 'interaction observes CRT power state')
+check(interactionSource.includes('this.close(false)'), 'power-off closes native interaction')
+check(displayCss.includes('.tube.is-powered-off .article-interaction'), 'power-off interaction CSS exists')
+check(displayCss.includes('display:none !important'), 'power-off surface is visually hidden')
 
 console.log(failed ? `\n  ${failed} display check(s) FAILED` : '\n  all display checks passed')
 process.exit(failed ? 1 : 0)
