@@ -13,7 +13,7 @@ splits them:
     sliders -> track and thumb separated so the thumb can travel
     rocker  -> housing and paddle separated so the paddle can flip
 """
-import glob, os
+import glob, os, shutil, time
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 from scipy import ndimage
@@ -21,9 +21,7 @@ from scipy import ndimage
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(ROOT, 'assets', 'src')
 OUT = os.path.join(ROOT, 'assets', 'build')
-EXPORT = os.path.join(ROOT, 'assets', 'chassis')
 os.makedirs(OUT, exist_ok=True)
-os.makedirs(EXPORT, exist_ok=True)
 
 SRC = {os.path.splitext(os.path.basename(f))[0]: f
        for f in glob.glob(os.path.join(SRC_DIR, '*.png'))}
@@ -49,9 +47,35 @@ def save(im, name, w=None, q=90):
     if w and im.width != w:
         im = im.resize((w, round(im.height * w / im.width)), Image.LANCZOS)
     p = f'{OUT}/{name}.webp'
-    im.save(p, 'WEBP', quality=q, method=6)
+    # Encode off-path first. On Unix the complete file is then renamed in one
+    # operation; on Windows Vite may keep the destination open, so the staged
+    # bytes are copied in one short write instead of exposing the much longer
+    # image-encoding phase.
+    tmp = p + '.tmp'
+    im.save(tmp, 'WEBP', quality=q, method=6)
+    publish_staged(tmp, p)
     print(f'  {name:16s} {im.width:5d}x{im.height:<5d} {os.path.getsize(p)/1024:7.1f} KB')
     return im
+
+
+def replace_with_retry(source, destination, attempts=24):
+    """Atomically replace files even while Vite briefly reads them on Windows."""
+    for attempt in range(attempts):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError:
+            if attempt + 1 == attempts:
+                raise
+            time.sleep(0.025 * (attempt + 1))
+
+
+def publish_staged(source, destination):
+    try:
+        replace_with_retry(source, destination, attempts=3)
+    except PermissionError:
+        shutil.copyfile(source, destination)
+        os.remove(source)
 
 
 def split_by_components(im, min_frac=0.02):
@@ -82,67 +106,6 @@ def aperture_rect(im):
     ys, xs = np.nonzero(lab == big)
     W, H = im.size
     return (xs.min() / W, ys.min() / H, (xs.max() + 1) / W, (ys.max() + 1) / H)
-
-
-def chassis_assets(source, meta):
-    """Create exact 16:9 desktop plates and transparent-aperture overlays.
-
-    The supplied plate is 1680x941, only seven source pixels wider than 16:9.
-    Pillow's floating crop box removes that surplus symmetrically before the
-    resize, so neither the CRT recess nor the plastic texture is stretched.
-    A connected-component mask turns only the black tube opening transparent;
-    the original moulded rim remains intact and becomes the exact mask for the
-    live canvas placed behind it.
-    """
-    source = source.convert('RGB')
-    W, H = source.size
-    crop_w = H * 16 / 9
-    if W >= crop_w:
-        crop_box = ((W - crop_w) / 2, 0, (W + crop_w) / 2, H)
-    else:
-        crop_h = W * 9 / 16
-        crop_box = (0, (H - crop_h) / 2, W, (H + crop_h) / 2)
-
-    # Find the black opening before resizing, then crop the mask with the same
-    # floating box. The central aperture is by far the largest dark component.
-    rgb = np.asarray(source).astype(float)
-    lum = rgb[:, :, :3].mean(2)
-    dark = lum < 28
-    lab, n = ndimage.label(dark)
-    sizes = ndimage.sum(dark, lab, range(1, n + 1))
-    opening = lab == (int(np.argmax(sizes)) + 1)
-    opening = ndimage.binary_fill_holes(ndimage.binary_closing(opening, np.ones((5, 5))))
-    mask = Image.fromarray((opening * 255).astype(np.uint8))
-
-    sizes_out = [('1920', (1920, 1080)), ('4k', (3840, 2160))]
-    aperture = None
-    for suffix, size in sizes_out:
-        plate = source.resize(size, Image.Resampling.LANCZOS, box=crop_box)
-        hole = mask.resize(size, Image.Resampling.LANCZOS, box=crop_box)
-
-        # Keep a subtle antialiased edge while preserving the dark moulded lip.
-        h = np.asarray(hole).astype(float) / 255
-        alpha = np.clip((1 - h) * 255, 0, 255).astype(np.uint8)
-        frame = plate.convert('RGBA')
-        frame.putalpha(Image.fromarray(alpha))
-
-        plate.save(os.path.join(EXPORT, f'chassis-{suffix}.webp'),
-                   'WEBP', quality=92, method=6)
-        frame.save(os.path.join(OUT, f'chassis-frame-{suffix}.webp'),
-                   'WEBP', quality=92, method=6)
-
-        if suffix == '1920':
-            ys, xs = np.nonzero(h > 0.5)
-            aperture = [round(xs.min() / size[0], 6), round(ys.min() / size[1], 6),
-                        round((xs.max() + 1) / size[0], 6), round((ys.max() + 1) / size[1], 6)]
-
-    meta['chassis'] = {
-        'aspect': 16 / 9,
-        'aperture': aperture,
-        'source_size': [W, H],
-        'crop_box': [round(float(v), 4) for v in crop_box],
-    }
-    print('  chassis         1920x1080 + 3840x2160 (no stretch)')
 
 
 def glass_maps(im, size, spec_gain=1.48, spec_shift=(-0.030, -0.022), spec_blur=0.009):
@@ -459,9 +422,23 @@ def split_key(off_im, on_im):
 # ===========================================================================
 def main():
     import json
-    meta = {}
+    meta_path = os.path.join(OUT, 'meta.json')
+    try:
+        with open(meta_path, encoding='utf-8') as previous_file:
+            previous = json.load(previous_file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        previous = {}
 
-    chassis_assets(Image.open(SRC['chassis-reference']), meta)
+    # Preserve the last complete chassis geometry until build_chassis.py
+    # atomically replaces it later in the same pipeline. This keeps HMR valid
+    # throughout a live asset rebuild.
+    meta = {name: previous[name] for name in ('chassis', 'mobile_chassis')
+            if name in previous}
+
+    # Chassis plates and their measured alpha apertures are generated once by
+    # build_chassis.py. Keeping that geometry in a single pipeline prevents a
+    # later generator from silently overwriting the mask with a different
+    # corner profile.
 
     def rec(name, im):
         meta[name] = {'aspect': round(im.width / im.height, 4)}
@@ -515,8 +492,10 @@ def main():
     save(paddle, 'rocker-paddle', 300, 92)
     save(led, 'led', 150, 92)
 
-    with open(os.path.join(OUT, 'meta.json'), 'w') as f:
+    meta_tmp = meta_path + '.tmp'
+    with open(meta_tmp, 'w', encoding='utf-8') as f:
         json.dump(meta, f, indent=1)
+    replace_with_retry(meta_tmp, meta_path)
     total = sum(os.path.getsize(os.path.join(OUT, f))
                 for f in os.listdir(OUT) if f.endswith('.webp'))
     print(f'\n{total/1024:.0f} KB of sprites -> {OUT}')

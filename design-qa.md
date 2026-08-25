@@ -135,4 +135,69 @@ The source and implementation were inspected together in each comparison.
 
 No actionable P0, P1 or P2 findings remain.
 
+## Artist-cut aperture audit — 2026-08-25
+
+- Source visual truth:
+  `C:/Users/jorda/Downloads/ChatGPT Image 25 août 2026, 12_44_13.png`,
+  1672 × 941 RGBA. Repository source:
+  `assets/src/chassis-frame-desktop.png`.
+- Desktop implementation after the complete production asset pass:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-crt-user-alpha-final-desktop.png`,
+  CSS viewport and screenshot 1920 × 1080, DPR 1, HOME state.
+- Focused 2× implementation:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-crt-user-alpha-desktop-zoom.png`.
+- Mobile implementation:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-crt-user-alpha-mobile.png`,
+  CSS viewport and screenshot 430 × 900, DPR 1, HOME state.
+- Same-canvas focused comparison:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-crt-user-alpha-comparison.png`.
+- Alpha validation composite:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-chassis-frame-1920.webp-green.png`.
+
+### Comparison history and fixes
+
+- Earlier P1 — opaque black wedges: the generated exponent-5.2 aperture left
+  source-face pixels over the canvas. Removing only the shader radius could
+  not affect those pixels because the photographic frame is above the tube.
+- Intermediate P1 — over-cut aperture: increasing the generated superellipse
+  to exponent 9 removed the wedges but made the opening too square and cut
+  into the inner black lip. The same-viewport comparison records that rejected
+  intermediate state on the left.
+- Final fix: desktop no longer synthesizes an aperture. The pipeline publishes
+  the exact artist-cut alpha supplied by the user. Near-opaque plate pixels
+  (alpha ≥ 240) are normalized to 255, while every aperture antialias pixel is
+  preserved. The live tube remains behind this mask.
+- Pipeline P1 — competing generators: `build_assets.py` and
+  `build_chassis.py` previously generated the same frame in sequence. Chassis
+  ownership now belongs only to `build_chassis.py`; the general sprite pass
+  preserves the last complete chassis metadata until replacement.
+- Pipeline P2 — live regeneration on Windows: outputs are encoded off-path;
+  complete staged bytes are then published with rename retries and a short
+  copy fallback when Vite holds the destination open.
+
+### Required fidelity surfaces
+
+- Fonts and typography: unchanged; terminal hierarchy and wrapping match the
+  prior approved state.
+- Spacing and layout: unchanged. Desktop remains 1920 × 1080; mobile tube is
+  x=88.76, y=155.01, w=251.92, h=269.68 with navigation below and no overlap.
+- Colors and tokens: cream chassis, black moulding, P1 phosphor and the
+  upper-left glass reflection remain unchanged.
+- Image quality and assets: the supplied 1672 × 941 alpha is the silhouette
+  source; it is resampled without aspect-ratio distortion to Full HD and 4K.
+  The focused view shows the fine inner lip intact with no opaque corner wedge
+  and no green spill over the moulding.
+- Copy and content: unchanged.
+
+### Browser verification
+
+- Page identity and meaningful DOM: passed at `http://127.0.0.1:5173/`.
+- Framework overlay: absent.
+- Broken images: 0 desktop and mobile.
+- Clean-session console errors/warnings: none.
+- Power interaction: ON → OFF → ON passed.
+- Desktop 1920 × 1080 and mobile 430 × 900: passed.
+
+No actionable P0, P1 or P2 findings remain.
+
 final result: passed

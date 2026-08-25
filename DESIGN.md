@@ -103,3 +103,7 @@ match the reference hardware legends.
 - The shader never owns the corner radius. It paints through the complete
   rectangular backing surface; only the photographic chassis alpha defines
   the visible glass silhouette, so there can be no competing corner shapes.
+- Chassis alpha is published only by `tools/build_chassis.py`. Desktop uses the
+  artist-cut transparency from `assets/src/chassis-frame-desktop.png` verbatim;
+  code must not approximate that silhouette with a second superellipse. The
+  live tube may overscan behind this alpha, never in front of the moulding.
