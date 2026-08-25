@@ -8,15 +8,13 @@ theme: synthwave
 link: https://www.youtube.com/watch?v=gchRNrRPOwI
 ---
 
-::hero{eyebrow="ARCADE RHYTHM GAME / PHYSICAL SYSTEM" title="PROJECT ECHO : NEON WAVE" subtitle="A rhythm game designed together with its own cabinet, controls, level tooling and visual identity." height=226}
-
 ## THE EXPERIENCE
 
 Project Echo: Neon Wave was designed as a complete arcade experience rather than only a game executable. The software, physical cabinet, rotary controls, level editor and visual language were developed as parts of the same system.
 
 The core loop asks the player to destroy notes in rhythm while handling long notes, directional movement and rotary-controlled sliders. Camera motion and visual feedback reinforce the musical structure instead of existing only as decoration.
 
-::embed{provider=youtube id=gchRNrRPOwI title="Project Echo: Neon Wave gameplay" height=216}
+::embed{provider=youtube id=gchRNrRPOwI label="GAMEPLAY DEMO" title="Project Echo: Neon Wave gameplay"}
 
 ## THE MACHINE
 
@@ -24,7 +22,7 @@ The project eventually became a real custom arcade cabinet. An existing wooden c
 
 The 3D cabinet below is the original project model hosted on Sketchfab. It uses the same generic integration block that any future portfolio project can reuse.
 
-::embed{provider=sketchfab uid=d1fa122dc2d4447a949b151b83e7df02 title="Project Echo arcade cabinet" height=236}
+::embed{provider=sketchfab uid=d1fa122dc2d4447a949b151b83e7df02 label="ARCADE CABINET 3D" title="Project Echo arcade cabinet"}
 
 ## INPUT SYSTEM
 
