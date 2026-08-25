@@ -17,6 +17,7 @@
     "vite-plugin-singlefile": "^2.0.0"
   },
   "dependencies": {
-    "@fortawesome/fontawesome-free": "^7.3.1"
+    "@fortawesome/fontawesome-free": "^7.3.1",
+    "three": "^0.181.2"
   }
 }
