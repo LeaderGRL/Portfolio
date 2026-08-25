@@ -37,12 +37,17 @@ export function attachArticleCRT(app) {
   const progressOverlay = new DocumentProgressOverlay()
   const mediaViewer = new MediaViewer({
     tube,
-    pipeline,
-    onChange: () => {
+    crtCanvas: documentCanvas,
+    onChange: ({ open } = {}) => {
       app.dirty = true
-      if (mediaViewer.isOpen) {
+      if (open) {
         interaction?.close?.(false)
         inlineIntegrations?.clear?.()
+      } else {
+        // The viewer temporarily owns article-source. When it closes, force the
+        // document rasteriser to repaint the exact same scroll position before
+        // the next CRT upload.
+        documentRaster?.markDirty?.()
       }
     },
   })
@@ -53,10 +58,6 @@ export function attachArticleCRT(app) {
   const blockRegistry = enhanceMediaBlocks(createDefaultBlockRegistry({ local3d }))
   const integrations = createDefaultIntegrationRegistry({ local3d, mediaViewer })
 
-  // Dirtying the framebuffer must never synchronously mount/unmount DOM
-  // integrations. Local 3D can mark the document dirty while a cleanup is in
-  // progress; re-entering inlineIntegrations.sync() from that callback creates
-  // a teardown loop. The RAF below owns integration synchronization instead.
   documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
     app.dirty = true
   }, { blockRegistry })
@@ -100,11 +101,9 @@ export function attachArticleCRT(app) {
       inlineIntegrations.clear()
     }
 
-    const nextId = mediaViewer.isOpen
-      ? 'media'
-      : documentItem
-        ? 'document'
-        : 'terminal'
+    // Media inspection intentionally reuses the document source. The viewer
+    // owns article-source while open, so no third WebGL source is selected.
+    const nextId = documentItem ? 'document' : 'terminal'
     if (pipeline.setSource(nextId)) {
       app.dirty = true
       app.state.static = mediaViewer.isOpen
@@ -121,7 +120,11 @@ export function attachArticleCRT(app) {
 
   app.raster.paint = (term, reveal, cursorOn) => {
     syncSource()
-    if (mediaViewer.isOpen) return false
+    if (mediaViewer.isOpen) {
+      // The MediaViewer owns article-source while open. Returning true ensures
+      // App.frame uploads those pixels to the existing CRT texture this frame.
+      return true
+    }
     if (isDocument()) {
       const painted = documentRaster.paint(true)
       progressOverlay.paint(documentRaster)
@@ -137,13 +140,12 @@ export function attachArticleCRT(app) {
     return result
   }
 
-  // The physical BACK key should leave media inspection before navigating away
-  // from the current project. This preserves the exact reader scroll position.
   const originalBack = app.back.bind(app)
   app.back = (...args) => {
     if (mediaViewer.isOpen) {
       mediaViewer.close()
       syncSource()
+      app.dirty = true
       return
     }
     return originalBack(...args)
@@ -160,11 +162,6 @@ export function attachArticleCRT(app) {
       return
     }
 
-    // An off-screen auto-spinning model must not keep the whole CRT source
-    // dirty. Besides wasting GPU time, continuous repaints while scrolling can
-    // feed many successive document positions into the phosphor persistence
-    // buffer and create severe ghost trails. Pause local 3D completely until
-    // one of its blocks intersects the source viewport again.
     if (hasVisibleLocal3D()) local3d.tick(time)
 
     interaction.sync()
