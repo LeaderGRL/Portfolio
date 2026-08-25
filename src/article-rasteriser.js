@@ -27,13 +27,14 @@ function stripInline(text = '') {
 }
 
 export class ArticleRasteriser {
-  constructor(canvas, reader, onDirty = () => {}) {
+  constructor(canvas, reader, onDirty = () => {}, options = {}) {
     this.canvas = canvas
     this.canvas.width = SRC_W
     this.canvas.height = SRC_H
     this.ctx = canvas.getContext('2d', { alpha: false })
     this.reader = reader
     this.onDirty = onDirty
+    this.blockRegistry = options.blockRegistry || null
     this.item = null
     this.scroll = 0
     this.maxScroll = 0
@@ -83,6 +84,19 @@ export class ArticleRasteriser {
     return out
   }
 
+  _blockEnv() {
+    return {
+      rasteriser: this,
+      item: this.item,
+      images: this.images,
+      colors: COLORS,
+      loadImage: src => this._loadImage(src),
+      drawLines: (...args) => this._drawLines(...args),
+      wrap: (text, width, size, weight = 500) => this._measureWrapped(text, width, size, weight),
+      markDirty: () => this.markDirty(),
+    }
+  }
+
   _layout() {
     const x = 42
     const width = SRC_W - x * 2
@@ -92,7 +106,7 @@ export class ArticleRasteriser {
       y += entry.height
     }
 
-    push({ type: 'eyebrow', text: 'ARTICLE / LOCAL ARCHIVE', height: 23 })
+    push({ type: 'eyebrow', text: 'DOCUMENT / LOCAL ARCHIVE', height: 23 })
     const title = this._measureWrapped(this.item.label || '', width, 18, 700)
     push({ type: 'title', lines: title, height: Math.max(28, title.length * 21 + 7) })
     if (this.item.sub) {
@@ -102,7 +116,16 @@ export class ArticleRasteriser {
     push({ type: 'rule', height: 24 })
 
     let videoIndex = 0
+    const env = this._blockEnv()
     for (const block of this.item.blocks || []) {
+      const handler = this.blockRegistry?.get(block.type)
+      if (handler?.measure) {
+        const measured = handler.measure(this.ctx, block, env) || {}
+        push({ type: block.type, block, height: measured.height || 120, meta: measured.meta })
+        handler.preload?.(block, env)
+        continue
+      }
+
       switch (block.type) {
         case 'heading': {
           const size = block.level >= 3 ? 11 : 13
@@ -192,7 +215,9 @@ export class ArticleRasteriser {
     let best = null
     let bestVisible = 0
     for (const entry of this.layout) {
-      if (entry.type !== 'video' && entry.type !== 'embed') continue
+      const handler = this.blockRegistry?.get(entry.type)
+      const interactive = entry.type === 'video' || entry.type === 'embed' || Boolean(handler?.getInteraction)
+      if (!interactive) continue
       const top = entry.y - this.scroll
       const bottom = top + entry.height
       const visible = Math.max(0, Math.min(bottom, SRC_H - 20) - Math.max(top, 20))
@@ -202,6 +227,15 @@ export class ArticleRasteriser {
       }
     }
     return bestVisible >= 32 ? best : null
+  }
+
+  getInteraction(entry) {
+    if (!entry) return null
+    if (entry.type === 'video') return { provider: 'video', block: entry.block, entry }
+    if (entry.type === 'embed') return { provider: entry.block.provider || 'iframe', block: entry.block, entry }
+    const handler = this.blockRegistry?.get(entry.type)
+    const descriptor = handler?.getInteraction?.(entry.block, entry, this._blockEnv())
+    return descriptor ? { ...descriptor, entry } : null
   }
 
   _drawLines(lines, x, y, size, lineHeight, color, weight = 500) {
@@ -226,8 +260,6 @@ export class ArticleRasteriser {
       const dx = x + (maxW - dw) * .5
       const dy = y + (maxH - dh) * .5
 
-      // Transparent images composite directly over the article phosphor.
-      // Videos remain opaque presentation surfaces and keep their own frame.
       if (entry.type === 'video') {
         g.fillStyle = '#010805'
         g.fillRect(dx, dy, dw, dh)
@@ -272,10 +304,17 @@ export class ArticleRasteriser {
     g.rect(26, 20, SRC_W - 52, SRC_H - 40)
     g.clip()
 
+    const env = this._blockEnv()
     for (const entry of this.layout) {
       const y = entry.y - this.scroll
       if (y + entry.height < 14 || y > SRC_H - 8) continue
       const x = entry.x
+
+      const handler = this.blockRegistry?.get(entry.type)
+      if (handler?.paint) {
+        handler.paint(g, entry.block, { ...entry, y }, env)
+        continue
+      }
 
       switch (entry.type) {
         case 'eyebrow':
