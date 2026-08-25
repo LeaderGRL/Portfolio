@@ -169,6 +169,20 @@ export function createDefaultBlockRegistry({ local3d }) {
     },
   })
 
+  registry.register('embed', {
+    measure(_ctx, block) {
+      return { height: Number(block.height) || 214 }
+    },
+    paint() {
+      // Intentionally blank. The native integration is mounted inline above the
+      // CRT framebuffer at this exact layout slot, so no black placeholder is
+      // painted underneath it.
+    },
+    getInteraction(block) {
+      return { provider: block.provider || 'iframe', block, inline: true }
+    },
+  })
+
   registry.register('model3d', {
     measure() {
       return { height: 248 }
@@ -178,9 +192,6 @@ export function createDefaultBlockRegistry({ local3d }) {
     },
     paint(g, block, layout, env) {
       const h = layout.height - 28
-      g.fillStyle = '#010a05'
-      g.fillRect(layout.x, layout.y, layout.width, h)
-
       const canvas = local3d.getCanvas(block)
       if (local3d.isReady(block) && canvas) {
         g.save()
@@ -201,7 +212,7 @@ export function createDefaultBlockRegistry({ local3d }) {
       env.drawLines(['DRAG / ZOOM'], layout.x + layout.width - 72, layout.y + h - 9, 7, 9, env.colors.amber, 700)
     },
     getInteraction(block) {
-      return { provider: 'local-3d', block }
+      return { provider: 'local-3d', block, inline: true }
     },
   })
 
