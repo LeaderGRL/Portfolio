@@ -11,9 +11,11 @@ link: https://www.youtube.com/watch?v=gchRNrRPOwI
 ::facts{columns=2 label="PROJECT SNAPSHOT"}
 GENRE | RHYTHM GAME / ARCADE
 ENGINE | UNITY
+ROLE | PROJECT LEAD + GAMEPLAY
 PLATFORM | CUSTOM ARCADE CABINET
 INPUT | BUTTONS + ROTARY ENCODERS
 TOOLING | WEB LEVEL EDITOR
+SYSTEMS | UNITY + IOT + HARDWARE
 PERIOD | 2021 — 2023
 ::
 
@@ -27,9 +29,18 @@ The core loop asks the player to destroy notes in rhythm while handling long not
 
 ## THE MACHINE
 
-The project eventually became a real custom arcade cabinet. An existing wooden cabinet was measured, adapted and redesigned around the game. The control panel had to accommodate traditional arcade inputs as well as rotary encoders used by the slider mechanic.
+The project eventually became a real custom arcade cabinet. An existing wooden cabinet was measured, adapted and redesigned around the game. The recovered structure used 19 mm MDF, and the control panel had to be rebuilt around the mechanics rather than forcing the game into an existing layout.
 
-The 3D cabinet below is the original project model hosted on Sketchfab. It uses the same generic integration block that any future portfolio project can reuse.
+::facts{columns=2 label="CABINET SYSTEM"}
+STRUCTURE | RECOVERED 19 MM MDF CABINET
+CONTROLS | CUBIC BUTTONS + ROTARY ENCODERS
+COMPUTE | RASPBERRY PI + ARDUINO
+AUDIO | SPEAKER + AMPLIFIER
+PANEL | CUSTOM MEASURED CONTROL SURFACE
+DISPLAY | GAME + CABINET DESIGNED TOGETHER
+::
+
+The 3D cabinet below is the original project model hosted on Sketchfab. It uses the same generic integration block that any future portfolio project can reuse. A local GLB can later replace this block without changing the document engine.
 
 ::embed{provider=sketchfab uid=d1fa122dc2d4447a949b151b83e7df02 label="ARCADE CABINET 3D" title="Project Echo arcade cabinet"}
 
@@ -50,7 +61,7 @@ SYSTEM DESIGN — SOFTWARE, HARDWARE AND GAMEPLAY WERE ITERATED AS ONE INPUT LOO
 
 ## LEVEL TOOLING
 
-A dedicated level editor was created to place notes against audio, iterate on timing and produce playable charts. This tooling became important because content iteration speed directly affected the quality of the rhythm design.
+A dedicated web level editor was created to import music, inspect its audio structure and place notes against the timeline. This tooling became important because content iteration speed directly affected the quality of the rhythm design.
 
 ::pipeline{label="AUTHORING LOOP"}
 AUDIO | IMPORT TRACK + READ TIMING
@@ -73,10 +84,14 @@ The important lesson was not simply producing more assets, but learning to compa
 2021-10 | Project starts and first gameplay prototypes
 2021-11 | Note destruction and early rhythm loop
 2021-12 | Menu and level selection experiments
+2022-01 | Echo mascot exploration
 2022-03 | Level editor and camera systems
-2022-06 | Visual direction and gameplay iteration
-2022-11 | Cabinet measurements and hardware planning
-2023-02 | Rotary encoders, particles and control integration
+2022-04 | Long notes and 3D mascot experiment
+2022-05 | New control-panel design
+2022-11 | Hardware testing and cabinet work
+2022-12 | Level-editor redesign
+2023-01 | Background and visual asset iterations
+2023-02 | Buttons, particles and control integration
 2023-04 | Final cabinet integration and presentation
 ::
 
