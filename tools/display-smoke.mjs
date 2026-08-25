@@ -66,9 +66,11 @@ check(mainSource.includes("import './crt-bypass.css'"), 'CRT bypass styles are b
 check(crtBypassCss.includes('.tube.is-crt-off #gl'), 'CRT off hides WebGL composite')
 check(crtBypassCss.includes('#article-source'), 'CRT off exposes article source directly')
 check(crtBypassCss.includes('#fallback2d'), 'CRT off exposes terminal source directly')
+check(crtBypassCss.includes('.tube.is-crt-off .tube__shade'), 'CRT off removes photographic shade')
+check(crtBypassCss.includes('.tube.is-crt-off .tube__gloss'), 'CRT off removes photographic gloss')
 check(crtBypassCss.includes('filter:none !important'), 'CRT off removes native embed optics')
 check(crtBypassCss.includes('document-inline-integration--youtube::before'), 'CRT off removes inline scanline overlays')
-check(crtBypassCss.includes('bottom:16px'), 'inline YouTube reserves media breathing room')
+check(crtBypassCss.includes('bottom:22px'), 'inline YouTube reserves media breathing room')
 
 check(ecsArticle.includes('<iframe'), 'legacy Godbolt iframe still authored')
 check(contentPlugin.includes('function parseRawIframe'), 'raw iframe parser exists')
