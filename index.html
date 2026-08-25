@@ -40,14 +40,22 @@
     </div>
 
     <!-- ── tube ───────────────────────────────────────────────────────────
-         Layer order matters: canvas, then the glass shading multiplied over
-         it, then the glass specular screened on top, then the bezel whose
-         transparent aperture does the masking.                             -->
+         The display has two content paths that share one physical glass stack:
+         the terminal owns the full WebGL post-process, while DOM/interactive
+         surfaces stay native and receive a transparent CRT overlay. Future
+         games, software, WebGL/WASM demos and fullscreen mode mount through the
+         same display-surface instead of adding another one-off layer.          -->
     <div class="screen">
-      <div class="tube" id="tube">
+      <div class="tube" id="tube" data-display-mode="terminal">
         <canvas id="gl"></canvas>
         <canvas id="fallback2d"></canvas>
-        <article class="article-reader" id="article-reader" tabindex="0" hidden></article>
+
+        <div class="display-surface" id="display-surface">
+          <article class="article-reader" id="article-reader" tabindex="0" hidden></article>
+        </div>
+
+        <canvas class="crt-overlay" id="crt-overlay" aria-hidden="true"></canvas>
+
         <img class="tube__shade" alt="" data-asset="glass-shade">
         <img class="tube__gloss tube__gloss--soft" alt="" data-asset="glass-gloss">
         <img class="tube__gloss tube__gloss--core" alt="" data-asset="glass-gloss">
