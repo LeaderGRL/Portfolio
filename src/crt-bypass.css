@@ -13,7 +13,8 @@
 }
 
 .tube.is-crt-off[data-display-mode="article"] #article-source,
-.tube.is-crt-off[data-display-mode="terminal"] #fallback2d{
+.tube.is-crt-off[data-display-mode="terminal"] #fallback2d,
+.tube.is-crt-off[data-display-mode="media"] #media-inspect-source{
   display:block !important;
   position:absolute;
   inset:0;
@@ -26,7 +27,11 @@
 }
 
 .tube.is-crt-off[data-display-mode="article"] #fallback2d,
-.tube.is-crt-off[data-display-mode="terminal"] #article-source{
+.tube.is-crt-off[data-display-mode="article"] #media-inspect-source,
+.tube.is-crt-off[data-display-mode="terminal"] #article-source,
+.tube.is-crt-off[data-display-mode="terminal"] #media-inspect-source,
+.tube.is-crt-off[data-display-mode="media"] #article-source,
+.tube.is-crt-off[data-display-mode="media"] #fallback2d{
   display:none !important;
 }
 
@@ -35,6 +40,7 @@
    last framebuffer remains visibly frozen on the tube. */
 .tube.is-powered-off.is-crt-off #article-source,
 .tube.is-powered-off.is-crt-off #fallback2d,
+.tube.is-powered-off.is-crt-off #media-inspect-source,
 .tube.is-powered-off.is-crt-off #gl{
   display:none !important;
   opacity:0 !important;
