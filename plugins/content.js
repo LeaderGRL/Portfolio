@@ -118,7 +118,7 @@ function parseBody(body, file) {
       continue
     }
 
-    const heading = /^(#{1,6})\s+(.+)$/.exec(line)
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line.trim())
     if (heading) {
       flushPara()
       blocks.push({ type: 'heading', level: heading[1].length, text: heading[2].trim() })
@@ -171,6 +171,18 @@ function parseBody(body, file) {
   }
   flushPara()
   return blocks
+}
+
+/* Defensive normalization for imported/converted Markdown. If a conversion
+ * tool has escaped a heading into a standalone prose block, restore its typed
+ * representation so the CRT renderer never prints literal ## markers. */
+function normalizeBlocks(blocks) {
+  return blocks.map(block => {
+    if (block.type !== 'prose') return block
+    const heading = /^(#{1,6})\s+(.+)$/.exec(String(block.text || '').trim())
+    if (!heading) return block
+    return { type: 'heading', level: heading[1].length, text: heading[2].trim() }
+  })
 }
 
 const MEDIA_DIR = 'content/media'
@@ -234,8 +246,6 @@ function resolveMedia(blocks, file) {
       }
     }
 
-    // Gallery sources live in the directive body rather than named fields.
-    // Resolve only the first pipe-separated cell; captions remain untouched.
     if (block.type === 'gallery') block.body = resolveGalleryBody(block.body, file)
   }
   return blocks
@@ -246,7 +256,7 @@ function readDocument(path, id) {
   return {
     id,
     ...meta,
-    blocks: resolveMedia(parseBody(body, path), path),
+    blocks: resolveMedia(normalizeBlocks(parseBody(body, path)), path),
   }
 }
 
