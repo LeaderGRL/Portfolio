@@ -21,6 +21,8 @@ export class InlineIntegrationController {
     this.registry = registry
     this.instances = new Map()
     this.opticsFilterId = 'document-crt-native-optics'
+    this.syncing = false
+    this.syncQueued = false
 
     this._ensureOpticsFilter()
 
@@ -35,9 +37,6 @@ export class InlineIntegrationController {
   }
 
   _neutralBarrelMap() {
-    // A neutral 50% R/G displacement map. It keeps the filter graph valid in
-    // limited environments (tests, old browsers, constrained WebViews) while
-    // naturally disabling only the barrel displacement effect.
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="rgb(128,128,128)"/></svg>'
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
   }
@@ -183,9 +182,6 @@ export class InlineIntegrationController {
   _setActive(instance, active) {
     if (!instance) return
 
-    // YouTube intentionally never receives raw pointer/wheel input. The shield
-    // remains above the iframe and controls playback via the documented iframe
-    // postMessage API so document scrolling still works while the video plays.
     if (instance.descriptor.provider === 'youtube') {
       instance.host.classList.remove('is-active')
       instance.shield.hidden = false
@@ -262,48 +258,76 @@ export class InlineIntegrationController {
     return instance
   }
 
+  _disposeInstance(instance) {
+    if (!instance || instance.disposed) return
+    instance.disposed = true
+    instance.host.remove()
+    try {
+      instance.cleanup?.()
+    } catch (error) {
+      console.warn('Inline integration cleanup failed', error)
+    }
+  }
+
   sync() {
-    const activeDocument = this.tube?.dataset.displayMode === 'article'
-    if (!this.isPoweredOn || !activeDocument) {
-      this.clear()
-      this.layer.hidden = true
+    if (this.syncing) {
+      this.syncQueued = true
       return
     }
 
-    this.layer.hidden = false
-    const wanted = new Set()
-
-    for (const entry of this.rasteriser?.layout || []) {
-      if (this._visibleAmount(entry) < 2) continue
-      const descriptor = this.rasteriser.getInteraction?.(entry)
-      if (!this._isInline(entry, descriptor)) continue
-
-      const key = this._key(entry, descriptor)
-      wanted.add(key)
-      let instance = this.instances.get(key)
-      if (!instance) {
-        instance = this._mount(entry, descriptor)
-        if (!instance) continue
-        this.instances.set(key, instance)
+    this.syncing = true
+    try {
+      const activeDocument = this.tube?.dataset.displayMode === 'article'
+      if (!this.isPoweredOn || !activeDocument) {
+        this.clear()
+        this.layer.hidden = true
+        return
       }
-      instance.entry = entry
-      this._position(instance.host, entry)
-    }
 
-    for (const [key, instance] of this.instances) {
-      if (wanted.has(key)) continue
-      instance.cleanup?.()
-      instance.host.remove()
-      this.instances.delete(key)
+      this.layer.hidden = false
+      const wanted = new Set()
+
+      for (const entry of this.rasteriser?.layout || []) {
+        if (this._visibleAmount(entry) < 2) continue
+        const descriptor = this.rasteriser.getInteraction?.(entry)
+        if (!this._isInline(entry, descriptor)) continue
+
+        const key = this._key(entry, descriptor)
+        wanted.add(key)
+        let instance = this.instances.get(key)
+        if (!instance) {
+          instance = this._mount(entry, descriptor)
+          if (!instance) continue
+          this.instances.set(key, instance)
+        }
+        instance.entry = entry
+        this._position(instance.host, entry)
+      }
+
+      for (const [key, instance] of [...this.instances]) {
+        if (wanted.has(key)) continue
+
+        // Remove the instance from controller state before running provider
+        // cleanup. Cleanup is allowed to dirty the framebuffer, and therefore
+        // must never be able to find and dispose the same instance again.
+        this.instances.delete(key)
+        this._disposeInstance(instance)
+      }
+    } finally {
+      this.syncing = false
+      if (this.syncQueued) {
+        this.syncQueued = false
+        queueMicrotask(() => this.sync())
+      }
     }
   }
 
   clear() {
-    for (const instance of this.instances.values()) {
-      instance.cleanup?.()
-      instance.host.remove()
-    }
+    // Detach controller state first so provider cleanup cannot recursively
+    // dispose the same integration through a nested synchronization pass.
+    const instances = [...this.instances.values()]
     this.instances.clear()
+    for (const instance of instances) this._disposeInstance(instance)
   }
 
   destroy() {
