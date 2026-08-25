@@ -3,8 +3,8 @@
  *
  * Historical class/file naming is retained during migration, but this
  * controller now serves any long-form document. Video stays a first-class
- * local media case; every other provider is resolved through the integration
- * registry so project code never branches on Sketchfab, YouTube, Miro, etc.
+ * local media case; providers that opt into inline rendering are mounted by the
+ * InlineIntegrationController instead of exposing a modal trigger.
  * ========================================================================== */
 export class ArticleInteractionController {
   constructor({ tube, reader, rasteriser, integrations = null }) {
@@ -55,7 +55,11 @@ export class ArticleInteractionController {
     if (!this.trigger) return
 
     const descriptor = this.rasteriser?.getInteraction?.(entry)
-    const available = Boolean(descriptor && this.tube?.dataset.displayMode === 'article')
+    const available = Boolean(
+      descriptor &&
+      !descriptor.inline &&
+      this.tube?.dataset.displayMode === 'article'
+    )
     this.trigger.hidden = !available
     if (!available) return
 
@@ -70,7 +74,7 @@ export class ArticleInteractionController {
   open(entry = this.activeEntry) {
     if (!this.isPoweredOn || !entry || !this.overlay || !this.content) return false
     const descriptor = this.rasteriser?.getInteraction?.(entry)
-    if (!descriptor) return false
+    if (!descriptor || descriptor.inline) return false
 
     this.close(false)
     this.openEntry = entry
