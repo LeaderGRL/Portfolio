@@ -16,11 +16,13 @@ const integrationRegistry = fs.readFileSync('src/document/integration-registry.j
 const integrations = fs.readFileSync('src/document/default-integrations.js', 'utf8')
 const inlineIntegrations = fs.readFileSync('src/document/inline-integrations.js', 'utf8')
 const local3d = fs.readFileSync('src/document/local-3d.js', 'utf8')
+const progressOverlay = fs.readFileSync('src/document/progress-overlay.js', 'utf8')
 const bridge = fs.readFileSync('src/article-crt-bridge.js', 'utf8')
 const reader = fs.readFileSync('src/article-reader.js', 'utf8')
 const interaction = fs.readFileSync('src/article-interaction.js', 'utf8')
 const displayCss = fs.readFileSync('src/display.css', 'utf8')
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+const packageLock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'))
 const penw = fs.readFileSync('content/projects/penw/index.md', 'utf8')
 const leak = fs.readFileSync('content/projects/leak/index.md', 'utf8')
 
@@ -78,6 +80,14 @@ check(local3d.includes('_fitCamera(radius)'), 'local 3D auto-frames arbitrary mo
 check(local3d.includes('ShadowMaterial'), 'local 3D has reusable contact shadow')
 check(local3d.includes('mountInput'), 'local 3D has CRT-preserving input proxy')
 check(packageJson.dependencies?.three, 'Three.js dependency declared')
+check(packageLock.packages?.['']?.dependencies?.three === packageJson.dependencies?.three, 'Three.js dependency is synchronized in npm lock')
+check(packageLock.packages?.['node_modules/three']?.version, 'npm lock contains resolved Three.js package')
+
+check(progressOverlay.includes('class DocumentProgressOverlay'), 'generic document progress overlay exists')
+check(progressOverlay.includes("block.type === 'heading'"), 'chapter progress derives from Markdown headings')
+check(progressOverlay.includes('progressOverlay') === false, 'progress overlay has no project-specific dependency')
+check(bridge.includes('DocumentProgressOverlay'), 'document bridge wires chapter progress')
+check(bridge.includes('progressOverlay.paint(documentRaster)'), 'chapter progress is painted into CRT source')
 
 check(bridge.includes('createDefaultBlockRegistry'), 'document bridge wires block registry')
 check(bridge.includes('createDefaultIntegrationRegistry'), 'document bridge wires integration adapters')
