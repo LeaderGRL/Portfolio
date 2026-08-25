@@ -147,10 +147,17 @@
   animation:none !important;
 }
 
+/* Power-off is a hard visual boundary. JS closes native interaction state, and
+   CSS also hides it immediately so no iframe/video can flash over a dead tube. */
 .tube.is-powered-off .display-surface,
 .tube.is-powered-off .article-interact-trigger,
 .tube.is-powered-off .article-interaction{
   pointer-events:none;
+}
+
+.tube.is-powered-off .article-interact-trigger,
+.tube.is-powered-off .article-interaction{
+  display:none !important;
 }
 
 /* Fullscreen enlarges the same physical display. */
