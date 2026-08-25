@@ -33,8 +33,19 @@ export function attachArticleCRT(app) {
 
   let interaction = null
   let inlineIntegrations = null
+  let documentRaster = null
   const progressOverlay = new DocumentProgressOverlay()
-  const mediaViewer = new MediaViewer()
+  const mediaViewer = new MediaViewer({
+    tube,
+    pipeline,
+    onChange: () => {
+      app.dirty = true
+      if (mediaViewer.isOpen) {
+        interaction?.close?.(false)
+        inlineIntegrations?.clear?.()
+      }
+    },
+  })
   const local3d = new Local3DManager(() => {
     app.dirty = true
     documentRaster?.markDirty?.()
@@ -46,7 +57,7 @@ export function attachArticleCRT(app) {
   // integrations. Local 3D can mark the document dirty while a cleanup is in
   // progress; re-entering inlineIntegrations.sync() from that callback creates
   // a teardown loop. The RAF below owns integration synchronization instead.
-  const documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
+  documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
     app.dirty = true
   }, { blockRegistry })
 
@@ -68,6 +79,7 @@ export function attachArticleCRT(app) {
   )
 
   const hasVisibleLocal3D = () => {
+    if (mediaViewer.isOpen) return false
     for (const entry of documentRaster.layout || []) {
       if (entry.type !== 'model3d') continue
       const top = entry.y - documentRaster.scroll
@@ -88,21 +100,28 @@ export function attachArticleCRT(app) {
       inlineIntegrations.clear()
     }
 
-    const nextId = documentItem ? 'document' : 'terminal'
+    const nextId = mediaViewer.isOpen
+      ? 'media'
+      : documentItem
+        ? 'document'
+        : 'terminal'
     if (pipeline.setSource(nextId)) {
       app.dirty = true
-      app.state.static = Math.max(app.state.static || 0, 0.7)
+      app.state.static = mediaViewer.isOpen
+        ? 0
+        : Math.max(app.state.static || 0, 0.7)
     }
 
-    tube.dataset.displayMode = documentItem ? 'article' : 'terminal'
-    tube.classList.toggle('has-dom-surface', Boolean(documentItem))
-    tube.classList.toggle('is-reading', Boolean(documentItem))
+    tube.dataset.displayMode = mediaViewer.isOpen ? 'media' : documentItem ? 'article' : 'terminal'
+    tube.classList.toggle('has-dom-surface', Boolean(documentItem) && !mediaViewer.isOpen)
+    tube.classList.toggle('is-reading', Boolean(documentItem) && !mediaViewer.isOpen)
     if (!documentItem && interaction.isOpen) interaction.close(false)
     if (!documentItem) mediaViewer.close()
   }
 
   app.raster.paint = (term, reveal, cursorOn) => {
     syncSource()
+    if (mediaViewer.isOpen) return false
     if (isDocument()) {
       const painted = documentRaster.paint(true)
       progressOverlay.paint(documentRaster)
@@ -118,10 +137,28 @@ export function attachArticleCRT(app) {
     return result
   }
 
+  // The physical BACK key should leave media inspection before navigating away
+  // from the current project. This preserves the exact reader scroll position.
+  const originalBack = app.back.bind(app)
+  app.back = (...args) => {
+    if (mediaViewer.isOpen) {
+      mediaViewer.close()
+      syncSource()
+      return
+    }
+    return originalBack(...args)
+  }
+
   let raf = 0
   const mediaFrame = time => {
     raf = requestAnimationFrame(mediaFrame)
     if (!isDocument()) return
+
+    if (mediaViewer.isOpen) {
+      if (interaction.isOpen) interaction.close(false)
+      inlineIntegrations.clear()
+      return
+    }
 
     // An off-screen auto-spinning model must not keep the whole CRT source
     // dirty. Besides wasting GPU time, continuous repaints while scrolling can
@@ -158,6 +195,7 @@ export function attachArticleCRT(app) {
     exitFullscreen: () => pipeline.exitFullscreen(),
     destroy() {
       cancelAnimationFrame(raf)
+      app.back = originalBack
       inlineIntegrations.destroy()
       interaction.destroy()
       mediaViewer.destroy()
@@ -166,7 +204,7 @@ export function attachArticleCRT(app) {
       app.raster.paint = terminalPaint
       pipeline.setSource('terminal')
       tube.dataset.displayMode = 'terminal'
-      tube.classList.remove('has-dom-surface', 'is-reading')
+      tube.classList.remove('has-dom-surface', 'is-reading', 'is-media-inspecting')
       delete app.__articleCRTBridge
     },
   }
