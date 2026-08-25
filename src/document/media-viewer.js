@@ -175,6 +175,7 @@ export class MediaViewer {
     this.index = Math.max(0, Math.min(normalized.length - 1, Number(index) || 0))
     this.isOpen = true
     this.tube?.classList.add('is-media-inspecting')
+    this.pipeline?.setSource('media')
     this._renderCurrent()
     this.onChange()
     return true
@@ -192,6 +193,7 @@ export class MediaViewer {
     this.isOpen = false
     this.token++
     this.tube?.classList.remove('is-media-inspecting')
+    this.pipeline?.setSource('document')
     this.onChange()
     return true
   }
