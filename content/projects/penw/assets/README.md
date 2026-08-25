@@ -4,6 +4,16 @@ This folder is the canonical home for portfolio-ready Project Echo: Neon Wave me
 
 The original presentation export uses timestamped filenames. Do not reference those names from `index.md`. Copy or transcode the source asset once, give it a descriptive filename here, then use the descriptive path from the document.
 
+## Current 3D state
+
+`arcade-cabinet.model.json` is the active lightweight local Three.js representation. Its 29 parts, dimensions and transforms were extracted from the original cabinet GLB, then converted to generic primitive geometry with curated material values. It exists to validate the full local rendering path now:
+
+```text
+local model data -> Three.js -> document raster -> FRAG_CRT -> glass
+```
+
+The final portfolio target remains `arcade-cabinet.glb`: the optimized textured GLB should replace the manifest once the binary asset is committed. The Markdown block and runtime architecture do not need to change.
+
 ## Recommended mapping
 
 | Portfolio asset | Original source asset | Intended block |
@@ -31,7 +41,8 @@ The original presentation export uses timestamped filenames. Do not reference th
 | `echo-weapon.webp` | `1680599495018-Arme_et_masque.jpg` | gallery |
 | `echo-3d-experiment.webp` | `1680786049921-echo+3d.png` | gallery |
 | `project-board.webp` | `1681113075818-1681113075818.png` | gallery |
-| `arcade-cabinet.glb` | local cabinet GLB export | model3d |
+| `arcade-cabinet.model.json` | geometry derived from local cabinet GLB | model3d / active preview |
+| `arcade-cabinet.glb` | optimized textured local cabinet GLB | model3d / final target |
 
 ## Asset rules
 
@@ -39,6 +50,6 @@ The original presentation export uses timestamped filenames. Do not reference th
 - Prefer WebP for static screenshots and photography.
 - Keep GIF only when the animation itself is the information being shown.
 - Prefer local MP4/WebM over YouTube when the original gameplay video is available, because local frames can pass through the real CRT shader.
-- Prefer `arcade-cabinet.glb` over Sketchfab once the local model is available in this folder.
+- Prefer the local `model3d` path over Sketchfab when the project geometry can be hosted with the portfolio.
 - Optimize assets before committing them; the document engine should not compensate for oversized source exports at runtime.
 - Never add PENW-specific loading code. If an asset needs a new behavior, implement a reusable document block or provider adapter.
