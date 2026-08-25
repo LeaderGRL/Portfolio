@@ -9,6 +9,7 @@ const check = (condition, label) => {
 
 const plugin = fs.readFileSync('plugins/content.js', 'utf8')
 const design = fs.readFileSync('docs/PROJECT_EXPERIENCE_ENGINE.md', 'utf8')
+const authoring = fs.readFileSync('docs/ADDING_PROJECTS.md', 'utf8')
 const blockRegistry = fs.readFileSync('src/document/block-registry.js', 'utf8')
 const defaultBlocks = fs.readFileSync('src/document/default-blocks.js', 'utf8')
 const integrationRegistry = fs.readFileSync('src/document/integration-registry.js', 'utf8')
@@ -22,13 +23,15 @@ const displayCss = fs.readFileSync('src/display.css', 'utf8')
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'))
 const penw = fs.readFileSync('content/projects/penw/index.md', 'utf8')
 
-for (const type of ['image', 'video', 'hero', 'gallery', 'timeline', 'compare', 'model3d', 'embed']) {
+for (const type of ['image', 'video', 'hero', 'facts', 'pipeline', 'gallery', 'timeline', 'compare', 'model3d', 'embed']) {
   check(hasBlockType(type), `schema contains ${type}`)
 }
 
-check(BLOCK_TYPES.length >= 14, 'schema exposes rich document vocabulary')
+check(BLOCK_TYPES.length >= 16, 'schema exposes rich document vocabulary')
 check(DIRECTIVE_TYPES.includes('model3d'), 'model3d is authorable directive')
 check(DIRECTIVE_TYPES.includes('gallery'), 'gallery is authorable directive')
+check(DIRECTIVE_TYPES.includes('facts'), 'facts is authorable directive')
+check(DIRECTIVE_TYPES.includes('pipeline'), 'pipeline is authorable directive')
 check(plugin.includes('DIRECTIVE_TYPES'), 'parser consumes shared schema')
 check(plugin.includes('normalizeBlocks'), 'parser normalizes imported markdown headings')
 check(plugin.includes('line.trim()'), 'heading parser tolerates indentation')
@@ -40,6 +43,8 @@ check(plugin.includes('findLocalAsset'), 'relative project assets supported')
 
 check(blockRegistry.includes('class BlockRegistry'), 'runtime block registry exists')
 check(defaultBlocks.includes("registry.register('hero'"), 'generic hero renderer registered')
+check(defaultBlocks.includes("registry.register('facts'"), 'generic facts renderer registered')
+check(defaultBlocks.includes("registry.register('pipeline'"), 'generic pipeline renderer registered')
 check(defaultBlocks.includes("registry.register('gallery'"), 'generic gallery renderer registered')
 check(defaultBlocks.includes("registry.register('timeline'"), 'generic timeline renderer registered')
 check(defaultBlocks.includes("registry.register('compare'"), 'generic compare renderer registered')
@@ -74,10 +79,14 @@ check(bridge.includes('createDefaultBlockRegistry'), 'document bridge wires bloc
 check(bridge.includes('createDefaultIntegrationRegistry'), 'document bridge wires integration adapters')
 check(bridge.includes('InlineIntegrationController'), 'document bridge wires inline integrations')
 check(reader.includes("case 'hero'"), 'semantic mirror accounts for hero height')
+check(reader.includes("case 'facts'"), 'semantic mirror accounts for facts height')
+check(reader.includes("case 'pipeline'"), 'semantic mirror accounts for pipeline height')
 check(reader.includes("case 'model3d'"), 'semantic mirror accounts for 3D height')
 check(reader.includes("case 'embed'"), 'semantic mirror accounts for embed height')
 
 check(!penw.includes('::hero{'), 'PENW does not reserve an empty hero slot')
+check(penw.includes('::facts{'), 'PENW uses generic project facts')
+check(penw.includes('::pipeline{'), 'PENW uses generic system pipelines')
 check(penw.includes('## THE EXPERIENCE'), 'PENW uses markdown section headings')
 check(penw.includes('provider=youtube'), 'PENW uses generic YouTube adapter')
 check(penw.includes('provider=sketchfab'), 'PENW uses generic Sketchfab adapter')
@@ -85,6 +94,10 @@ check(penw.includes('::timeline'), 'PENW uses generic timeline block')
 check(!penw.toLowerCase().includes('genial.ly'), 'PENW no longer embeds Genially')
 check(!fs.existsSync('src/penw.js'), 'no PENW-specific runtime module')
 check(!fs.existsSync('src/leak.js'), 'no Leak-specific runtime module')
+
+check(authoring.includes('### Project facts'), 'authoring guide documents facts block')
+check(authoring.includes('### System pipeline'), 'authoring guide documents pipeline block')
+check(authoring.includes('mounted directly in the document'), 'authoring guide documents inline embeds')
 
 check(design.includes('no Leak-specific runtime code'), 'architecture records anti-overfit rule')
 check(design.includes('no PENW-specific runtime code'), 'PENW validation rule documented')
