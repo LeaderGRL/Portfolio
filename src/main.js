@@ -6,6 +6,12 @@
  */
 import './style.css'
 import { start } from './app.js'
+import { initDisplayRuntime } from './display-runtime.js'
 
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(start)
-else addEventListener('load', start)
+const boot = () => {
+  initDisplayRuntime()
+  start()
+}
+
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(boot)
+else addEventListener('load', boot)
