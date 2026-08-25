@@ -3,10 +3,10 @@ import { VERT } from './crt.js'
 /* ========================================================================== *
  * Shared CRT overlay
  *
- * The terminal raster already owns a full post-process shader. DOM and future
- * interactive surfaces cannot be sampled safely by WebGL without flattening
- * their native controls, so this renderer draws only the optical/noise layer
- * on a transparent canvas above them. It never captures the surface below.
+ * Native DOM/iframe/video surfaces remain interactive below this transparent
+ * pass. Pixel-dependent optics (bloom and RGB separation) are handled by the
+ * SVG filter on #display-surface; this shader supplies the screen-space effects
+ * that do not need to sample the underlying content.
  * ========================================================================== */
 
 const FRAG_OVERLAY = `#version 300 es
@@ -35,58 +35,63 @@ void main(){
   vec2 uv = vUv;
   vec2 px = uv * max(uCss, vec2(1.0));
 
-  // Fine scanlines remain tied to CSS pixels so DPR changes do not change the
-  // perceived pitch of the tube.
-  float scanWave = 0.5 + 0.5 * cos(px.y / 2.15 * 6.2831853);
-  float scan = pow(scanWave, 8.0);
-  float dark = scan * 0.105;
+  // Match the visible terminal cadence rather than treating scanlines as a
+  // decorative texture. CSS-pixel locking keeps the pitch stable across DPRs.
+  float scanWave = 0.5 + 0.5 * cos(px.y / 2.05 * 6.2831853);
+  float scan = pow(scanWave, 7.0);
+  float dark = scan * 0.205;
 
-  // Aperture grille. This is intentionally subtle on authored media: it should
-  // make the glass feel electronic without hiding screenshots or source code.
+  // A clearly visible but still restrained RGB grille. The terminal shader
+  // modulates source pixels directly; on native DOM this transparent pass is
+  // the closest physically coherent equivalent without flattening controls.
   float stripe = mod(px.x, 3.0);
-  vec3 grille = stripe < 1.0 ? vec3(1.0, 0.30, 0.28)
-              : stripe < 2.0 ? vec3(0.28, 1.0, 0.36)
-                             : vec3(0.30, 0.42, 1.0);
-  float grilleAlpha = 0.026;
+  vec3 grille = stripe < 1.0 ? vec3(1.0, 0.18, 0.16)
+              : stripe < 2.0 ? vec3(0.16, 1.0, 0.24)
+                             : vec3(0.18, 0.28, 1.0);
+  float grilleAlpha = 0.062;
 
-  // Shallow vignette and a slowly drifting beam band sell the curved faceplate
-  // while the photographic glass above remains responsible for the real shape.
+  // Curved-face falloff. The photographic shade above remains the real glass
+  // illumination, so this only supplies the electronic beam falloff.
   vec2 edge = abs(uv * 2.0 - 1.0);
-  float vignette = smoothstep(0.56, 1.08, max(edge.x, edge.y));
-  dark += vignette * 0.090;
+  float radial = dot(uv - 0.5, uv - 0.5);
+  float vignette = smoothstep(0.50, 1.02, max(edge.x, edge.y));
+  dark += vignette * 0.145 + smoothstep(0.16, 0.44, radial) * 0.050;
 
-  float beamY = fract(uTime * 0.055);
-  float beam = exp(-pow((uv.y - beamY) * 18.0, 2.0));
-  vec3 beamTint = vec3(0.22, 1.0, 0.44) * beam;
-  float beamAlpha = beam * 0.020;
+  // Slow vertical brightness drift / retrace band.
+  float beamY = fract(uTime * 0.047);
+  float beam = exp(-pow((uv.y - beamY) * 21.0, 2.0));
+  vec3 beamTint = vec3(0.20, 1.0, 0.42) * beam;
+  float beamAlpha = beam * 0.034;
 
-  // Stable low-level grain, with a short stronger burst when the display mode
-  // changes. Static is deliberately procedural so live video/iframes remain
-  // untouched and interactive under the effect layer.
-  float grain = hash(floor(px) + floor(uTime * 48.0));
-  float grainAlpha = (0.010 + uStatic * 0.075) * abs(grain - 0.5) * 2.0;
-  vec3 grainTint = mix(vec3(0.0), vec3(0.35, 1.0, 0.52), grain);
+  // Fine analogue grain and occasional stronger route-change static.
+  float grain = hash(floor(px) + floor(uTime * 52.0));
+  float grainAlpha = (0.018 + uStatic * 0.105) * abs(grain - 0.5) * 2.0;
+  vec3 grainTint = mix(vec3(0.015), vec3(0.30, 1.0, 0.48), grain);
 
-  // Degauss cannot warp the DOM beneath this transparent layer, but a brief
-  // moving interference pattern keeps power-on visually coherent with the
-  // terminal shader until a future capture-capable surface is mounted.
+  // A sparse horizontal interference line makes still screenshots read as a
+  // live display instead of a green-themed webpage.
+  float lineSeed = hash(vec2(floor(uTime * 12.0), 3.7));
+  float lineY = fract(lineSeed * 7.13 + uTime * 0.19);
+  float interference = exp(-abs(uv.y - lineY) * 380.0);
+  float interferenceAlpha = interference * (0.014 + uStatic * 0.08);
+
   float wave = sin(uv.y * 54.0 + uTime * 32.0 + sin(uv.x * 19.0) * 2.0);
-  float degaussAlpha = abs(wave) * 0.048 * uDegauss * uDegauss;
-  vec3 degaussTint = vec3(0.20, 0.95, 0.48);
+  float degaussAlpha = abs(wave) * 0.060 * uDegauss * uDegauss;
+  vec3 degaussTint = vec3(0.18, 0.96, 0.44);
 
-  float tintAlpha = grilleAlpha + beamAlpha + grainAlpha + degaussAlpha;
-  float alpha = clamp((dark + tintAlpha) * strength, 0.0, 0.34);
+  float tintAlpha = grilleAlpha + beamAlpha + grainAlpha
+                  + interferenceAlpha + degaussAlpha;
+  float alpha = clamp((dark + tintAlpha) * strength, 0.0, 0.48);
 
   vec3 tint = grille * grilleAlpha
             + beamTint * beamAlpha
             + grainTint * grainAlpha
+            + vec3(0.25, 1.0, 0.50) * interferenceAlpha
             + degaussTint * degaussAlpha;
   vec3 color = tintAlpha > 0.0001 ? tint / tintAlpha : vec3(0.0);
 
-  // Dark components are represented by black contribution in the same alpha
-  // blend. Keeping the overlay in one pass avoids a second full-screen canvas.
   float tintShare = tintAlpha / max(dark + tintAlpha, 0.0001);
-  color *= clamp(tintShare * 1.35, 0.0, 1.0);
+  color *= clamp(tintShare * 1.22, 0.0, 1.0);
 
   outColor = vec4(color, alpha);
 }`
