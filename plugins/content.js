@@ -5,8 +5,8 @@
  * block vocabulary is shared with the browser through src/document/schema.js,
  * so authoring validation and rendering cannot silently drift apart.
  */
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
-import { join, extname, basename, resolve } from 'node:path'
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
+import { join, extname, basename, resolve, dirname, relative } from 'node:path'
 import { DIRECTIVE_TYPES, getBlockDefinition } from '../src/document/schema.js'
 
 const VIRTUAL = 'virtual:content'
@@ -33,7 +33,6 @@ function parseFrontMatter(raw) {
   return [meta, body]
 }
 
-/** ::name{a=1 b="two words"} -> { name, attrs } */
 function parseDirectiveHead(line) {
   const m = /^::([a-z][\w-]*)\s*(?:\{(.*)\})?\s*$/.exec(line.trim())
   if (!m) return null
@@ -55,7 +54,6 @@ function parseHtmlAttributes(source) {
   return attrs
 }
 
-/** Normalize legacy iframe HTML into the generic embed contract. */
 function parseRawIframe(lines, start) {
   if (!/^\s*<iframe\b/i.test(lines[start] || '')) return null
   const html = []
@@ -182,15 +180,24 @@ const INLINE_MIME = {
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
   '.gif': 'image/gif',
+  '.glb': 'model/gltf-binary',
+}
+const isExternal = value => /^(?:data:|blob:|https?:|\/)/i.test(String(value || ''))
+
+function findLocalAsset(value, file) {
+  if (!value || isExternal(value)) return null
+  const candidates = [
+    resolve(dirname(file), value),
+    resolve(MEDIA_DIR, value),
+  ]
+  return candidates.find(existsSync) || null
 }
 
-const isExternal = value => /^(?:data:|https?:|\/)/i.test(String(value || ''))
-
-function resolveRasterAsset(value, file) {
+function inlineLocalAsset(value, file) {
   if (!value || isExternal(value)) return value
-  const path = join(MEDIA_DIR, value)
-  if (!existsSync(path)) throw new Error(`${file}: media not found: ${path}`)
-  const mime = INLINE_MIME[extname(value).toLowerCase()]
+  const path = findLocalAsset(value, file)
+  if (!path) throw new Error(`${file}: media not found: ${value}`)
+  const mime = INLINE_MIME[extname(path).toLowerCase()]
   if (!mime) return value
   return `data:${mime};base64,${readFileSync(path).toString('base64')}`
 }
@@ -200,34 +207,70 @@ function resolveMedia(blocks, file) {
     const definition = getBlockDefinition(block.type)
     for (const field of definition?.assetFields || []) {
       const value = block[field]
-      if (!value) continue
+      if (!value || isExternal(value)) continue
 
-      // Raster images/GIFs are kept inside the single-file build. Large live
-      // media and 3D files remain URL assets; the runtime adapters own them.
-      const ext = extname(String(value).split(/[?#]/)[0]).toLowerCase()
-      if (INLINE_MIME[ext]) block[field] = resolveRasterAsset(value, file)
-      else if (block.type === 'video' && field === 'src' && !isExternal(value)) {
-        block[field] = `/media/${value}`
+      const path = findLocalAsset(value, file)
+      const ext = extname(path || value).toLowerCase()
+      if (INLINE_MIME[ext]) {
+        block[field] = inlineLocalAsset(value, file)
+        continue
+      }
+
+      // Large videos stay external by design. Existing flat content/media URLs
+      // remain backward-compatible. Project-local video should be placed in
+      // public/media (or another public path) and authored with an absolute URL.
+      if (block.type === 'video' && field === 'src') {
+        block[field] = `/media/${basename(value)}`
       }
     }
   }
   return blocks
 }
 
+function readDocument(path, id) {
+  const [meta, body] = parseFrontMatter(readFileSync(path, 'utf8'))
+  return {
+    id,
+    ...meta,
+    blocks: resolveMedia(parseBody(body, path), path),
+  }
+}
+
+/**
+ * Collections support both the legacy flat form (`frogbyte.md`) and the new
+ * self-contained form (`penw/index.md` + `penw/assets/*`).
+ */
 function readCollection(dir) {
   if (!existsSync(dir)) return []
-  return readdirSync(dir)
-    .filter(f => extname(f) === '.md')
-    .sort()
-    .map(f => {
-      const path = join(dir, f)
-      const [meta, body] = parseFrontMatter(readFileSync(path, 'utf8'))
-      return { id: basename(f, '.md'), ...meta, blocks: resolveMedia(parseBody(body, path), path) }
-    })
+  const documents = []
+  for (const entry of readdirSync(dir).sort()) {
+    const path = join(dir, entry)
+    const stat = statSync(path)
+    if (stat.isFile() && extname(entry) === '.md') {
+      documents.push(readDocument(path, basename(entry, '.md')))
+      continue
+    }
+    if (stat.isDirectory()) {
+      const index = join(path, 'index.md')
+      if (existsSync(index)) documents.push(readDocument(index, entry))
+    }
+  }
+  return documents
+}
+
+function collectWatchFiles(root) {
+  const files = []
+  const walk = path => {
+    if (!existsSync(path)) return
+    const stat = statSync(path)
+    if (stat.isFile()) { files.push(resolve(path)); return }
+    for (const entry of readdirSync(path)) walk(join(path, entry))
+  }
+  walk(root)
+  return files
 }
 
 export default function contentPlugin(root = 'content') {
-  let watched = []
   return {
     name: 'jg1500-content',
     resolveId(id) { return id === VIRTUAL ? RESOLVED : null },
@@ -240,14 +283,7 @@ export default function contentPlugin(root = 'content') {
         projects: readCollection(join(root, 'projects')),
         articles: readCollection(join(root, 'articles')),
       }
-      watched = []
-      for (const d of ['pages', 'projects', 'articles']) {
-        const dir = join(root, d)
-        if (!existsSync(dir)) continue
-        for (const f of readdirSync(dir)) watched.push(resolve(dir, f))
-      }
-      watched.push(resolve(root, 'site.json'))
-      watched.forEach(f => this.addWatchFile(f))
+      collectWatchFiles(root).forEach(f => this.addWatchFile(f))
       return `export default ${JSON.stringify(bundle)}`
     },
     handleHotUpdate({ file, server }) {
