@@ -1,21 +1,40 @@
-"""Prepare the selected desktop chassis without geometric distortion."""
+"""Prepare the supplied moulded desktop/mobile chassis without distortion."""
 import json
+import math
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "assets" / "src" / "chassis-reference-centered.png"
-MOBILE_SOURCE = ROOT / "assets" / "src" / "ChatGPT Image 25 août 2026, 00_31_47 (1).png"
+SOURCE = ROOT / "assets" / "src" / "chassis-moulding-desktop.png"
+MOBILE_SOURCE = ROOT / "assets" / "src" / "chassis-moulding-mobile.png"
 EXPORT = ROOT / "assets" / "chassis"
 BUILD = ROOT / "assets" / "build"
 
+# Measured at the bright inner lip of the supplied black moulding. The plate
+# remains fully photographic; this mask only decides which central pixels are
+# replaced by the live raster and therefore preserves the entire black rim.
+DESKTOP_APERTURE = (581, 295, 1092, 686)
+MOBILE_APERTURE = (246, 298, 694, 779)
 
-def opening_mask(source):
-    luminance = np.asarray(source, dtype=np.float32).mean(axis=2)
-    opening = Image.fromarray((luminance < 28).astype(np.uint8) * 255)
-    return opening.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.MinFilter(5))
+
+def opening_mask(size, box, exponent=5.2, supersample=4):
+    """Antialiased superellipse matching the CRT glass inside the moulding."""
+    width, height = size
+    x0, y0, x1, y1 = box
+    cx, cy = (x0 + x1) * .5, (y0 + y1) * .5
+    rx, ry = (x1 - x0) * .5, (y1 - y0) * .5
+    points = []
+    for step in range(720):
+        angle = step / 720 * math.tau
+        c, s = math.cos(angle), math.sin(angle)
+        x = cx + rx * math.copysign(abs(c) ** (2 / exponent), c)
+        y = cy + ry * math.copysign(abs(s) ** (2 / exponent), s)
+        points.append((round(x * supersample), round(y * supersample)))
+    mask = Image.new("L", (width * supersample, height * supersample), 0)
+    ImageDraw.Draw(mask).polygon(points, fill=255)
+    return mask.resize((width, height), Image.Resampling.LANCZOS)
 
 
 def aperture_from_mask(mask):
@@ -48,7 +67,7 @@ def main():
         crop_height = width * 9 / 16
         crop_box = (0, (height - crop_height) / 2, width, (height + crop_height) / 2)
 
-    opening = opening_mask(source)
+    opening = opening_mask(source.size, DESKTOP_APERTURE)
 
     aperture = None
     for suffix, size in (("1920", (1920, 1080)), ("4k", (3840, 2160))):
@@ -63,7 +82,7 @@ def main():
             aperture = aperture_from_mask(hole)
 
     mobile = Image.open(MOBILE_SOURCE).convert("RGB")
-    mobile_hole = opening_mask(mobile)
+    mobile_hole = opening_mask(mobile.size, MOBILE_APERTURE, exponent=4.8)
     mobile_frame = transparent_frame(mobile, mobile_hole)
     mobile.save(EXPORT / "chassis-mobile.webp", "WEBP", quality=92, method=6)
     mobile_frame.save(BUILD / "chassis-frame-mobile.webp", "WEBP", quality=92, method=6)

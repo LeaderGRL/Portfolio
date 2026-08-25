@@ -1,59 +1,84 @@
-# Design QA — JG-1500 CRT and responsive pass
+# Design QA — moulded CRT frame and mobile recomposition
 
-## Source truth
+## Source truth and normalization
 
-- Desktop composition: `assets/src/target_portfolio.png`, with the later
-  user-selected centered chassis in `assets/src/chassis-reference-centered.png`.
-- Mobile plate: `assets/src/ChatGPT Image 25 août 2026, 00_31_47 (1).png`
-  at 941 × 1672.
-- The centered desktop chassis intentionally overrides the older target's
-  larger CRT opening. Neither desktop nor mobile source is stretched.
+- Desktop source: `assets/src/chassis-moulding-desktop.png`, 1672 × 941.
+- Mobile source: `assets/src/chassis-moulding-mobile.png`, 941 × 1672.
+- Desktop implementation: `C:/Users/jorda/AppData/Local/Temp/jg1500-moulding-desktop.png`,
+  browser viewport and output 1920 × 1080, DPR 1.
+- Mobile implementation: `C:/Users/jorda/AppData/Local/Temp/jg1500-moulding-mobile.png`,
+  browser viewport and output 430 × 900, DPR 1.
+- The desktop source was normalized to 960 × 540. The mobile source was
+  center-cover-cropped to the same 430 × 900 viewport as the implementation;
+  no source image was stretched.
+- State: HOME for full-view comparisons; first article detail for responsive
+  content and CRT-effect verification.
 
-## Combined visual comparisons
+## Comparison evidence
 
-- `qa/desktop-comparison.png` places the target and final 1920 × 1080 state on
-  the same canvas.
-- `qa/mobile-comparison.png` places the cover-cropped mobile source plate and
-  final 430 × 900 state on the same canvas.
-- Supporting captures: `qa/desktop-final.png`,
-  `qa/desktop-article-final.png`, `qa/mobile-final.png`, and
-  `qa/mobile-article-final.png`.
+- Desktop full view:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-moulding-desktop-comparison.png`.
+- Mobile full view:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-moulding-mobile-comparison.png`.
+- Focused CRT/moulding comparison:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-moulding-focus-comparison.png`.
+- Mobile article state:
+  `C:/Users/jorda/AppData/Local/Temp/jg1500-moulding-mobile-article.png`.
 
-Both combined comparisons were inspected at original resolution. The mobile
-opening, moulded contour, highlight direction, cream texture and full-bleed
-cover crop remain registered to the supplied plate. The only desktop geometry
-departure from the older target is the explicitly preferred smaller, centered
-screen.
+The source and rendered captures were placed together in each comparison input
+and inspected at original resolution.
 
-## Findings and fixes
+## Required fidelity surfaces
 
-- Lighting: the real glass gloss asset is anchored and strengthened toward the
-  upper-left inner corner. A zoomed inspection confirms that the reflected
-  shoulder starts at the top-left edge rather than floating over content.
-- CRT raster: scanline troughs now use a narrow seventh-power profile with
-  lower amplitude. Aperture-grille strength and noise are also reduced to
-  prevent thick bands and moiré.
-- Article rendering: long-form content again receives fine scanlines, a subtle
-  phosphor grille, glass shade and upper-left gloss. The CRT switch removes the
-  article overlays as well as the canvas effect.
-- Mobile background: the portrait asset is converted to a transparent-aperture
-  frame and cover-fitted at its native aspect ratio. At 430 × 900 the machine
-  extends 38.6 px past each horizontal edge by design, which fills the viewport
-  without distortion or background bars.
-- Mobile layout: the hamburger icon is absent. The screen ends at 588.3 px,
-  navigation occupies 606.0–793.7 px, and controls begin at 797.4 px; these
-  regions do not overlap. A stray `CRT EFFECTS` pseudo-label found during the
-  first capture was removed from the CONTACT-button area.
-- Article mobile: rich text and code remain readable and independently
-  scrollable inside the photographed opening.
+- Fonts and typography: panel and terminal families, weights, tracking and
+  hierarchy remain unchanged and readable. The mobile article keeps its title,
+  metadata, heading and body rhythm without clipping.
+- Spacing and layout: the desktop nameplate is 10px lower. At 430 × 900 the
+  live glass ends at 419.3px, navigation occupies 468.3–662.6px, and controls
+  occupy 684.7–803.1px. These regions have deliberate gaps and do not overlap.
+- Colors and tokens: the photographic cream field and black moulding are used
+  directly. Existing green phosphor, amber accents and hardware ink remain
+  consistent with the supplied references.
+- Image quality and assets: both user-supplied raster plates are used at their
+  native aspect ratios. Only the inner-glass superellipse is transparent; the
+  full black moulding, its highlights and contact shadow remain photographic.
+  No CSS-drawn bezel substitutes the supplied asset.
+- Copy and content: navigation labels, terminal copy and article content are
+  unchanged. No text crosses the frame or a control.
+- Icons and controls: the Font Awesome mobile icons remain optically aligned;
+  all six navigation keys, switch, slider and rocker remain visible and usable.
+- Accessibility and interaction: native buttons and ARIA switch/slider states
+  remain intact. Focus/selected states are visible and the article has its own
+  scroll region.
 
-## Verification
+## Comparison history
 
-- `pnpm.cmd build`: passed; production single-file output generated.
-- `pnpm.cmd test`: all smoke, WebGL, navigation, power, slider, keyboard,
-  responsive and interaction checks passed.
-- Browser states checked at 1920 × 1080 and 430 × 900: HOME and article detail.
-- CRT article switch: overlay opacity changes from 0.72/0.17 to 0/0 when OFF.
-- Browser console: no application errors.
+- Earlier P1: the inner black moulding was absent because the complete dark
+  opening was cut transparent. Fix: measure the inner glass separately and use
+  an antialiased superellipse mask. Post-fix evidence: the focused comparison
+  shows the supplied black rim continuously around the live CRT.
+- Earlier P1: the mobile frame was too large and too low, causing the control
+  stack to crowd it. Fix: use the new portrait plate and move navigation to
+  design y=870 and controls to y=1272. Post-fix evidence: the mobile comparison
+  and measured rectangles show no intersections.
+- Earlier P2: the upper-left reflection read as a small clipped point. Fix:
+  reposition the real gloss asset 1.6% inward and increase its brightness and
+  opacity. Post-fix evidence: the focused comparison shows a broad reflection
+  following both the upper and left glass curvature.
+- Earlier P3: the desktop nameplate sat slightly high. Fix: move only the
+  desktop plate down 10px, keeping the rails and mobile layout stable.
 
-Final result: passed
+## Browser verification
+
+- Page identity and meaningful DOM content: passed.
+- Framework overlay: absent.
+- Console errors/warnings: none.
+- Primary interaction: ARTICLES → first detail opened on mobile; passed.
+- CRT switch on article: scanline overlay opacity changes from 0.72 to 0 when
+  OFF and returns when ON; passed.
+- Responsive screenshots: 1920 × 1080 and 430 × 900 captured and compared.
+
+No actionable P0, P1 or P2 differences remain. The photographed moulding and
+live raster are registered cleanly at both target viewports.
+
+final result: passed

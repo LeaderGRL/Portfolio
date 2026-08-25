@@ -28,14 +28,14 @@ def panel(image, size, label, cover=False):
 
 def main():
     QA.mkdir(exist_ok=True)
-    desktop_source = Image.open(ROOT / "assets" / "src" / "target_portfolio.png")
+    desktop_source = Image.open(ROOT / "assets" / "src" / "chassis-moulding-desktop.png")
     desktop_final = Image.open(QA / "desktop-final.png")
     desktop = Image.new("RGB", (1920, 540), "#1b1916")
     desktop.paste(panel(desktop_source, (960, 540), "SOURCE TARGET"), (0, 0))
     desktop.paste(panel(desktop_final, (960, 540), "IMPLEMENTATION"), (960, 0))
     desktop.save(QA / "desktop-comparison.png", optimize=True)
 
-    mobile_source = Image.open(ROOT / "assets" / "src" / "ChatGPT Image 25 août 2026, 00_31_47 (1).png")
+    mobile_source = Image.open(ROOT / "assets" / "src" / "chassis-moulding-mobile.png")
     mobile_final = Image.open(QA / "mobile-final.png")
     mobile = Image.new("RGB", (860, 900), "#1b1916")
     mobile.paste(panel(mobile_source, (430, 900), "SOURCE PLATE", cover=True), (0, 0))

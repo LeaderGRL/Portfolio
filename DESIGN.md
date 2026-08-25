@@ -10,12 +10,12 @@ green phosphor. It is restrained, tactile, technical, and never card-based.
 
 ## Visual source of truth
 
-- Desktop reference: `../target_design/target_portfolio.png` at 1672 × 941,
-  refined by the user-selected `assets/src/chassis-reference-centered.png`. The latter is
-  cropped symmetrically by less than one source pixel vertically, never
-  stretched, and exported at 1920 × 1080 and 3840 × 2160.
-- Portable/mobile: user-supplied
-  `assets/src/ChatGPT Image 25 août 2026, 00_31_47 (1).png` at 941 × 1672.
+- Desktop reference: user-supplied
+  `assets/src/chassis-moulding-desktop.png` at 1672 × 941. It is cropped
+  symmetrically by less than one source pixel vertically, never stretched, and
+  exported at 1920 × 1080 and 3840 × 2160.
+- Portable/mobile: user-supplied `assets/src/chassis-moulding-mobile.png` at
+  941 × 1672.
   It is used as a full-bleed portrait plate without stretching; its black
   opening becomes a transparent aperture for the live CRT.
 
@@ -31,23 +31,24 @@ green phosphor. It is restrained, tactile, technical, and never card-based.
 - CRT black-green: `#030604`
 - P1 phosphor: `#2fd06d`
 
-The desktop chassis and CRT recess are one photographic 16:9 plate. Its black
-opening is converted to a transparent aperture so the live CRT sits behind the
-original moulded rim instead of behind a second bezel. Switches, grille, and
+The desktop chassis and CRT recess are one photographic 16:9 plate. Only the
+central glass is converted to a transparent aperture: the complete black inner
+moulding stays photographic and sits above the live CRT. Switches, grille, and
 rocker still come from `assets/build/*.webp`. Navigation/action keys follow the supplied
 `soft-ui-neumorphic-buttons-led-dynamic-palette-cavity-slider.html`: every
 highlight, shadow, cavity and face is derived from the terminal's cream panel
 surface, so the controls read as one moulded assembly. A small integrated LED
 at the upper-right owns route selection without recolouring the entire face.
 CSS owns layout, travel, focus, and responsive composition.
-The glass specular is anchored to the tube's upper-left inner curvature: its
-bright shoulder grazes the left edge and never floats over terminal content.
+The glass specular is anchored slightly inside the tube's upper-left curvature:
+its broad shoulder follows the top and left glass edges instead of collapsing
+to a point or floating over terminal content.
 
 ## Geometry
 
 Desktop uses a native 1920 × 1080 photographic design surface with three fixed
-columns: 512 / 896 / 512. The screen is registered to the detected aperture at
-35.1562–64.7396% horizontally and 31.5741–70% vertically. This compact,
+columns: 512 / 896 / 512. The screen is registered to the measured inner-glass
+aperture at 34.7396–65.3125% horizontally and 31.2963–72.963% vertically. This compact,
 centered frame is an explicit user preference over the larger target-design
 opening. Navigation and actions
 are narrow, vertically balanced rails. Desktop keys keep their 3.4577:1
@@ -62,7 +63,10 @@ omitted from the reference state.
 Portable uses the portrait plate's native 941 × 1672 surface with a cover fit.
 Its order is nameplate, large CRT, six full-width navigation keys, paired
 CRT/volume controls, then power. Navigation never becomes a two-column grid
-and stays directly accessible; there is no hamburger/menu control.
+and stays directly accessible; there is no hamburger/menu control. The live
+glass occupies 26.1424–73.7513% horizontally and 17.823–46.5909% vertically.
+The photographic frame ends before the navigation begins, leaving a deliberate
+65px design-space gap and preventing the keys from touching the moulding.
 
 ## Typography and iconography
 
