@@ -6,6 +6,7 @@ import { createDefaultBlockRegistry } from './document/default-blocks.js'
 import { createDefaultIntegrationRegistry } from './document/default-integrations.js'
 import { InlineIntegrationController } from './document/inline-integrations.js'
 import { Local3DManager } from './document/local-3d.js'
+import { DocumentProgressOverlay } from './document/progress-overlay.js'
 
 /* ========================================================================== *
  * Document CRT bridge
@@ -30,6 +31,7 @@ export function attachArticleCRT(app) {
 
   let interaction = null
   let inlineIntegrations = null
+  const progressOverlay = new DocumentProgressOverlay()
   const local3d = new Local3DManager(() => {
     app.dirty = true
     documentRaster?.markDirty?.()
@@ -86,7 +88,11 @@ export function attachArticleCRT(app) {
 
   app.raster.paint = (term, reveal, cursorOn) => {
     syncSource()
-    if (isDocument()) return documentRaster.paint(true)
+    if (isDocument()) {
+      const painted = documentRaster.paint(true)
+      progressOverlay.paint(documentRaster)
+      return painted
+    }
     return terminalPaint(term, reveal, cursorOn)
   }
 
@@ -120,6 +126,7 @@ export function attachArticleCRT(app) {
     integrations,
     inlineIntegrations,
     local3d,
+    progressOverlay,
     interaction,
     pipeline,
     syncSource,
