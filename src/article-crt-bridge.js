@@ -2,14 +2,12 @@ import { ArticleInteractionController } from './article-interaction.js'
 import { syncArticleReader } from './article-reader.js'
 import { ArticleRasteriser } from './article-rasteriser.js'
 import { DisplayPipeline } from './display-pipeline.js'
+import { createDefaultBlockRegistry } from './document/default-blocks.js'
+import { createDefaultIntegrationRegistry } from './document/default-integrations.js'
+import { Local3DManager } from './document/local-3d.js'
 
 /* ========================================================================== *
  * Document CRT bridge
- *
- * Historical file/class names are retained temporarily to minimize migration
- * risk, but the bridge now serves every long-form document detail (articles
- * and projects). Both kinds use the same 480x360 source, CRT shader, scrolling
- * and native interaction surface.
  * ========================================================================== */
 export function attachArticleCRT(app) {
   if (!app || app.__articleCRTBridge) return app?.__articleCRTBridge || null
@@ -30,11 +28,24 @@ export function attachArticleCRT(app) {
   })
 
   let interaction = null
+  const local3d = new Local3DManager(() => {
+    app.dirty = true
+    documentRaster?.markDirty?.()
+  })
+  const blockRegistry = createDefaultBlockRegistry({ local3d })
+  const integrations = createDefaultIntegrationRegistry({ local3d })
+
   const documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
     app.dirty = true
     interaction?.sync()
+  }, { blockRegistry })
+
+  interaction = new ArticleInteractionController({
+    tube,
+    reader,
+    rasteriser: documentRaster,
+    integrations,
   })
-  interaction = new ArticleInteractionController({ tube, reader, rasteriser: documentRaster })
 
   const isDocument = () => (
     (app.state?.route === 'articles' || app.state?.route === 'projects') &&
@@ -43,10 +54,6 @@ export function attachArticleCRT(app) {
 
   const syncSource = () => {
     const documentItem = isDocument() ? app.state.item : null
-
-    // App still owns the legacy article-reader synchronization for articles.
-    // Re-running it here is idempotent and additionally mounts project detail
-    // semantics before the rasteriser discovers videos/interactive elements.
     syncArticleReader(documentItem)
 
     const itemChanged = documentRaster.setItem(documentItem)
@@ -58,8 +65,6 @@ export function attachArticleCRT(app) {
       app.state.static = Math.max(app.state.static || 0, 0.7)
     }
 
-    // Keep the legacy CSS value until display.css is migrated; it describes a
-    // rasterised long-form document now, not specifically an article.
     tube.dataset.displayMode = documentItem ? 'article' : 'terminal'
     tube.classList.toggle('has-dom-surface', Boolean(documentItem))
     tube.classList.toggle('is-reading', Boolean(documentItem))
@@ -81,9 +86,11 @@ export function attachArticleCRT(app) {
   }
 
   let raf = 0
-  const mediaFrame = () => {
+  const mediaFrame = time => {
     raf = requestAnimationFrame(mediaFrame)
     if (!isDocument()) return
+
+    local3d.tick(time)
     interaction.sync()
     if (documentRaster.videoNodes.some(video => !video.paused && !video.ended && video.readyState >= 2)) {
       app.dirty = true
@@ -96,6 +103,9 @@ export function attachArticleCRT(app) {
   const bridge = {
     documentRaster,
     articleRaster: documentRaster,
+    blockRegistry,
+    integrations,
+    local3d,
     interaction,
     pipeline,
     syncSource,
@@ -104,6 +114,7 @@ export function attachArticleCRT(app) {
     destroy() {
       cancelAnimationFrame(raf)
       interaction.destroy()
+      local3d.dispose()
       syncArticleReader(null)
       app.raster.paint = terminalPaint
       pipeline.setSource('terminal')
