@@ -4,6 +4,7 @@ import { ArticleRasteriser } from './article-rasteriser.js'
 import { DisplayPipeline } from './display-pipeline.js'
 import { createDefaultBlockRegistry } from './document/default-blocks.js'
 import { createDefaultIntegrationRegistry } from './document/default-integrations.js'
+import { InlineIntegrationController } from './document/inline-integrations.js'
 import { Local3DManager } from './document/local-3d.js'
 
 /* ========================================================================== *
@@ -28,6 +29,7 @@ export function attachArticleCRT(app) {
   })
 
   let interaction = null
+  let inlineIntegrations = null
   const local3d = new Local3DManager(() => {
     app.dirty = true
     documentRaster?.markDirty?.()
@@ -38,6 +40,7 @@ export function attachArticleCRT(app) {
   const documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
     app.dirty = true
     interaction?.sync()
+    inlineIntegrations?.sync()
   }, { blockRegistry })
 
   interaction = new ArticleInteractionController({
@@ -45,6 +48,11 @@ export function attachArticleCRT(app) {
     reader,
     rasteriser: documentRaster,
     integrations,
+  })
+  inlineIntegrations = new InlineIntegrationController({
+    tube,
+    rasteriser: documentRaster,
+    registry: integrations,
   })
 
   const isDocument = () => (
@@ -57,7 +65,10 @@ export function attachArticleCRT(app) {
     syncArticleReader(documentItem)
 
     const itemChanged = documentRaster.setItem(documentItem)
-    if (itemChanged && interaction.isOpen) interaction.close(false)
+    if (itemChanged) {
+      if (interaction.isOpen) interaction.close(false)
+      inlineIntegrations.clear()
+    }
 
     const nextId = documentItem ? 'document' : 'terminal'
     if (pipeline.setSource(nextId)) {
@@ -70,6 +81,7 @@ export function attachArticleCRT(app) {
     tube.classList.toggle('is-reading', Boolean(documentItem))
     if (!documentItem && interaction.isOpen) interaction.close(false)
     interaction.sync()
+    inlineIntegrations.sync()
   }
 
   app.raster.paint = (term, reveal, cursorOn) => {
@@ -92,6 +104,7 @@ export function attachArticleCRT(app) {
 
     local3d.tick(time)
     interaction.sync()
+    inlineIntegrations.sync()
     if (documentRaster.videoNodes.some(video => !video.paused && !video.ended && video.readyState >= 2)) {
       app.dirty = true
     }
@@ -105,6 +118,7 @@ export function attachArticleCRT(app) {
     articleRaster: documentRaster,
     blockRegistry,
     integrations,
+    inlineIntegrations,
     local3d,
     interaction,
     pipeline,
@@ -113,6 +127,7 @@ export function attachArticleCRT(app) {
     exitFullscreen: () => pipeline.exitFullscreen(),
     destroy() {
       cancelAnimationFrame(raf)
+      inlineIntegrations.destroy()
       interaction.destroy()
       local3d.dispose()
       syncArticleReader(null)
