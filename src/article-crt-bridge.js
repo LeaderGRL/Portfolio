@@ -1,15 +1,12 @@
 import { ArticleRasteriser } from './article-rasteriser.js'
+import { DisplayPipeline } from './display-pipeline.js'
 
 /* ========================================================================== *
  * ArticleCRTBridge
  *
  * Adapts the existing App without creating a second tube. App still owns the
  * animation loop, power state and CRT instance. This bridge only changes which
- * 480x360 canvas `CRT.source` points at and which rasteriser paints when the
- * current route is an article detail.
- *
- * This is deliberately a narrow adapter. A later generalized display-source
- * registry can replace it without touching article layout or the CRT shader.
+ * registered 480x360 pixel source the physical CRT samples.
  * ========================================================================== */
 export function attachArticleCRT(app) {
   if (!app || app.__articleCRTBridge) return app?.__articleCRTBridge || null
@@ -21,37 +18,29 @@ export function attachArticleCRT(app) {
 
   const terminalCanvas = app.raster.canvas
   const terminalPaint = app.raster.paint.bind(app.raster)
+  const pipeline = new DisplayPipeline({
+    crt: app.crt,
+    sources: {
+      terminal: terminalCanvas,
+      article: articleCanvas,
+    },
+  })
+
   const articleRaster = new ArticleRasteriser(articleCanvas, reader, () => {
     app.dirty = true
   })
-
-  const clearPersistence = () => {
-    const crt = app.crt
-    const gl = crt.gl
-    if (!gl || !crt.a || !crt.b) return
-    const previous = gl.getParameter?.(gl.FRAMEBUFFER_BINDING)
-    gl.clearColor(0, 0, 0, 1)
-    for (const target of [crt.a, crt.b]) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, target.fb)
-      gl.viewport(0, 0, 480, 360)
-      gl.clear(gl.COLOR_BUFFER_BIT)
-    }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, previous || null)
-  }
 
   const isArticle = () => app.state?.route === 'articles' && Boolean(app.state?.item)
 
   const syncSource = () => {
     const article = isArticle() ? app.state.item : null
     articleRaster.setItem(article)
-    const nextSource = article ? articleCanvas : terminalCanvas
-    if (app.crt.source !== nextSource) {
-      app.crt.source = nextSource
-      clearPersistence()
+    const nextId = article ? 'article' : 'terminal'
+    if (pipeline.setSource(nextId)) {
       app.dirty = true
       app.state.static = Math.max(app.state.static || 0, 0.7)
     }
-    tube.dataset.displayMode = article ? 'article' : 'terminal'
+    tube.dataset.displayMode = nextId
     tube.classList.toggle('has-dom-surface', Boolean(article))
   }
 
@@ -70,8 +59,8 @@ export function attachArticleCRT(app) {
     return result
   }
 
-  // Native video needs fresh source pixels while playing. We do not force the
-  // whole application to redraw continuously for static articles.
+  // Native video needs fresh source pixels while playing. Static articles do
+  // not force a continuous source upload.
   let raf = 0
   const mediaFrame = () => {
     raf = requestAnimationFrame(mediaFrame)
@@ -86,16 +75,22 @@ export function attachArticleCRT(app) {
 
   const bridge = {
     articleRaster,
+    pipeline,
     syncSource,
+    registerSource: (id, source) => pipeline.registerSource(id, source),
+    setSource: id => pipeline.setSource(id),
+    enterFullscreen: () => pipeline.enterFullscreen(document.getElementById('screen')),
+    exitFullscreen: () => pipeline.exitFullscreen(),
     destroy() {
       cancelAnimationFrame(raf)
       app.raster.paint = terminalPaint
-      app.crt.source = terminalCanvas
+      pipeline.setSource('terminal')
       tube.dataset.displayMode = 'terminal'
       tube.classList.remove('has-dom-surface')
       delete app.__articleCRTBridge
     },
   }
   app.__articleCRTBridge = bridge
+  app.displayPipeline = pipeline
   return bridge
 }
