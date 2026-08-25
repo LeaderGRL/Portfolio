@@ -80,6 +80,91 @@ export function createDefaultBlockRegistry({ local3d }) {
     },
   })
 
+  registry.register('facts', {
+    measure(_ctx, block) {
+      const items = parsePipeRows(block.body)
+      const columns = Math.max(1, Math.min(3, Number(block.columns) || 2))
+      const rows = Math.max(1, Math.ceil(items.length / columns))
+      return { height: rows * 58 + 14, meta: { items, columns } }
+    },
+    paint(g, block, layout, env) {
+      const items = layout.meta?.items || parsePipeRows(block.body)
+      const columns = layout.meta?.columns || 2
+      const gap = 8
+      const cellW = (layout.width - gap * (columns - 1)) / columns
+      const cellH = 50
+
+      items.forEach((item, index) => {
+        const col = index % columns
+        const row = Math.floor(index / columns)
+        const x = layout.x + col * (cellW + gap)
+        const y = layout.y + row * 58
+
+        g.fillStyle = 'rgba(2,15,8,.62)'
+        g.fillRect(x, y, cellW, cellH)
+        g.strokeStyle = 'rgba(47,208,109,.38)'
+        g.strokeRect(x + .5, y + .5, cellW - 1, cellH - 1)
+
+        env.drawLines(
+          [String(item.value || '').toUpperCase()],
+          x + 7,
+          y + 14,
+          7,
+          9,
+          env.colors.amber,
+          700,
+        )
+        const valueLines = env.wrap(item.label || '', cellW - 14, 9, 700)
+        env.drawLines(valueLines.slice(0, 2), x + 7, y + 32, 9, 11, env.colors.core, 700)
+      })
+    },
+  })
+
+  registry.register('pipeline', {
+    measure(_ctx, block) {
+      const items = parsePipeRows(block.body)
+      return { height: Math.max(88, items.length * 42 + 18), meta: { items } }
+    },
+    paint(g, block, layout, env) {
+      const items = layout.meta?.items || parsePipeRows(block.body)
+      const nodeX = layout.x + 12
+      const nodeW = layout.width - 24
+      const nodeH = 31
+
+      items.forEach((item, index) => {
+        const y = layout.y + index * 42
+        if (index > 0) {
+          const cx = layout.x + layout.width * .5
+          g.strokeStyle = 'rgba(47,208,109,.48)'
+          g.beginPath()
+          g.moveTo(cx, y - 11)
+          g.lineTo(cx, y - 2)
+          g.stroke()
+
+          g.fillStyle = env.colors.mid
+          g.beginPath()
+          g.moveTo(cx - 2.5, y - 4)
+          g.lineTo(cx + 2.5, y - 4)
+          g.lineTo(cx, y)
+          g.closePath()
+          g.fill()
+        }
+
+        g.fillStyle = 'rgba(2,13,7,.72)'
+        g.fillRect(nodeX, y, nodeW, nodeH)
+        g.strokeStyle = index === items.length - 1
+          ? 'rgba(185,255,201,.58)'
+          : 'rgba(47,208,109,.36)'
+        g.strokeRect(nodeX + .5, y + .5, nodeW - 1, nodeH - 1)
+
+        const left = String(item.value || '').toUpperCase()
+        env.drawLines([left], nodeX + 8, y + 12, 7, 9, env.colors.amber, 700)
+        const detail = env.wrap(item.label || '', nodeW - 132, 8, 600)
+        env.drawLines(detail.slice(0, 2), nodeX + 124, y + 12, 8, 10, env.colors.bright, 600)
+      })
+    },
+  })
+
   registry.register('gallery', {
     measure(_ctx, block) {
       const items = parsePipeRows(block.body)
