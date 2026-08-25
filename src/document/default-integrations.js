@@ -22,19 +22,9 @@ export function createDefaultIntegrationRegistry({ local3d }) {
 
   registry.register('local-3d', {
     mount({ block, host }) {
-      host.closest('.article-interaction')?.classList.add('is-model3d-interaction')
-      const cleanupModel = local3d.mount(block, host)
-
-      const help = document.createElement('div')
-      help.className = 'article-interaction__model-help'
-      help.textContent = 'DRAG ROTATE · WHEEL ZOOM'
-      host.append(help)
-
-      return () => {
-        cleanupModel?.()
-        help.remove()
-        host.closest('.article-interaction')?.classList.remove('is-model3d-interaction')
-      }
+      // Local 3D is already labelled inside the raster source. The DOM layer is
+      // input-only so it must never add visible controls above the CRT picture.
+      return local3d.mount(block, host)
     },
   })
 
