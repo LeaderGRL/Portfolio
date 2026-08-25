@@ -129,7 +129,7 @@ export class ArticleRasteriser {
           const raw = String(block.body || '').split('\n')
           const max = 47
           const lines = raw.flatMap(line => line.length ? line.match(new RegExp(`.{1,${max}}`, 'g')) : [''])
-          push({ type: 'code', language: block.language || '', lines, height: 28 + Math.min(lines.length, 18) * 13 + 19 })
+          push({ type: 'code', language: block.language || '', lines, height: 47 + lines.length * 13 })
           break
         }
         case 'image':
@@ -149,7 +149,7 @@ export class ArticleRasteriser {
         }
         case 'figure': {
           const lines = String([block.cols, block.body].filter(Boolean).join('\n')).split('\n')
-          push({ type: 'code', language: 'FIGURE', lines, height: 28 + Math.min(lines.length, 18) * 13 + 19 })
+          push({ type: 'code', language: 'FIGURE', lines, height: 47 + lines.length * 13 })
           break
         }
       }
@@ -186,6 +186,22 @@ export class ArticleRasteriser {
     const domMax = Math.max(0, this.reader.scrollHeight - this.reader.clientHeight)
     const ratio = domMax > 0 ? this.reader.scrollTop / domMax : 0
     this.scroll = ratio * this.maxScroll
+  }
+
+  getVisibleInteractiveEntry() {
+    let best = null
+    let bestVisible = 0
+    for (const entry of this.layout) {
+      if (entry.type !== 'video' && entry.type !== 'embed') continue
+      const top = entry.y - this.scroll
+      const bottom = top + entry.height
+      const visible = Math.max(0, Math.min(bottom, SRC_H - 20) - Math.max(top, 20))
+      if (visible > bestVisible) {
+        bestVisible = visible
+        best = entry
+      }
+    }
+    return bestVisible >= 32 ? best : null
   }
 
   _drawLines(lines, x, y, size, lineHeight, color, weight = 500) {
@@ -290,7 +306,7 @@ export class ArticleRasteriser {
             this._drawLines([entry.language.toUpperCase()], x + 9, y + 13, 7, 9, COLORS.amber, 700)
             g.strokeStyle = COLORS.dim; g.beginPath(); g.moveTo(x, y + 21.5); g.lineTo(x + entry.width, y + 21.5); g.stroke()
           }
-          this._drawLines(entry.lines.slice(0, 18), x + 9, y + 37, 8, 13, COLORS.bright, 500)
+          this._drawLines(entry.lines, x + 9, y + 37, 8, 13, COLORS.bright, 500)
           break
         }
         case 'image':
@@ -303,7 +319,7 @@ export class ArticleRasteriser {
           g.fillStyle = '#010b06'; g.fillRect(x, y, entry.width, entry.height - 10)
           g.strokeStyle = COLORS.dim; g.strokeRect(x + .5, y + .5, entry.width - 1, entry.height - 11)
           this._drawLines(['EXTERNAL / INTERACTIVE SURFACE', entry.block.label || entry.block.title || 'OPEN EMBED'], x + 12, y + 28, 9, 18, COLORS.amber, 700)
-          this._drawLines(['Native iframe stays in the interaction layer.'], x + 12, y + 70, 8, 12, COLORS.mid, 500)
+          this._drawLines(['Use INTERACT when this block is visible.'], x + 12, y + 70, 8, 12, COLORS.mid, 500)
           break
         }
         case 'note': {
