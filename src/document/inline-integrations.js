@@ -12,7 +12,9 @@ import { SRC_H, SRC_W } from '../core.js'
  * - wheel always belongs to the document while the shield is active;
  * - YouTube stays shielded permanently and is controlled through postMessage;
  * - integrations that require direct pointer input can still opt into a short
- *   active state, restored to scroll mode when the pointer leaves.
+ *   active state, restored to scroll mode when the pointer leaves;
+ * - direct overlays (for example media inspection hotspots) receive pointer
+ *   input immediately without an activation click.
  * ========================================================================== */
 export class InlineIntegrationController {
   constructor({ tube, rasteriser, registry }) {
@@ -180,7 +182,7 @@ export class InlineIntegrationController {
   }
 
   _setActive(instance, active) {
-    if (!instance) return
+    if (!instance || instance.descriptor.direct) return
 
     if (instance.descriptor.provider === 'youtube') {
       instance.host.classList.remove('is-active')
@@ -205,18 +207,21 @@ export class InlineIntegrationController {
 
     const surface = document.createElement('div')
     surface.className = 'document-inline-integration__surface'
-    surface.style.pointerEvents = 'none'
+    surface.style.pointerEvents = descriptor.direct ? 'auto' : 'none'
 
     const shield = document.createElement('div')
     shield.className = 'document-inline-integration__activation'
-    shield.tabIndex = 0
-    shield.setAttribute('role', 'button')
-    shield.setAttribute(
-      'aria-label',
-      resolved.provider === 'youtube'
-        ? 'Play or pause embedded video; use the wheel to scroll the document'
-        : 'Activate embedded integration',
-    )
+    shield.tabIndex = descriptor.direct ? -1 : 0
+    shield.hidden = Boolean(descriptor.direct)
+    if (!descriptor.direct) {
+      shield.setAttribute('role', 'button')
+      shield.setAttribute(
+        'aria-label',
+        resolved.provider === 'youtube'
+          ? 'Play or pause embedded video; use the wheel to scroll the document'
+          : 'Activate embedded integration',
+      )
+    }
 
     host.append(surface, shield)
     this.layer.append(host)
@@ -237,23 +242,27 @@ export class InlineIntegrationController {
       youtubePlaying: false,
     }
 
-    shield.addEventListener('wheel', event => {
+    const relayWheel = event => {
       event.preventDefault()
       event.stopPropagation()
       this._scrollDocument(event.deltaY)
-    }, { passive: false })
+    }
+    shield.addEventListener('wheel', relayWheel, { passive: false })
+    if (descriptor.direct) surface.addEventListener('wheel', relayWheel, { passive: false })
 
-    shield.addEventListener('click', () => {
-      if (descriptor.provider === 'youtube') this._toggleYouTube(instance)
-      else this._setActive(instance, true)
-    })
-    shield.addEventListener('keydown', event => {
-      if (event.key !== 'Enter' && event.key !== ' ') return
-      event.preventDefault()
-      if (descriptor.provider === 'youtube') this._toggleYouTube(instance)
-      else this._setActive(instance, true)
-    })
-    host.addEventListener('pointerleave', () => this._setActive(instance, false))
+    if (!descriptor.direct) {
+      shield.addEventListener('click', () => {
+        if (descriptor.provider === 'youtube') this._toggleYouTube(instance)
+        else this._setActive(instance, true)
+      })
+      shield.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        if (descriptor.provider === 'youtube') this._toggleYouTube(instance)
+        else this._setActive(instance, true)
+      })
+      host.addEventListener('pointerleave', () => this._setActive(instance, false))
+    }
 
     return instance
   }
@@ -306,10 +315,6 @@ export class InlineIntegrationController {
 
       for (const [key, instance] of [...this.instances]) {
         if (wanted.has(key)) continue
-
-        // Remove the instance from controller state before running provider
-        // cleanup. Cleanup is allowed to dirty the framebuffer, and therefore
-        // must never be able to find and dispose the same instance again.
         this.instances.delete(key)
         this._disposeInstance(instance)
       }
@@ -323,8 +328,6 @@ export class InlineIntegrationController {
   }
 
   clear() {
-    // Detach controller state first so provider cleanup cannot recursively
-    // dispose the same integration through a nested synchronization pass.
     const instances = [...this.instances.values()]
     this.instances.clear()
     for (const instance of instances) this._disposeInstance(instance)
