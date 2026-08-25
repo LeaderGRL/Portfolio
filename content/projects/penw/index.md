@@ -40,9 +40,9 @@ PANEL | CUSTOM MEASURED CONTROL SURFACE
 DISPLAY | GAME + CABINET DESIGNED TOGETHER
 ::
 
-The 3D cabinet below is the original project model hosted on Sketchfab. It uses the same generic integration block that any future portfolio project can reuse. A local GLB can later replace this block without changing the document engine.
+The cabinet below is rendered locally with Three.js from geometry extracted from the original project model. Its visible pixels stay inside the document framebuffer, so rotation, lighting and animation pass through the same CRT shader as the text and local media around it.
 
-::embed{provider=sketchfab uid=d1fa122dc2d4447a949b151b83e7df02 label="ARCADE CABINET 3D" title="Project Echo arcade cabinet"}
+::model3d{src=assets/arcade-cabinet.model.json label="ARCADE CABINET / LOCAL THREE.JS" autospin=0.10 exposure=1.18}
 
 ## INPUT SYSTEM
 
