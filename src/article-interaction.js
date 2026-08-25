@@ -42,6 +42,17 @@ export class ArticleInteractionController {
     return !this.tube?.classList.contains('is-powered-off')
   }
 
+  _isInlineEntry(entry, descriptor) {
+    return Boolean(
+      entry &&
+      (
+        entry.type === 'embed' ||
+        entry.type === 'model3d' ||
+        descriptor?.inline
+      )
+    )
+  }
+
   sync() {
     if (!this.isPoweredOn) {
       if (this.isOpen) this.close(false)
@@ -57,7 +68,7 @@ export class ArticleInteractionController {
     const descriptor = this.rasteriser?.getInteraction?.(entry)
     const available = Boolean(
       descriptor &&
-      !descriptor.inline &&
+      !this._isInlineEntry(entry, descriptor) &&
       this.tube?.dataset.displayMode === 'article'
     )
     this.trigger.hidden = !available
@@ -66,7 +77,6 @@ export class ArticleInteractionController {
     const provider = descriptor.provider
     let label = '↗ OPEN INTEGRATION'
     if (provider === 'video') label = '▶ INTERACT VIDEO'
-    if (provider === 'local-3d') label = '◈ INTERACT 3D'
     this.trigger.textContent = label
     this.trigger.setAttribute('aria-label', label.replace(/[▶↗◈]/g, '').trim())
   }
@@ -74,7 +84,7 @@ export class ArticleInteractionController {
   open(entry = this.activeEntry) {
     if (!this.isPoweredOn || !entry || !this.overlay || !this.content) return false
     const descriptor = this.rasteriser?.getInteraction?.(entry)
-    if (!descriptor || descriptor.inline) return false
+    if (!descriptor || this._isInlineEntry(entry, descriptor)) return false
 
     this.close(false)
     this.openEntry = entry
