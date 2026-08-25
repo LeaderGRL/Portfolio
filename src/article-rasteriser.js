@@ -210,19 +210,20 @@ export class ArticleRasteriser {
       const dx = x + (maxW - dw) * .5
       const dy = y + (maxH - dh) * .5
 
-      // Images may contain alpha. Drawing a dark rectangle first would turn
-      // every transparent pixel into black before the canvas reaches WebGL.
-      // Let image alpha composite directly over the article phosphor instead.
-      // Video remains an opaque presentation surface and keeps a dark backing.
+      // Transparent images composite directly over the article phosphor.
+      // Videos remain opaque presentation surfaces and keep their own frame.
       if (entry.type === 'video') {
         g.fillStyle = '#010805'
         g.fillRect(dx, dy, dw, dh)
       }
+
       try { g.drawImage(source, dx, dy, dw, dh) } catch {}
 
-      g.strokeStyle = COLORS.dim
-      g.lineWidth = 1
-      g.strokeRect(dx + .5, dy + .5, Math.max(0, dw - 1), Math.max(0, dh - 1))
+      if (entry.type === 'video') {
+        g.strokeStyle = COLORS.dim
+        g.lineWidth = 1
+        g.strokeRect(dx + .5, dy + .5, Math.max(0, dw - 1), Math.max(0, dh - 1))
+      }
       return
     }
 
