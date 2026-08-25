@@ -6,6 +6,7 @@
  */
 import './style.css'
 import './display.css'
+import './crt-bypass.css'
 import { start } from './app.js'
 import { attachArticleCRT } from './article-crt-bridge.js'
 
