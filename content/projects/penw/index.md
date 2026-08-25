@@ -27,9 +27,19 @@ The core loop asks the player to destroy notes in rhythm while handling long not
 
 ::embed{provider=youtube id=gchRNrRPOwI label="GAMEPLAY DEMO" title="Project Echo: Neon Wave gameplay"}
 
+::gallery{columns=2}
+/media/penw/level-select.webp | Dynamic level selection and scoreboard
+/media/penw/gameplay-camera.webp | Rotary input also drives the radial camera response
+::
+
 ## THE MACHINE
 
 The project eventually became a real custom arcade cabinet. An existing wooden cabinet was measured, adapted and redesigned around the game. The recovered structure used 19 mm MDF, and the control panel had to be rebuilt around the mechanics rather than forcing the game into an existing layout.
+
+::gallery{columns=2}
+/media/penw/cabinet-photo.webp | Recovered wooden cabinet used as the physical starting point
+/media/penw/cabinet-plan.webp | Measurements used to redesign the machine around the game
+::
 
 ::facts{columns=2 label="CABINET SYSTEM"}
 STRUCTURE | RECOVERED 19 MM MDF CABINET
@@ -43,6 +53,15 @@ DISPLAY | GAME + CABINET DESIGNED TOGETHER
 The cabinet below is rendered locally with Three.js from the original project geometry. Its visible pixels stay inside the document framebuffer, so rotation and lighting pass through the same CRT shader as the text and local media around it.
 
 ::model3d{src=/media/penw/arcade-cabinet.glb label="ARCADE CABINET / LOCAL THREE.JS" autospin=0.06 exposure=1.12 shadow=off}
+
+The original control surface did not match the mechanics, so measurements became a new panel designed around the actual buttons and rotary encoders rather than around the shape of the recovered cabinet.
+
+::compare{before=/media/penw/control-panel-plan.webp after=/media/penw/control-panel-design.webp beforeLabel="MEASUREMENTS" afterLabel="NEW CONTROL PANEL"}
+
+::gallery{columns=2}
+/media/penw/control-panel-detail.webp | Control layout and dimensions
+/media/penw/cabinet-wrap.webp | Visual wrap explored for the physical cabinet
+::
 
 ## INPUT SYSTEM
 
@@ -63,11 +82,15 @@ SYSTEM DESIGN — SOFTWARE, HARDWARE AND GAMEPLAY WERE ITERATED AS ONE INPUT LOO
 
 A dedicated web level editor was created to import music, inspect its audio structure and place notes against the timeline. This tooling became important because content iteration speed directly affected the quality of the rhythm design.
 
-::pipeline{label="AUTHORING LOOP"}
-AUDIO | IMPORT TRACK + READ TIMING
-CHART AUTHORING | PLACE NOTES AGAINST THE MUSIC
-LEVEL DATA | SAVE THE PLAYABLE SEQUENCE
-UNITY PLAYTEST | TEST RHYTHM, FEEDBACK AND DIFFICULTY
+::gallery{columns=1}
+/media/penw/level-editor.webp | JavaScript level editor — waveform inspection and note authoring
+::
+
+::facts{columns=2 label="AUTHORING TOOL"}
+INPUT | IMPORT A MUSIC TRACK
+ANALYSIS | READ THE AUDIO WAVEFORM
+AUTHORING | PLACE NOTES AGAINST MUSICAL PEAKS
+OUTPUT | BUILD PLAYABLE LEVEL DATA
 ::
 
 The editor evolved alongside the game instead of being treated as a disposable internal utility. That experience strongly influenced how I think about production tools today: reducing iteration cost is often as valuable as optimizing runtime code.
@@ -75,6 +98,13 @@ The editor evolved alongside the game instead of being treated as a disposable i
 ## VISUAL DIRECTION
 
 The project went through multiple synthwave background iterations, menu experiments and character concepts before converging on its final identity. Echo, the mascot, was explored through clothing, hair, face, weapon and even an abandoned 3D figurine attempt.
+
+::gallery{columns=2}
+/media/penw/logo-design.webp | Project Echo logo and synthwave identity
+/media/penw/background-prototype.webp | 3D gameplay background prototype — rejected for excessive visual noise
+/media/penw/echo-concept.webp | Echo character concept exploration
+/media/penw/echo-3d.webp | Abandoned 3D mascot experiment
+::
 
 The important lesson was not simply producing more assets, but learning to compare iterations against the actual constraints of an arcade screen: motion readability, contrast, note visibility and the amount of visual noise behind gameplay.
 
