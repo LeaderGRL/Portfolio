@@ -30,6 +30,8 @@ class Local3DScene {
     this.failed = false
     this.interacting = false
     this.lastTime = performance.now()
+    this.initialCameraPosition = new THREE.Vector3(2.4, 1.7, 3.2)
+    this.initialTarget = new THREE.Vector3(0, 0, 0)
 
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
@@ -49,11 +51,8 @@ class Local3DScene {
 
     this.scene = new THREE.Scene()
     this.camera = new THREE.PerspectiveCamera(34, this.canvas.width / this.canvas.height, 0.01, 100)
-    this.camera.position.set(2.4, 1.7, 3.2)
+    this.camera.position.copy(this.initialCameraPosition)
 
-    // OrbitControls requires an element during construction. Keep that element
-    // detached and disconnect it immediately; the real input proxy is attached
-    // only while the corresponding document block is visible and active.
     this.detachedInput = document.createElement('div')
     this.controls = new OrbitControls(this.camera, this.detachedInput)
     this.controls.disconnect()
@@ -74,6 +73,7 @@ class Local3DScene {
       this.onDirty()
     })
     this.controls.addEventListener('change', () => {
+      if (!this.inputProxy) return
       this.render()
       this.onDirty()
     })
@@ -217,6 +217,9 @@ class Local3DScene {
     this.controls.minDistance = Math.max(safeRadius * 1.08, distance * 0.36)
     this.controls.maxDistance = distance * 3.2
     this.controls.update()
+
+    this.initialCameraPosition.copy(this.camera.position)
+    this.initialTarget.copy(this.controls.target)
   }
 
   _configureShadows(box, radius) {
@@ -272,7 +275,7 @@ class Local3DScene {
 
     const spin = Number(this.block.autospin ?? 0.10)
     if (!this.interacting && spin) this.root.rotation.y += spin * dt
-    this.controls.update()
+    if (this.inputProxy) this.controls.update()
 
     if (!this.interacting && spin) {
       this.render()
@@ -283,8 +286,35 @@ class Local3DScene {
   }
 
   render() {
-    if (!this.renderer) return
-    this.renderer.render(this.scene, this.camera)
+    if (!this.renderer || !this.ready && this.failed) return
+    try {
+      this.renderer.render(this.scene, this.camera)
+    } catch (error) {
+      console.warn('Local 3D render failed', error)
+    }
+  }
+
+  resetCamera() {
+    if (!this.ready) return
+    this.camera.position.copy(this.initialCameraPosition)
+    this.controls.target.copy(this.initialTarget)
+    this.controls.update()
+    this.render()
+    this.onDirty()
+  }
+
+  _zoomBy(deltaY) {
+    if (!this.ready) return
+    const target = this.controls.target
+    const offset = this.camera.position.clone().sub(target)
+    const distance = offset.length()
+    const factor = Math.exp(Number(deltaY || 0) * 0.0015)
+    const nextDistance = THREE.MathUtils.clamp(distance * factor, this.controls.minDistance, this.controls.maxDistance)
+    offset.setLength(nextDistance)
+    this.camera.position.copy(target).add(offset)
+    this.camera.updateMatrixWorld()
+    this.render()
+    this.onDirty()
   }
 
   mountInput(host, context = {}) {
@@ -296,14 +326,25 @@ class Local3DScene {
     proxy.setAttribute('role', 'application')
     proxy.setAttribute('aria-label', this.block.label || this.block.title || 'Interactive 3D model')
 
-    // Inline 3D never owns the wheel. Users can rotate with drag while normal
-    // wheel scrolling keeps moving the surrounding project document.
+    // Normal wheel input always scrolls the surrounding document. Holding Ctrl
+    // explicitly opts into model zoom, so zoom remains available without ever
+    // trapping ordinary page navigation.
     proxy.addEventListener('wheel', event => {
       event.preventDefault()
       event.stopImmediatePropagation()
+      if (event.ctrlKey) {
+        this._zoomBy(event.deltaY)
+        return
+      }
       const reader = context?.rasteriser?.reader
       if (reader) reader.scrollTop += event.deltaY
     }, { passive: false, capture: true })
+
+    proxy.addEventListener('dblclick', event => {
+      event.preventDefault()
+      event.stopPropagation()
+      this.resetCamera()
+    })
 
     host.append(proxy)
     this.inputProxy = proxy
@@ -312,19 +353,21 @@ class Local3DScene {
     this.render()
   }
 
-  unmountInput(markDirty = true) {
-    if (this.inputProxy) {
+  unmountInput(markDirty = false) {
+    // Teardown must be side-effect free with respect to the document renderer.
+    // In particular, never render or dirty the document from cleanup: doing so
+    // can synchronously re-enter integration synchronization while this same
+    // instance is being removed.
+    const proxy = this.inputProxy
+    this.inputProxy = null
+    if (proxy) {
       this.controls.disconnect()
       this.controls.enabled = false
-      this.inputProxy.remove()
-      this.inputProxy = null
+      proxy.remove()
     }
     this.interacting = false
     this.lastTime = performance.now()
-    if (markDirty) {
-      this.render()
-      this.onDirty()
-    }
+    if (markDirty) this.onDirty()
   }
 
   dispose() {
@@ -384,7 +427,12 @@ export class Local3DManager {
     const scene = this.ensure(block)
     if (!scene) return null
     scene.mountInput(host, context)
-    return () => scene.unmountInput()
+    let cleaned = false
+    return () => {
+      if (cleaned) return
+      cleaned = true
+      scene.unmountInput(false)
+    }
   }
 
   dispose() {
