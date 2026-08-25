@@ -39,10 +39,12 @@ export function attachArticleCRT(app) {
   const blockRegistry = createDefaultBlockRegistry({ local3d })
   const integrations = createDefaultIntegrationRegistry({ local3d })
 
+  // Dirtying the framebuffer must never synchronously mount/unmount DOM
+  // integrations. Local 3D can mark the document dirty while a cleanup is in
+  // progress; re-entering inlineIntegrations.sync() from that callback creates
+  // a teardown loop. The RAF below owns integration synchronization instead.
   const documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
     app.dirty = true
-    interaction?.sync()
-    inlineIntegrations?.sync()
   }, { blockRegistry })
 
   interaction = new ArticleInteractionController({
@@ -92,8 +94,6 @@ export function attachArticleCRT(app) {
     tube.classList.toggle('has-dom-surface', Boolean(documentItem))
     tube.classList.toggle('is-reading', Boolean(documentItem))
     if (!documentItem && interaction.isOpen) interaction.close(false)
-    interaction.sync()
-    inlineIntegrations.sync()
   }
 
   app.raster.paint = (term, reveal, cursorOn) => {
@@ -134,6 +134,8 @@ export function attachArticleCRT(app) {
   raf = requestAnimationFrame(mediaFrame)
 
   syncSource()
+  interaction.sync()
+  inlineIntegrations.sync()
 
   const bridge = {
     documentRaster,
