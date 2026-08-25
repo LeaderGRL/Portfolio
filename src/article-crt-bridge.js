@@ -1,4 +1,5 @@
 import { ArticleInteractionController } from './article-interaction.js'
+import { syncArticleReader } from './article-reader.js'
 import { ArticleRasteriser } from './article-rasteriser.js'
 import { DisplayPipeline } from './display-pipeline.js'
 
@@ -42,6 +43,12 @@ export function attachArticleCRT(app) {
 
   const syncSource = () => {
     const documentItem = isDocument() ? app.state.item : null
+
+    // App still owns the legacy article-reader synchronization for articles.
+    // Re-running it here is idempotent and additionally mounts project detail
+    // semantics before the rasteriser discovers videos/interactive elements.
+    syncArticleReader(documentItem)
+
     const itemChanged = documentRaster.setItem(documentItem)
     if (itemChanged && interaction.isOpen) interaction.close(false)
 
@@ -55,6 +62,7 @@ export function attachArticleCRT(app) {
     // rasterised long-form document now, not specifically an article.
     tube.dataset.displayMode = documentItem ? 'article' : 'terminal'
     tube.classList.toggle('has-dom-surface', Boolean(documentItem))
+    tube.classList.toggle('is-reading', Boolean(documentItem))
     if (!documentItem && interaction.isOpen) interaction.close(false)
     interaction.sync()
   }
@@ -87,7 +95,6 @@ export function attachArticleCRT(app) {
 
   const bridge = {
     documentRaster,
-    // Backward-compatible alias while callers/tests migrate.
     articleRaster: documentRaster,
     interaction,
     pipeline,
@@ -97,10 +104,11 @@ export function attachArticleCRT(app) {
     destroy() {
       cancelAnimationFrame(raf)
       interaction.destroy()
+      syncArticleReader(null)
       app.raster.paint = terminalPaint
       pipeline.setSource('terminal')
       tube.dataset.displayMode = 'terminal'
-      tube.classList.remove('has-dom-surface')
+      tube.classList.remove('has-dom-surface', 'is-reading')
       delete app.__articleCRTBridge
     },
   }
