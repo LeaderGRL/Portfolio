@@ -19,6 +19,8 @@ export const BLOCK_DEFINITIONS = Object.freeze({
   video: Object.freeze({ kind: 'media', assetFields: ['src'], interactive: true }),
 
   hero: Object.freeze({ kind: 'composition', assetFields: ['media', 'poster'] }),
+  facts: Object.freeze({ kind: 'composition' }),
+  pipeline: Object.freeze({ kind: 'composition' }),
   gallery: Object.freeze({ kind: 'composition' }),
   timeline: Object.freeze({ kind: 'composition' }),
   compare: Object.freeze({ kind: 'composition', assetFields: ['before', 'after'] }),
