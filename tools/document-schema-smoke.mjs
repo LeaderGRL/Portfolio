@@ -3,7 +3,7 @@ import { BLOCK_TYPES, DIRECTIVE_TYPES, hasBlockType } from '../src/document/sche
 
 let failed = 0
 const check = (condition, label) => {
-  console.log(`  ${label.padEnd(56)}: ${condition ? 'OK' : 'WRONG'}`)
+  console.log(`  ${label.padEnd(58)}: ${condition ? 'OK' : 'WRONG'}`)
   if (!condition) failed++
 }
 
@@ -49,16 +49,21 @@ check(defaultBlocks.includes("registry.register('model3d'"), 'generic local 3D r
 
 check(integrationRegistry.includes('class IntegrationRegistry'), 'integration registry exists')
 check(integrations.includes("registry.register('youtube'"), 'YouTube adapter registered')
+check(integrations.includes('enablejsapi=1'), 'YouTube API is enabled for shield controls')
+check(integrations.includes('scrollwheel=0'), 'Sketchfab does not capture wheel input')
 check(integrations.includes("registry.register('sketchfab'"), 'Sketchfab adapter registered')
 check(integrations.includes("registry.register('local-3d'"), 'local 3D adapter registered')
 check(inlineIntegrations.includes('class InlineIntegrationController'), 'inline integration controller exists')
 check(inlineIntegrations.includes('_position(host, entry)'), 'inline integrations follow raster layout')
 check(inlineIntegrations.includes("shield.addEventListener('wheel'"), 'inline embeds preserve document wheel scrolling')
-check(inlineIntegrations.includes('_setActive(instance, true)'), 'inline embeds activate directly in place')
+check(inlineIntegrations.includes('_toggleYouTube(instance)'), 'YouTube playback is controlled by shield')
+check(inlineIntegrations.includes("func: command"), 'YouTube uses postMessage commands')
+check(inlineIntegrations.includes("descriptor.provider === 'youtube'"), 'YouTube never exposes raw iframe pointer input')
 check(inlineIntegrations.includes('feDisplacementMap'), 'native integrations get compositor distortion')
 check(displayCss.includes('#document-crt-native-optics'), 'native integration CRT filter is applied')
 check(displayCss.includes('repeating-linear-gradient(0deg'), 'native integration scanlines are applied')
-check(interaction.includes('!descriptor.inline'), 'modal trigger ignores inline integrations')
+check(interaction.includes("entry.type === 'embed'"), 'modal controller explicitly ignores inline embeds')
+check(interaction.includes("entry.type === 'model3d'"), 'modal controller explicitly ignores inline 3D')
 
 check(local3d.includes('GLTFLoader'), 'local 3D uses GLTFLoader')
 check(local3d.includes('OrbitControls'), 'local 3D uses OrbitControls')
