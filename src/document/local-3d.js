@@ -51,13 +51,17 @@ class Local3DScene {
     this.camera = new THREE.PerspectiveCamera(34, this.canvas.width / this.canvas.height, 0.01, 100)
     this.camera.position.set(2.4, 1.7, 3.2)
 
-    // Controls stay disconnected until an input proxy is mounted. The renderer
-    // canvas therefore remains a pure pixel source for the entire scene life.
-    this.controls = new OrbitControls(this.camera, null)
+    // OrbitControls requires an element during construction. Keep that element
+    // detached and disconnect it immediately; the real input proxy is attached
+    // only while the corresponding document block is visible and active.
+    this.detachedInput = document.createElement('div')
+    this.controls = new OrbitControls(this.camera, this.detachedInput)
+    this.controls.disconnect()
     this.controls.enabled = false
     this.controls.enableDamping = true
     this.controls.dampingFactor = 0.07
     this.controls.enablePan = false
+    this.controls.enableZoom = false
     this.controls.minDistance = 1.2
     this.controls.maxDistance = 9
     this.controls.addEventListener('start', () => {
@@ -137,38 +141,55 @@ class Local3DScene {
     this.onDirty()
   }
 
+  _createManifestMaterial(part) {
+    const opacity = Number.isFinite(Number(part.opacity)) ? Number(part.opacity) : 1
+    return new THREE.MeshStandardMaterial({
+      color: new THREE.Color(part.color || '#808080'),
+      metalness: Number(part.metalness) || 0,
+      roughness: Number.isFinite(Number(part.roughness)) ? Number(part.roughness) : 0.65,
+      transparent: opacity < 1,
+      opacity,
+      depthWrite: opacity >= 0.98,
+      side: opacity < 1 ? THREE.DoubleSide : THREE.FrontSide,
+    })
+  }
+
+  _applyManifestTransform(mesh, part) {
+    mesh.name = String(part.name || '')
+    if (!Array.isArray(part.matrix) || part.matrix.length !== 16) return
+    mesh.matrix.fromArray(part.matrix.map(Number))
+    mesh.matrixAutoUpdate = false
+  }
+
   _acceptManifest(data) {
-    if (data?.format !== 'jg1500-model-1' || !Array.isArray(data.parts)) {
+    if (!Array.isArray(data?.parts) || !['jg1500-model-1', 'jg1500-model-2'].includes(data.format)) {
       this._fail(new Error('Unsupported local 3D manifest'))
       return
     }
 
     const model = new THREE.Group()
     for (const part of data.parts) {
-      if (!Array.isArray(part.size) || part.size.length !== 3) continue
-      const opacity = Number.isFinite(Number(part.opacity)) ? Number(part.opacity) : 1
-      const material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(part.color || '#808080'),
-        metalness: Number(part.metalness) || 0,
-        roughness: Number.isFinite(Number(part.roughness)) ? Number(part.roughness) : 0.65,
-        transparent: opacity < 1,
-        opacity,
-        depthWrite: opacity >= 0.98,
-        side: opacity < 1 ? THREE.DoubleSide : THREE.FrontSide,
-      })
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(
+      let geometry = null
+
+      if (data.format === 'jg1500-model-2') {
+        if (!Array.isArray(part.vertices) || part.vertices.length < 9 || !Array.isArray(part.indices)) continue
+        geometry = new THREE.BufferGeometry()
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(part.vertices.map(Number), 3))
+        geometry.setIndex(part.indices.map(Number))
+        geometry.computeVertexNormals()
+        geometry.computeBoundingBox()
+        geometry.computeBoundingSphere()
+      } else {
+        if (!Array.isArray(part.size) || part.size.length !== 3) continue
+        geometry = new THREE.BoxGeometry(
           Math.max(Number(part.size[0]) || 0.01, 0.001),
           Math.max(Number(part.size[1]) || 0.01, 0.001),
           Math.max(Number(part.size[2]) || 0.01, 0.001),
-        ),
-        material,
-      )
-      mesh.name = String(part.name || '')
-      if (Array.isArray(part.matrix) && part.matrix.length === 16) {
-        mesh.matrix.set(...part.matrix.map(Number))
-        mesh.matrixAutoUpdate = false
+        )
       }
+
+      const mesh = new THREE.Mesh(geometry, this._createManifestMaterial(part))
+      this._applyManifestTransform(mesh, part)
       model.add(mesh)
     }
 
@@ -266,7 +287,7 @@ class Local3DScene {
     this.renderer.render(this.scene, this.camera)
   }
 
-  mountInput(host) {
+  mountInput(host, context = {}) {
     this.unmountInput(false)
 
     const proxy = document.createElement('div')
@@ -274,8 +295,17 @@ class Local3DScene {
     proxy.tabIndex = 0
     proxy.setAttribute('role', 'application')
     proxy.setAttribute('aria-label', this.block.label || this.block.title || 'Interactive 3D model')
-    host.append(proxy)
 
+    // Inline 3D never owns the wheel. Users can rotate with drag while normal
+    // wheel scrolling keeps moving the surrounding project document.
+    proxy.addEventListener('wheel', event => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      const reader = context?.rasteriser?.reader
+      if (reader) reader.scrollTop += event.deltaY
+    }, { passive: false, capture: true })
+
+    host.append(proxy)
     this.inputProxy = proxy
     this.controls.connect(proxy)
     this.controls.enabled = true
@@ -350,10 +380,10 @@ export class Local3DManager {
     for (const scene of this.scenes.values()) scene.tick(time)
   }
 
-  mount(block, host) {
+  mount(block, host, context) {
     const scene = this.ensure(block)
     if (!scene) return null
-    scene.mountInput(host)
+    scene.mountInput(host, context)
     return () => scene.unmountInput()
   }
 
