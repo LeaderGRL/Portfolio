@@ -1,26 +1,17 @@
 /**
  * virtual:content — compiles content/ into a single bundle at build time.
  *
- * WHY A PLUGIN AND NOT A RUNTIME FETCH
- * The screen is a 480x360 canvas rasteriser, not a DOM. There is nothing for
- * a Markdown-to-HTML renderer to render into, and nothing for MDX's component
- * substitution to substitute. What the terminal needs is a list of typed
- * blocks it can lay out into cells. So the parse happens once, here, and ships
- * as data; the runtime never sees Markdown.
- *
- * FORMAT
- * Front matter between --- fences, then a body of blocks separated by blank
- * lines. Supported blocks include prose, headings, fenced code, lists, typed
- * directives and legacy raw <iframe> embeds. Raw iframes are normalized into
- * the same `embed` block shape as ::embed so the runtime stays HTML-agnostic.
+ * The runtime consumes typed document blocks rather than Markdown/HTML. The
+ * block vocabulary is shared with the browser through src/document/schema.js,
+ * so authoring validation and rendering cannot silently drift apart.
  */
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, extname, basename, resolve } from 'node:path'
+import { DIRECTIVE_TYPES, getBlockDefinition } from '../src/document/schema.js'
 
 const VIRTUAL = 'virtual:content'
 const RESOLVED = '\0' + VIRTUAL
-
-const KNOWN_DIRECTIVES = new Set(['image', 'video', 'figure', 'note', 'embed'])
+const KNOWN_DIRECTIVES = new Set(DIRECTIVE_TYPES)
 
 function parseFrontMatter(raw) {
   if (!raw.startsWith('---')) return [{}, raw]
@@ -48,9 +39,9 @@ function parseDirectiveHead(line) {
   if (!m) return null
   const attrs = {}
   const spec = m[2] || ''
-  const re = /([\w-]+)(?:=(?:"([^"]*)"|(\S+)))?/g
+  const re = /([\w-]+)(?:=(?:"([^"]*)"|'([^']*)'|(\S+)))?/g
   let a
-  while ((a = re.exec(spec))) attrs[a[1]] = a[2] ?? a[3] ?? true
+  while ((a = re.exec(spec))) attrs[a[1]] = a[2] ?? a[3] ?? a[4] ?? true
   return { name: m[1], attrs }
 }
 
@@ -64,14 +55,9 @@ function parseHtmlAttributes(source) {
   return attrs
 }
 
-/**
- * Normalize legacy raw HTML iframes into a typed embed block. We deliberately
- * support iframe only rather than arbitrary HTML: authored content remains
- * declarative and the runtime never has to parse or trust random markup.
- */
+/** Normalize legacy iframe HTML into the generic embed contract. */
 function parseRawIframe(lines, start) {
   if (!/^\s*<iframe\b/i.test(lines[start] || '')) return null
-
   const html = []
   let i = start
   while (i < lines.length) {
@@ -79,16 +65,15 @@ function parseRawIframe(lines, start) {
     if (/<\/iframe\s*>/i.test(lines[i])) break
     i++
   }
-
   const markup = html.join('\n')
   const open = /<iframe\b([^>]*)>/i.exec(markup)
   if (!open) return null
   const attrs = parseHtmlAttributes(open[1])
   if (!attrs.src) return null
-
   return {
     block: {
       type: 'embed',
+      provider: 'iframe',
       src: attrs.src,
       title: attrs.title || attrs['aria-label'] || 'Interactive integration',
       width: attrs.width,
@@ -112,7 +97,6 @@ function parseBody(body, file) {
 
   while (i < lines.length) {
     const line = lines[i]
-
     if (!line.trim()) { flushPara(); i++; continue }
 
     if (line.startsWith('```')) {
@@ -170,8 +154,9 @@ function parseBody(body, file) {
       if (!KNOWN_DIRECTIVES.has(head.name)) {
         throw new Error(
           `${file}: unknown directive "::${head.name}". ` +
-          `Add a renderer and register it in plugins/content.js.`)
+          `Register it in src/document/schema.js before using it in content.`)
       }
+
       const hasBody = i + 1 < lines.length && lines[i + 1].trim() !== ''
       const inner = []
       i++
@@ -191,19 +176,39 @@ function parseBody(body, file) {
 }
 
 const MEDIA_DIR = 'content/media'
-const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-               '.webp': 'image/webp', '.gif': 'image/gif' }
+const INLINE_MIME = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+}
+
+const isExternal = value => /^(?:data:|https?:|\/)/i.test(String(value || ''))
+
+function resolveRasterAsset(value, file) {
+  if (!value || isExternal(value)) return value
+  const path = join(MEDIA_DIR, value)
+  if (!existsSync(path)) throw new Error(`${file}: media not found: ${path}`)
+  const mime = INLINE_MIME[extname(value).toLowerCase()]
+  if (!mime) return value
+  return `data:${mime};base64,${readFileSync(path).toString('base64')}`
+}
 
 function resolveMedia(blocks, file) {
-  for (const b of blocks) {
-    if (b.type === 'image') {
-      const path = join(MEDIA_DIR, b.src)
-      if (!existsSync(path)) throw new Error(`${file}: image not found: ${path}`)
-      const mime = MIME[extname(b.src).toLowerCase()]
-      if (!mime) throw new Error(`${file}: unsupported image type: ${b.src}`)
-      b.src = `data:${mime};base64,${readFileSync(path).toString('base64')}`
-    } else if (b.type === 'video') {
-      b.src = b.src.startsWith('/') ? b.src : `/media/${b.src}`
+  for (const block of blocks) {
+    const definition = getBlockDefinition(block.type)
+    for (const field of definition?.assetFields || []) {
+      const value = block[field]
+      if (!value) continue
+
+      // Raster images/GIFs are kept inside the single-file build. Large live
+      // media and 3D files remain URL assets; the runtime adapters own them.
+      const ext = extname(String(value).split(/[?#]/)[0]).toLowerCase()
+      if (INLINE_MIME[ext]) block[field] = resolveRasterAsset(value, file)
+      else if (block.type === 'video' && field === 'src' && !isExternal(value)) {
+        block[field] = `/media/${value}`
+      }
     }
   }
   return blocks
