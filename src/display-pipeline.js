@@ -3,20 +3,16 @@ import { CRT } from './crt.js'
 /* ========================================================================== *
  * DisplayPipeline
  *
- * The physical tube has exactly one post-process. Content providers only own
- * pixels. The terminal, article rasteriser, future games, software emulators,
- * Rive canvases or WASM renderers register a canvas-like source here and the
- * same CRT shader processes whichever source is active.
- *
- * This keeps display optics independent from application content and makes
- * fullscreen a resize concern rather than a second rendering architecture.
+ * One physical CRT, many pixel sources. Providers register canvas-like sources
+ * here; switching source never creates another optical pipeline.
  * ========================================================================== */
 export class DisplayPipeline {
-  constructor({ outputCanvas, sources = {} }) {
+  constructor({ outputCanvas = null, crt = null, sources = {} }) {
     this.sources = new Map(Object.entries(sources))
     this.activeId = this.sources.keys().next().value || null
     const initial = this.activeId ? this.sources.get(this.activeId) : null
-    this.crt = initial ? new CRT(outputCanvas, initial) : null
+    this.crt = crt || (initial && outputCanvas ? new CRT(outputCanvas, initial) : null)
+    if (this.crt && initial) this.crt.source = initial
     this.ok = Boolean(this.crt?.ok)
   }
 
@@ -25,7 +21,7 @@ export class DisplayPipeline {
     this.sources.set(id, source)
     if (!this.activeId) {
       this.activeId = id
-      this.crt?.setSource(source)
+      if (this.crt) this.crt.source = source
     }
     return true
   }
@@ -36,11 +32,26 @@ export class DisplayPipeline {
     return true
   }
 
+  _clearPersistence() {
+    const crt = this.crt
+    const gl = crt?.gl
+    if (!gl || !crt.a || !crt.b) return
+    const previous = gl.getParameter?.(gl.FRAMEBUFFER_BINDING)
+    gl.clearColor(0, 0, 0, 1)
+    for (const target of [crt.a, crt.b]) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target.fb)
+      gl.viewport(0, 0, 480, 360)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, previous || null)
+  }
+
   setSource(id) {
     const source = this.sources.get(id)
     if (!source || this.activeId === id) return false
     this.activeId = id
-    this.crt?.setSource(source)
+    if (this.crt) this.crt.source = source
+    this._clearPersistence()
     return true
   }
 
