@@ -193,6 +193,7 @@ const INLINE_MIME = {
   '.webp': 'image/webp',
   '.gif': 'image/gif',
   '.glb': 'model/gltf-binary',
+  '.json': 'application/json',
 }
 const isExternal = value => /^(?:data:|blob:|https?:|\/)/i.test(String(value || ''))
 
