@@ -5,6 +5,7 @@
  * loads bakes the fallback into the tube for the rest of the session.
  */
 import './style.css'
+import './display.css'
 import { start } from './app.js'
 import { initDisplayRuntime } from './display-runtime.js'
 
