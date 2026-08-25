@@ -1,0 +1,17 @@
+{
+  "identity": {
+    "name": "JORDAN GRILLY",
+    "role": "SYSTEMS / PERFORMANCE / ARCHITECTURE",
+    "tagline": "I build the layer underneath the game.",
+    "base": "PARIS / FR",
+    "stack": "RUST · C# · TS",
+    "state": "AVAILABLE"
+  },
+  "contact": [
+    { "label": "EMAIL",  "value": "jordangrilly@gmail.com" },
+    { "label": "GITHUB", "value": "github.com/LeaderGRL" },
+    { "label": "MEDIUM", "value": "medium.com/@jordangrilly" }
+  ],
+  "model": "JG-1500",
+  "made": "MADE IN FRANCE"
+}

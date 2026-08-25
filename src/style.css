@@ -1,0 +1,618 @@
+/* ============================================================================
+   JG-1500 — PANEL
+
+   The controls on this page are not drawn in CSS. They are the supplied
+   component renders, split into moving parts by a build step and composited
+   here. That is a deliberate reversal of the earlier approach, and the reason
+   is simple: a CSS gradient is a function of one axis, and the surfaces in
+   these renders are compound-curved mouldings lit by a single source. No stack
+   of linear-gradients reproduces that, and every attempt read as an
+   approximation of a photograph rather than as an object.
+
+   So CSS's job here is narrow, and it does that job well: layout, hit targets,
+   state transitions, travel, and the panel field the parts sit in. Everything
+   material — bevels, fillets, specular, moulding texture, contact shadow —
+   comes from the renders.
+
+   The light direction is baked into the sprites: upper left, slightly
+   elevated. The panel field below is graded to match, so the parts sit in
+   their ground instead of floating on it.
+   ========================================================================= */
+:root{
+  --px: 0;  --py: 0;               /* pointer parallax, drives the tilt only  */
+
+  /* sampled directly off the bezel render so the field matches the parts */
+  --cream-hi:   #f9ecd9;
+  --cream-1:    #f3e5d1;
+  --cream-2:    #eddfca;
+  --cream-3:    #e6d7c0;
+  --cream-4:    #dccbb1;
+  --cream-edge: #c3b096;
+
+  --ink:        #6a5b43;
+  --ink-soft:   #93825f;
+  --ink-hard:   #423a2c;
+
+  /* Desktop geometry is authored natively at Full HD. Smaller and larger
+     viewports scale this complete surface uniformly through --fit. */
+  --design-w: 1920px;
+  --design-h: 1080px;
+  --fit: 1;
+
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.035' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23g)' opacity='0.5'/%3E%3C/svg%3E");
+  --font-panel: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+*,*::before,*::after{ box-sizing:border-box; margin:0; padding:0; }
+html,body{ height:100%; }
+body{
+  font-family:var(--font-panel);
+  background:#eadcc8;
+  color:var(--ink);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+body.is-compact-stage{
+  background:#eadcc8;
+}
+#stage{ position:fixed; inset:0; overflow:hidden; perspective:3000px; }
+img{ display:block; -webkit-user-drag:none; user-select:none; pointer-events:none; }
+
+/* ============================================================================
+   CHASSIS
+   ========================================================================= */
+.machine{
+  position:absolute; left:50%; top:50%;
+  width:var(--design-w); height:var(--design-h);
+  transform-origin:50% 50%;
+  transform:translate(-50%,-50%) scale(var(--fit))
+            rotateX(calc(var(--py) * -0.35deg))
+            rotateY(calc(var(--px) * 0.45deg));
+  display:grid;
+  grid-template-columns:512px 896px 512px;
+  grid-template-rows:158px 1fr 0;
+  grid-template-areas:
+    "plate plate plate"
+    "left  bezel right"
+    "foot  foot  foot";
+  border-radius:0;
+  background:#eadcc8;
+  box-shadow:none;
+  isolation:isolate;
+}
+.machine::after{
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background-image:var(--grain); background-size:560px;
+  display:none; opacity:.13; mix-blend-mode:soft-light; z-index:1;
+}
+.machine > *{ position:relative; z-index:3; }
+.machine > .screen{ position:absolute; z-index:1; }
+.machine > .machine__background{ position:absolute; z-index:2; }
+
+.machine__background{ inset:0; width:100%; height:100%; pointer-events:none; }
+.machine__background img{ width:100%; height:100%; object-fit:cover; }
+.machine__background--mobile{ display:none; }
+
+/* ============================================================================
+   NAMEPLATE — the sprite carries the plate and its screws, HTML supplies text
+   ========================================================================= */
+.plate-row{
+  grid-area:plate; display:grid; grid-template-columns:1fr auto 1fr;
+  align-items:center; gap:50px; padding:68px 138px 0;
+}
+.rail{ display:grid; gap:5px; }
+.rail span{
+  height:2px; border-radius:2px;
+  background:linear-gradient(90deg, rgba(120,102,70,0), rgba(120,102,70,.32) 24%, rgba(120,102,70,.32));
+  box-shadow:1px 1px 0 rgba(255,255,255,.72);
+}
+.rail--r span{ background:linear-gradient(270deg, rgba(120,102,70,0), rgba(120,102,70,.32) 24%, rgba(120,102,70,.32)); }
+.rail span:nth-child(2){ opacity:.68; }
+.rail span:nth-child(3){ opacity:.4; }
+
+.nameplate{ position:relative; width:558px; aspect-ratio:var(--ar-nameplate); }
+.nameplate img{ position:absolute; inset:0; width:100%; height:100%; }
+.nameplate__txt{
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:5px;
+}
+.nameplate h1{
+  font-size:24px; font-weight:600; letter-spacing:.42em; text-indent:.42em;
+  color:var(--ink-hard);
+  text-shadow:0 1px 0 rgba(255,255,255,.9), 0 -1px 0 rgba(66,58,44,.25);
+}
+.nameplate p{
+  font-size:8px; font-weight:600; letter-spacing:.28em; text-indent:.28em;
+  color:var(--ink-soft); text-shadow:0 1px 0 rgba(255,255,255,.85);
+}
+
+/* ============================================================================
+   KEYS — soft industrial neomorphism
+
+   The navigation and action keys follow the dynamic-palette soft-UI reference:
+   one cream surface derives every tinted highlight, shadow, cavity and face.
+   The selected state belongs to a small integrated LED, while the physical
+   button keeps the terminal's industrial proportions and label language.
+   ========================================================================= */
+.panel{ display:flex; flex-direction:column; }
+.panel--left{ grid-area:left; align-items:flex-end; justify-content:center; padding:0 118px 28px 0; transform:translateY(-50px); }
+.panel--right{ grid-area:right; align-items:center; justify-content:flex-start; padding:0 0 28px; }
+.panel--right .stack,
+.panel--right .rule,
+.panel--right .controls-row,
+.panel--right .bottom-row{ position:absolute; left:calc(50% - 90px); transform:translateX(-50%); }
+.panel--right .stack{ top:129px; }
+.panel--right .rule{ top:305px; width:210px; margin:0; }
+.panel--right .controls-row{ top:343px; }
+.panel--right .bottom-row{ top:505px; }
+.group{ display:flex; flex-direction:column; gap:30px; }
+.stack{ display:flex; flex-direction:column; gap:29px; }
+.rule{
+  height:1px; margin:24px 0 20px;
+  background:rgba(120,102,70,.26); box-shadow:0 1px 0 rgba(255,255,255,.72);
+}
+
+.key{
+  --key-surface:var(--cream-2);
+  --key-light-rim:color-mix(in oklab,var(--key-surface) 72%,white 28%);
+  --key-light-soft:color-mix(in oklab,var(--key-surface) 86%,white 14%);
+  --key-light-glow:color-mix(in oklab,var(--key-light-soft) 34%,transparent);
+  --key-shadow-near:color-mix(in oklab,var(--key-surface) 58%,black 42%);
+  --key-shadow-soft:color-mix(in oklab,var(--key-surface) 72%,black 28%);
+  --key-shadow-glow:color-mix(in oklab,var(--key-shadow-soft) 52%,transparent);
+  --key-shadow-far:color-mix(in oklab,var(--key-shadow-soft) 24%,transparent);
+  --key-cavity:color-mix(in oklab,var(--key-surface) 48%,black 52%);
+  --key-cavity-deep:color-mix(in oklab,var(--key-cavity) 78%,black 22%);
+  --key-cavity-rim:color-mix(in oklab,var(--key-surface) 76%,white 24%);
+  --key-face-light:color-mix(in oklab,var(--key-surface) 82%,white 18%);
+  --key-face-shadow:color-mix(in oklab,var(--key-surface) 68%,black 32%);
+  --key-text:color-mix(in oklab,var(--key-surface) 48%,black 52%);
+  --key-gap:2px;
+  position:relative; display:block; border:0; padding:0;
+  width:154px; height:62px;
+  border-radius:13px; background:var(--key-cavity);
+  box-shadow:
+    -8px -8px 18px var(--key-light-glow),
+    -2px -2px 4px var(--key-shadow-near),
+    1px 1px 0 var(--key-cavity-rim),
+    5px 6px 13px var(--key-shadow-glow),
+    10px 11px 22px var(--key-shadow-far);
+  cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+  font-family:inherit; isolation:isolate;
+}
+.key::before{
+  content:""; position:absolute; z-index:0; inset:0;
+  border-radius:inherit; pointer-events:none;
+  background:linear-gradient(145deg,var(--key-cavity-deep) 0%,var(--key-cavity) 72%);
+  box-shadow:
+    inset 1.5px 1.5px 3px color-mix(in oklab,var(--key-cavity-deep) 72%,black 28%),
+    inset 0 0 4px color-mix(in oklab,var(--key-cavity-deep) 45%,transparent);
+}
+.key__button{
+  position:absolute; z-index:1; inset:var(--key-gap); display:block; padding:1.5px;
+  border-radius:11px;
+  background:linear-gradient(145deg,
+    var(--key-light-rim) 0%,var(--key-light-soft) 17%,
+    var(--key-surface) 42%,var(--key-shadow-soft) 76%,var(--key-shadow-near) 100%);
+  box-shadow:1px 2px 4px color-mix(in oklab,var(--key-shadow-near) 72%,transparent);
+  transform:translateY(-2px);
+  transition:
+    transform 110ms cubic-bezier(.2,.8,.2,1),
+    box-shadow 180ms ease,
+    background 180ms ease,
+    filter 140ms ease;
+  will-change:transform,box-shadow;
+}
+.key__face{
+  position:relative; display:block; width:100%; height:100%; overflow:hidden;
+  border-radius:9.5px;
+  background:
+    radial-gradient(115% 150% at 100% 100%,
+      color-mix(in oklab,var(--key-face-light) 48%,transparent) 0%,
+      color-mix(in oklab,var(--key-face-light) 30%,transparent) 23%,
+      color-mix(in oklab,var(--key-face-light) 10%,transparent) 48%,transparent 67%),
+    radial-gradient(120% 150% at 0% 0%,
+      color-mix(in oklab,var(--key-face-shadow) 56%,transparent) 0%,
+      color-mix(in oklab,var(--key-face-shadow) 38%,transparent) 25%,
+      color-mix(in oklab,var(--key-face-shadow) 13%,transparent) 49%,transparent 69%),
+    var(--key-surface);
+  box-shadow:inset 0 0 2px color-mix(in oklab,var(--key-shadow-soft) 28%,transparent);
+  transition:background 180ms ease,color 180ms ease,box-shadow 180ms ease;
+}
+.key__face::after{
+  content:""; position:absolute; inset:0; z-index:1; border-radius:inherit;
+  pointer-events:none;
+  background:linear-gradient(145deg, transparent 40%, transparent 57%,
+    color-mix(in oklab,var(--key-face-light) 7%,transparent) 70%,
+    color-mix(in oklab,var(--key-face-light) 20%,transparent) 100%);
+}
+.key__led{
+  position:absolute; z-index:4; top:8px; right:9px;
+  width:7px; height:7px; border-radius:50%;
+  background:color-mix(in oklab,var(--key-cavity-deep) 88%,black 12%);
+  box-shadow:
+    inset 1px 1px 2px color-mix(in oklab,var(--key-cavity-deep) 70%,black 30%),
+    inset -1px -1px 1px color-mix(in oklab,var(--key-light-soft) 10%,transparent),
+    0 0 0 1px color-mix(in oklab,var(--key-shadow-near) 52%,transparent);
+  transition:background 160ms ease,box-shadow 160ms ease,transform 160ms ease;
+}
+.key__legend{
+  position:absolute; inset:0; z-index:3; display:flex; align-items:center;
+  padding-left:18px; padding-right:24px;
+  font-size:13px; font-weight:650; letter-spacing:.09em;
+  color:var(--key-text); white-space:nowrap;
+  text-shadow:0 1px 0 color-mix(in oklab,var(--key-light-rim) 72%,transparent);
+  transition:color .18s ease,transform .18s ease;
+}
+.key.is-on .key__led{
+  background:#9dffb0;
+  box-shadow:
+    inset 0 0 1px rgba(255,255,255,.80),
+    0 0 2px rgba(174,255,190,.95),
+    0 0 6px rgba(128,255,153,.75),
+    0 0 12px rgba(128,255,153,.34);
+  transform:scale(1.04);
+}
+.key.is-on .key__legend{ color:#315a3e; }
+
+@media (hover:hover) and (pointer:fine){
+  .key:hover .key__button{ filter:brightness(1.055); }
+}
+.key.is-down .key__button, .key:active .key__button{
+  transform:translateY(2px) scale(.996);
+  box-shadow:1px 1px 2px color-mix(in oklab,var(--key-shadow-near) 58%,transparent);
+  filter:none;
+}
+.key.is-down .key__face, .key:active .key__face{
+  background:
+    radial-gradient(115% 150% at 100% 100%,
+      color-mix(in oklab,var(--key-face-light) 18%,transparent),transparent 58%),
+    radial-gradient(120% 150% at 0% 0%,
+      color-mix(in oklab,var(--key-face-shadow) 32%,transparent),transparent 60%),
+    var(--key-surface);
+  box-shadow:
+    inset 2px 2px 4px color-mix(in oklab,var(--key-shadow-near) 25%,transparent),
+    inset -1px -1px 3px color-mix(in oklab,var(--key-light-soft) 8%,transparent);
+}
+.key:focus-visible{ outline:2px solid rgba(47,208,109,.9); outline-offset:5px; }
+.key--sm{ width:154px; }
+.key--sm .key__legend{ font-size:13px; }
+.key__icon{ display:none; }
+
+.caption{
+  display:flex; align-items:center; gap:9px;
+  font-size:9px; font-weight:700; letter-spacing:.24em; text-indent:.24em;
+  color:var(--ink-soft); text-shadow:0 1px 0 rgba(255,255,255,.9);
+}
+.caption::after{
+  content:""; flex:1; height:1px;
+  background:linear-gradient(90deg, rgba(120,102,70,.28), rgba(120,102,70,0));
+  box-shadow:0 1px 0 rgba(255,255,255,.6);
+}
+
+/* ============================================================================
+   THE TUBE
+
+   Four layers. The bezel render sits on top, and its transparent aperture is
+   what shapes the picture — no CSS mask, no silhouette in the shader; the
+   alpha channel of the moulding does the masking, exactly as the real part
+   would.
+
+   Between the canvas and the bezel go two maps extracted from the glass
+   render: its shading multiplied over the picture, its specular screened on
+   top. The optics of the faceplate therefore come from a render instead of
+   being re-derived, which is the one thing both CSS and a hand-written shader
+   kept losing.
+   ========================================================================= */
+.screen{
+  left:calc(var(--chassis-ap-l) * 100%);
+  top:calc(var(--chassis-ap-t) * 100%);
+  width:calc((var(--chassis-ap-r) - var(--chassis-ap-l)) * 100%);
+  height:calc((var(--chassis-ap-b) - var(--chassis-ap-t)) * 100%);
+  transform:none;
+}
+.tube{
+  position:absolute; inset:0; width:100%; height:100%;
+  background:#030604;
+  overflow:hidden;
+  /* multiply and screen below must resolve against the tube's own backdrop;
+     without an isolated stacking context they reach through to the chassis */
+  isolation:isolate;
+}
+#gl, #fallback2d{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+#fallback2d{ image-rendering:pixelated; opacity:0; }
+.tube.is-fallback #gl{ display:none; }
+.tube.is-fallback #fallback2d{ opacity:1; }
+
+.tube__shade{ position:absolute; inset:0; width:100%; height:100%; z-index:4; mix-blend-mode:multiply; pointer-events:none; }
+.tube__gloss{
+  position:absolute; inset:0; width:100%; height:100%; z-index:5;
+  mix-blend-mode:screen; opacity:.9; pointer-events:none;
+  transform:translate(-1.1%,-1.1%) scale(1.025); transform-origin:0 0;
+  filter:brightness(1.07) saturate(.9);
+}
+.screen__bezel{ display:none; position:absolute; inset:0; width:100%; height:100%; z-index:3; }
+
+/* Rich long-form reader. It lives inside the exact CRT aperture and keeps
+   native semantics for code, media, video and embeds while the physical glass
+   layers remain above it. */
+.article-reader{
+  position:absolute; inset:0; z-index:2; overflow:auto; padding:54px 72px 86px;
+  color:#6bf39a;
+  background:radial-gradient(90% 75% at 43% 36%,#06371f 0%,#02180d 62%,#010805 100%);
+  font-family:ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  font-size:16px; line-height:1.62; text-shadow:0 0 5px rgba(67,255,132,.38);
+  scrollbar-color:#2fd06d rgba(1,18,9,.92); scrollbar-width:thin;
+  transition:opacity .22s ease,filter .22s ease;
+}
+.tube.is-reading::before,.tube.is-reading::after{
+  content:""; position:absolute; inset:0; z-index:3; pointer-events:none;
+  transition:opacity .2s ease;
+}
+.tube.is-reading::before{
+  background:repeating-linear-gradient(
+    0deg,
+    rgba(0,5,2,.18) 0 .45px,
+    transparent .45px 2.15px
+  );
+  mix-blend-mode:multiply; opacity:.72;
+}
+.tube.is-reading::after{
+  background:repeating-linear-gradient(
+    90deg,
+    rgba(255,70,70,.13) 0 .34px,
+    rgba(90,255,120,.07) .34px .68px,
+    rgba(80,120,255,.11) .68px 1.02px,
+    transparent 1.02px 3px
+  );
+  mix-blend-mode:screen; opacity:.17;
+}
+.tube.is-reading.is-crt-off::before,.tube.is-reading.is-crt-off::after{ opacity:0; }
+.tube.is-crt-off .article-reader{ text-shadow:none; filter:saturate(.82) contrast(.96); }
+.article-reader[hidden]{ display:none; }
+.tube.is-powered-off .article-reader{ opacity:0; filter:brightness(0); pointer-events:none; }
+.article-reader::-webkit-scrollbar{ width:9px; }
+.article-reader::-webkit-scrollbar-track{ background:rgba(1,18,9,.9); }
+.article-reader::-webkit-scrollbar-thumb{ border:2px solid rgba(1,18,9,.9); border-radius:9px; background:#2fd06d; }
+.article-reader__header{ padding-bottom:30px; margin-bottom:34px; border-bottom:1px solid rgba(80,255,145,.45); }
+.article-reader__eyebrow{ margin-bottom:12px; color:#e2aa52; font-size:11px; font-weight:700; letter-spacing:.18em; }
+.article-reader__title{ color:#b8ffce; font-size:32px; line-height:1.08; letter-spacing:.025em; text-transform:uppercase; }
+.article-reader__sub{ margin-top:12px; color:#54d985; font-size:14px; text-transform:uppercase; letter-spacing:.08em; }
+.article-reader__heading{ margin:42px 0 16px; color:#a8ffc5; font-size:21px; line-height:1.2; text-transform:uppercase; letter-spacing:.06em; }
+.article-reader__heading--1{ font-size:25px; }
+.article-reader__heading--3,.article-reader__heading--4{ margin-top:32px; font-size:17px; }
+.article-reader__prose{ margin:0 0 22px; }
+.article-reader__list{ display:grid; gap:9px; margin:0 0 26px 24px; }
+.article-reader__link{ color:#b8ffce; text-decoration-color:rgba(184,255,206,.52); text-underline-offset:3px; }
+.article-reader__inline-code{ padding:.08em .32em; border:1px solid rgba(84,217,133,.28); border-radius:2px; background:#011108; color:#d5ffe1; text-shadow:none; }
+.article-reader__media{ margin:30px 0 36px; }
+.article-reader__media img,.article-reader__media video{ display:block; width:100%; max-height:520px; object-fit:contain; border:1px solid rgba(84,217,133,.32); background:#010805; }
+.article-reader__media figcaption,.article-reader__caption{ margin-top:10px; color:#54d985; font-size:12px; letter-spacing:.05em; text-transform:uppercase; }
+.article-reader__code{ overflow:auto; margin:28px 0; padding:20px; border:1px solid rgba(84,217,133,.38); background:#010b06; color:#b8ffce; font:13px/1.55 ui-monospace,"SFMono-Regular",Consolas,monospace; text-shadow:none; white-space:pre; tab-size:2; }
+.article-reader__code code[data-language]::before{ content:attr(data-language); display:block; margin-bottom:14px; color:#e2aa52; font-size:10px; letter-spacing:.16em; text-transform:uppercase; }
+.article-reader__note{ margin:28px 0; padding:18px 20px; border-left:3px solid #e2aa52; background:rgba(226,170,82,.08); color:#b8ffce; }
+.article-reader__embed{ margin:30px 0 38px; }
+.article-reader__embed iframe{ display:block; width:100%; min-height:420px; border:1px solid rgba(84,217,133,.38); background:#fff; }
+
+/* ============================================================================
+   SWITCH / SLIDER — track and thumb split apart so the thumb can travel
+   ========================================================================= */
+.control{ width:210px; }
+.control__row{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; }
+.tiny{ font-size:8.5px; font-weight:700; letter-spacing:.18em; color:var(--ink-soft); text-shadow:0 1px 0 rgba(255,255,255,.88); }
+
+.switch, .slider{
+  position:relative; border:0; padding:0; background:none;
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+.switch{ width:100px; aspect-ratio:var(--ar-switch); flex:0 0 auto; }
+.slider{ width:160px; aspect-ratio:var(--ar-slider); cursor:ew-resize; touch-action:none; }
+.switch img.track, .slider img.track{ position:absolute; inset:0; width:100%; height:100%; }
+
+.switch__thumb, .slider__thumb{
+  position:absolute; top:50%; height:130%; width:auto;
+  transform:translate(-50%,-50%);
+  filter:drop-shadow(2px 3px 3px rgba(60,48,28,.38));
+}
+.switch__thumb{ left:22%; transition:left .17s cubic-bezier(.3,1.35,.5,1); }
+.switch[aria-checked="true"] .switch__thumb{ left:78%; }
+.slider__thumb{ left:50%; }
+.slider:focus-visible, .switch:focus-visible{ outline:2px solid rgba(47,208,109,.9); outline-offset:4px; border-radius:6px; }
+
+/* Desktop: these two wrappers are inert; the compact layout makes rows of
+   them. Declaring them here keeps the two layouts reading as one system. */
+.controls-row, .bottom-row{ display:block; }
+.control + .control{ margin-top:22px; }
+.slider-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px; }
+
+.grille{ width:172px; height:63px; margin-top:25px; }
+.grille img{ width:100%; height:100%; object-fit:fill; }
+
+/* ============================================================================
+   POWER — a single compact two-throw rocker
+   ========================================================================= */
+.power{ position:relative; display:flex; align-items:center; justify-content:center; margin-top:24px; }
+.power::before{
+  content:"POWER"; position:absolute; left:50%; top:-24px; translate:-50% 0;
+  font-size:8px; font-weight:700; letter-spacing:.16em; color:var(--ink-soft);
+  text-shadow:0 1px 0 rgba(255,255,255,.9);
+}
+.panel--right .bottom-row .power{ margin-top:58px; }
+/* The paddle is cut out of the render and pivots for real, in three
+   dimensions, instead of being mirrored. Mirroring reversed the shading and
+   the taper — which is what a throw does — but it also mirrored the cavity
+   around it and the moulded dome on its face, so the control read as a
+   different object each time rather than as one object tilted. That is what
+   made it look like the switch was turning over.
+
+   The supplied render has the top standing proud, so that state is taken as
+   ON and the throw rotates the top away from the viewer. A gradient reverses
+   the lighting at the same time: the end that recedes has to go dark and the
+   end that comes forward has to catch the key light, otherwise the render's
+   baked highlight stays on the wrong end of the plate. */
+.rocker{
+  position:relative; border:0; padding:0; background:none; cursor:pointer;
+  width:64px; aspect-ratio:var(--ar-rocker);
+  perspective:150px; -webkit-tap-highlight-color:transparent;
+}
+.rocker__housing{ position:absolute; inset:0; width:100%; height:100%; }
+.rocker__paddle{
+  position:absolute;
+  left:calc(var(--pad-l) * 100%);  top:calc(var(--pad-t) * 100%);
+  width:calc(var(--pad-w) * 100%); height:calc(var(--pad-h) * 100%);
+  transform-origin:50% 50%;
+  transform:rotateX(19deg);                       /* default state: off */
+  transition:transform .17s cubic-bezier(.34,1.32,.5,1), filter .09s ease;
+}
+.rocker__paddle img{ position:absolute; inset:0; width:100%; height:100%; }
+.rocker__throw{
+  position:absolute; inset:0; border-radius:11%; pointer-events:none;
+  transition:opacity .17s ease;
+  background:linear-gradient(180deg,
+    rgba(0,0,0,.72) 0%, rgba(0,0,0,.40) 26%, rgba(0,0,0,0) 54%,
+    rgba(255,255,255,.06) 78%, rgba(255,255,255,.19) 100%);
+}
+.rocker.is-on .rocker__paddle{ transform:rotateX(0deg); }
+.rocker.is-on .rocker__throw{ opacity:0; }
+/* Pushed, then it snaps. Without this a click produced only the state swap. */
+.rocker:active .rocker__paddle{ filter:brightness(.88); }
+.rocker:focus-visible{ outline:2px solid rgba(47,208,109,.9); outline-offset:4px; border-radius:6px; }
+/* ============================================================================
+   FOOT
+   ========================================================================= */
+.foot{ display:none; }
+.badge, .maker{ font-size:7.5px; font-weight:700; letter-spacing:.22em; color:var(--ink-soft); text-shadow:0 1px 0 rgba(255,255,255,.9); }
+.maker{ font-size:12px; font-style:italic; font-weight:500; letter-spacing:0; }
+.vents{
+  width:230px; height:10px; border-radius:3px;
+  background-image:repeating-linear-gradient(90deg, rgba(120,102,70,.34) 0 3px, transparent 3px 10px);
+  box-shadow:inset 2px 2px 3px rgba(92,76,48,.3), 0 1px 0 rgba(255,255,255,.7);
+}
+
+/* ============================================================================
+   A11Y
+   ========================================================================= */
+.sr{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.hint{
+  position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+  font-size:10px; letter-spacing:.2em; color:rgba(255,255,255,.26);
+  pointer-events:none; z-index:998; transition:opacity .6s ease;
+}
+@media (prefers-reduced-motion: reduce){
+  .key, .key__button, .key__face, .key__led, .key__legend, .switch__thumb, .rocker img{ transition-duration:.01ms; }
+}
+
+/* ============================================================================
+   COMPACT — the same unit, re-moulded as a portable
+
+   The previous version scaled the desktop numbers down and hoped. It did not
+   work: the keys stayed at their desktop pixel width inside a 430px chassis,
+   so two of them filled a row, and the switch — sized for a 200px control
+   column — ran off the side entirely.
+
+   The fix is to stop using pixels here. Every part is a percentage of the
+   chassis, and the chassis itself is scaled by --fit, so the layout holds at
+   any device width instead of at one.
+   ========================================================================= */
+.machine.is-compact{
+  left:50%; top:50%; transform-origin:50% 50%;
+  transform:translate(-50%,-50%) scale(var(--fit))
+            rotateX(calc(var(--py) * -0.35deg))
+            rotateY(calc(var(--px) * 0.45deg));
+  width:941px; height:1672px;
+  display:block;
+  border-radius:0; background:#eadcc8; box-shadow:none;
+}
+.machine.is-compact::after{ display:none; }
+.is-compact .machine__background--desktop{ display:none; }
+.is-compact .machine__background--mobile{ display:block; }
+
+.is-compact .plate-row{
+  position:absolute; left:235px; top:116px;
+  width:471px; height:66px; padding:0; gap:0;
+}
+.is-compact .rail{ display:none; }
+.is-compact .nameplate{ width:471px; height:66px; margin:0; }
+.is-compact .nameplate h1{ font-size:16px; letter-spacing:.34em; text-indent:.34em; }
+.is-compact .nameplate p{ font-size:7px; letter-spacing:.22em; text-indent:.22em; }
+
+.is-compact .screen{
+  position:absolute;
+  left:calc(var(--mobile-ap-l) * 100%);
+  top:calc(var(--mobile-ap-t) * 100%);
+  width:calc((var(--mobile-ap-r) - var(--mobile-ap-l)) * 100%);
+  height:calc((var(--mobile-ap-b) - var(--mobile-ap-t)) * 100%);
+  margin:0; transform:none;
+}
+.is-compact .tube{
+  inset:0; width:100%; height:100%;
+}
+.is-compact .screen__bezel{ display:none; }
+.is-compact .article-reader{ padding:38px 44px 64px; font-size:15px; line-height:1.58; }
+.is-compact .article-reader__title{ font-size:27px; }
+.is-compact .article-reader__heading{ margin-top:34px; font-size:19px; }
+
+/* The portable reference is a real vertical control panel, not the desktop
+   layout squeezed into a two-column card grid. */
+.is-compact .panel--left{
+  position:absolute; left:201px; top:1126px;
+  width:539px; height:auto; padding:0; align-items:stretch; justify-content:flex-start;
+  transform:none;
+  transition:opacity .18s ease, transform .22s cubic-bezier(.2,.8,.2,1);
+}
+.is-compact #nav-keys{ display:flex; flex-direction:column; gap:5px; }
+.is-compact .panel--right{
+  position:absolute; left:111px; top:1482px;
+  width:719px; height:174px; padding:0; display:block;
+}
+.is-compact .panel--right .controls-row,.is-compact .panel--right .bottom-row{
+  position:relative; left:auto; top:auto; transform:none;
+}
+.is-compact .stack,.is-compact .rule{ display:none; }
+.is-compact .key,
+.is-compact .key--sm{ width:539px; height:54px; }
+.is-compact .key__legend{
+  font-size:15px; letter-spacing:.08em;
+  padding-left:60px;
+}
+.is-compact .key__icon{
+  display:grid; place-items:center;
+  position:absolute; left:10px; top:50%; translate:0 -50%;
+  width:24px; height:24px; color:var(--key-text); z-index:3;
+}
+.is-compact .key__icon svg{ display:block; width:100%; height:100%; fill:currentColor; }
+.is-compact .key__led{ top:10px; right:12px; width:8px; height:8px; }
+.is-compact .key.is-on .key__icon{ color:#315a3e; }
+
+.is-compact .controls-row{
+  display:grid; grid-template-columns:280px 280px; column-gap:159px; align-items:end;
+  position:relative;
+}
+.is-compact .controls-row::before{
+  content:none; display:none;
+}
+.is-compact .control{ width:280px; }
+.is-compact .control__row{ margin-top:13px; gap:12px; }
+.is-compact .control:first-child .caption{ font-size:0; }
+.is-compact .control:first-child .caption::before{ content:"CRT"; font-size:15px; }
+.is-compact .caption{ justify-content:center; font-size:15px; letter-spacing:.06em; text-indent:0; color:var(--ink-hard); }
+.is-compact .caption::after{ display:none; }
+.is-compact .tiny{ font-size:12px; letter-spacing:.08em; color:var(--ink-hard); }
+.is-compact .switch{ width:82px; }
+.is-compact .slider-row{ margin-top:15px; gap:12px; }
+.is-compact .slider{ width:142px; margin:0; }
+
+.is-compact .bottom-row{
+  display:block; margin-top:20px;
+}
+.is-compact .grille{ display:none; }
+.is-compact .panel--right .bottom-row .power{ width:max-content; margin:28px auto 0; transform:none; }
+.is-compact .power::before{
+  content:"POWER"; position:absolute; left:50%; top:-35px; translate:-50% 0;
+  font-size:15px; font-weight:650; letter-spacing:.08em; color:var(--ink-hard);
+}
+.is-compact .rocker{ width:56px; }
+
+.is-compact .foot{ display:none; }
+
+@media (max-width:980px), (max-aspect-ratio:1.05){ .hint{ display:none; } }

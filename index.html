@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jordan Grilly — Systems / Performance / Architecture</title>
+<meta name="description" content="Portfolio of Jordan Grilly, systems and performance engineer.">
+<meta name="color-scheme" content="dark">
+</head>
+<body>
+
+<div id="stage">
+  <div class="machine" id="machine">
+
+    <picture class="machine__background machine__background--desktop" aria-hidden="true">
+      <source media="(min-width: 2560px)" data-asset-srcset="chassis-frame-4k">
+      <img alt="" data-asset="chassis-frame-1920">
+    </picture>
+
+    <picture class="machine__background machine__background--mobile" aria-hidden="true">
+      <img alt="" data-asset="chassis-frame-mobile">
+    </picture>
+
+    <!-- ── nameplate ──────────────────────────────────────────────────── -->
+    <div class="plate-row">
+      <div class="rail"><span></span><span></span><span></span></div>
+      <div class="nameplate">
+        <img alt="" data-asset="nameplate">
+        <div class="nameplate__txt">
+          <h1>JORDAN GRILLY</h1>
+          <p>SYSTEMS / PERFORMANCE / ARCHITECTURE</p>
+        </div>
+      </div>
+      <div class="rail rail--r"><span></span><span></span><span></span></div>
+    </div>
+
+    <!-- ── navigation ─────────────────────────────────────────────────── -->
+    <div class="panel panel--left">
+      <div class="group" id="nav-keys"></div>
+    </div>
+
+    <!-- ── tube ───────────────────────────────────────────────────────────
+         Layer order matters: canvas, then the glass shading multiplied over
+         it, then the glass specular screened on top, then the bezel whose
+         transparent aperture does the masking.                             -->
+    <div class="screen">
+      <div class="tube" id="tube">
+        <canvas id="gl"></canvas>
+        <canvas id="fallback2d"></canvas>
+        <article class="article-reader" id="article-reader" tabindex="0" hidden></article>
+        <img class="tube__shade" alt="" data-asset="glass-shade">
+        <img class="tube__gloss" alt="" data-asset="glass-gloss">
+      </div>
+      <img class="screen__bezel" alt="" data-asset="bezel">
+    </div>
+
+    <!-- ── controls ───────────────────────────────────────────────────── -->
+    <div class="panel panel--right">
+      <div class="stack" id="action-keys"></div>
+
+      <div class="rule"></div>
+
+      <!-- Wrappers the compact layout turns into rows. On desktop they are
+           plain blocks and change nothing. -->
+      <div class="controls-row">
+      <div class="control">
+        <div class="caption">CRT EFFECTS</div>
+        <div class="control__row">
+          <span class="tiny">OFF</span>
+          <button class="switch" id="crt-switch" role="switch" aria-checked="true" aria-label="CRT effects">
+            <img class="track" alt="" data-asset="switch-track">
+            <img class="switch__thumb" alt="" data-asset="switch-thumb">
+          </button>
+          <span class="tiny">ON</span>
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="caption">VOLUME</div>
+        <div class="slider-row">
+          <span class="tiny">LOW</span>
+          <div class="slider" id="volume" role="slider" tabindex="0"
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="55" aria-label="Volume">
+            <img class="track" alt="" data-asset="slider-track">
+            <img class="slider__thumb" id="volume-thumb" alt="" data-asset="slider-thumb">
+          </div>
+          <span class="tiny">HIGH</span>
+        </div>
+      </div>
+
+      </div><!-- /controls-row -->
+
+      <div class="bottom-row">
+      <div class="grille"><img alt="" data-asset="grille"></div>
+
+      <div class="power" id="power-group">
+        <button class="rocker is-on" id="power" aria-pressed="true" aria-label="Power">
+          <img class="rocker__housing" alt="" data-asset="rocker-housing">
+          <span class="rocker__paddle">
+            <img alt="" data-asset="rocker-paddle">
+            <span class="rocker__throw"></span>
+          </span>
+        </button>
+      </div>
+      </div><!-- /bottom-row -->
+    </div>
+
+    <!-- ── foot ───────────────────────────────────────────────────────── -->
+    <div class="foot">
+      <span class="badge">MODEL JG-1500 · MADE IN FRANCE</span>
+      <div class="vents"></div>
+      <span class="maker">Frogbyte</span>
+    </div>
+
+  </div>
+</div>
+<p class="hint" id="hint">1-5 SECTIONS · ↑↓ MOVE · ENTER SELECT · ESC BACK · P POWER</p>
+<div class="sr" id="live" aria-live="polite"></div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
