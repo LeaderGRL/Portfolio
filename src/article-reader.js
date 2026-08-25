@@ -102,14 +102,7 @@ function renderBlock(block) {
       return figure
     }
     case 'embed':
-      // The visible iframe is mounted by InlineIntegrationController. Keeping
-      // only a semantic footprint here avoids loading a second hidden YouTube,
-      // Sketchfab or Miro instance while preserving the document scroll range.
-      return richSpacer(
-        block,
-        Number(block.height) || 214,
-        block.title || block.label || 'Interactive integration',
-      )
+      return richSpacer(block, Number(block.height) || 214, block.title || block.label || 'Interactive integration')
     case 'note':
       return make('aside', 'article-reader__note', block.body || '')
     case 'figure': {
@@ -123,6 +116,11 @@ function renderBlock(block) {
       const count = countRows(block)
       const cols = Math.max(1, Math.min(3, Number(block.columns) || 2))
       return richSpacer(block, Math.max(72, Math.ceil(count / cols) * 58 + 14), block.label || 'Project facts')
+    }
+    case 'system': {
+      const count = countRows(block)
+      const cols = Math.max(1, Math.min(2, Number(block.columns) || 2))
+      return richSpacer(block, Math.max(98, Math.ceil(count / cols) * 78 + 20), block.label || 'System overview')
     }
     case 'pipeline': {
       const count = countRows(block)
