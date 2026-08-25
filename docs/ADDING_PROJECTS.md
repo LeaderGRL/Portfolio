@@ -2,20 +2,65 @@
 
 The project engine is designed so a new portfolio project should require content and assets, not runtime JavaScript.
 
-## Recommended folder
+## Recommended project structure
+
+Keep the authored document in `content/projects/<slug>/`. Small document-local images can live beside it, but large or streamed media should live under `public/media/<slug>/` so Vite serves them as files instead of embedding them into the JavaScript bundle.
 
 ```text
-content/projects/
-└── my-project/
-    ├── index.md
-    └── assets/
+content/
+└── projects/
+    └── my-project/
+        └── index.md
+
+public/
+└── media/
+    └── my-project/
         ├── hero.webp
+        ├── gameplay.mp4
         ├── screenshot-01.webp
-        ├── screenshot-02.webp
         └── model.glb
 ```
 
 Legacy one-file projects such as `content/projects/frogbyte.md` remain supported.
+
+### Which asset folder should I use?
+
+Use `content/projects/<slug>/assets/` for small images that are genuinely part of the document source and that benefit from build-time inlining.
+
+Use `public/media/<slug>/` for:
+
+- `.glb` / `.gltf` models;
+- videos;
+- large GIFs;
+- large image galleries;
+- assets you want the browser to load lazily or stream independently from the application bundle.
+
+For rich projects, `public/media/<slug>/` should be the default for substantial media.
+
+## Versioning 3D models
+
+A GLB is a normal project asset. If it is a few hundred kilobytes or a few megabytes, commit it with regular Git; Git LFS is unnecessary at that scale.
+
+Recommended workflow:
+
+```bash
+node tools/install-project-model.mjs C:/path/to/model.glb my-project model.glb
+
+git add public/media/my-project/model.glb
+git add content/projects/my-project/index.md
+git commit -m "feat: add my-project 3D model"
+git push
+```
+
+The installer validates the GLB header/version and copies it to the canonical public-media directory. It is optional convenience tooling; after the copy, the model is simply a tracked Git file.
+
+Then reference it from Markdown:
+
+```md
+::model3d{src=/media/my-project/model.glb label="EXPLORE THE MODEL" autospin=0.08}
+```
+
+For ordinary portfolio-sized GLBs, this is all that is required. Consider Git LFS only if individual binary assets become genuinely large (for example tens or hundreds of megabytes) or change frequently enough to bloat repository history.
 
 ## Minimal project
 
@@ -47,7 +92,7 @@ No JavaScript registration is needed for a project. If you are about to create `
 ### Hero
 
 ```md
-::hero{media=assets/hero.webp eyebrow="ARCADE SYSTEM" title="PROJECT TITLE" subtitle="Short pitch"}
+::hero{media=/media/my-project/hero.webp eyebrow="ARCADE SYSTEM" title="PROJECT TITLE" subtitle="Short pitch"}
 ```
 
 Use a hero only when it has useful visual media. Do not create an empty hero simply to reserve space.
@@ -94,18 +139,18 @@ Use `pipeline` only when the ordering is meaningful: input chains, rendering pas
 ### Image
 
 ```md
-::image{src=assets/screenshot.webp alt="Gameplay screenshot"}
+::image{src=/media/my-project/screenshot.webp alt="Gameplay screenshot"}
 ```
 
-Local PNG, JPEG, WebP and GIF assets are resolved relative to `index.md` and inlined by the build.
+Small local PNG, JPEG, WebP and GIF assets placed next to `index.md` are resolved relative to the document and inlined by the build. Prefer `/media/<slug>/...` for substantial project media.
 
 ### Gallery
 
 ```md
 ::gallery{columns=2}
-assets/shot-01.webp | Gameplay
-assets/shot-02.webp | Level editor
-assets/shot-03.webp | Final environment
+/media/my-project/shot-01.webp | Gameplay
+/media/my-project/shot-02.webp | Level editor
+/media/my-project/shot-03.webp | Final environment
 ::
 ```
 
@@ -114,7 +159,7 @@ Use `1`, `2` or `3` columns. The first pipe-separated field is an asset path; th
 ### Before / after
 
 ```md
-::compare{before=assets/old.webp after=assets/final.webp beforeLabel="PROTOTYPE" afterLabel="FINAL"}
+::compare{before=/media/my-project/old.webp after=/media/my-project/final.webp beforeLabel="PROTOTYPE" afterLabel="FINAL"}
 ```
 
 ### Timeline
@@ -130,10 +175,21 @@ Use `1`, `2` or `3` columns. The first pipe-separated field is an asset path; th
 ### Local 3D model
 
 ```md
-::model3d{src=assets/model.glb label="EXPLORE THE MODEL" autospin=0.14}
+::model3d{src=/media/my-project/model.glb label="EXPLORE THE MODEL" autospin=0.08}
 ```
 
-Prefer this when the GLB belongs to the project and can be hosted with the portfolio. The model is rendered by Three.js into a local canvas and therefore remains inside the real CRT post-process even while the user rotates or zooms it.
+Prefer this when the GLB belongs to the project and can be hosted with the portfolio. The model is rendered by Three.js into a detached local canvas and therefore remains inside the real CRT post-process even while the user rotates it.
+
+Current interaction contract:
+
+```text
+drag             rotate
+wheel            scroll document
+Ctrl + wheel     zoom / unzoom
+double click     reset camera
+```
+
+The model renderer and its DOM input proxy are deliberately separate. Never mount the Three.js render canvas into the document; only the transparent input proxy belongs in the DOM.
 
 ### YouTube
 
@@ -180,6 +236,7 @@ A short callout or engineering takeaway.
 5. Keep filenames descriptive. Prefer `control-panel.webp` over exported UUID filenames.
 6. A rich project should still explain your contribution, engineering decisions and lessons learned. Visual spectacle supports the story; it does not replace it.
 7. Avoid decorative flowcharts. Arrows imply causality or sequence; use them only when that relationship is actually part of the system.
+8. Keep binary asset ownership explicit: if a project page references `/media/<slug>/foo.glb`, that file should be committed with the project unless it is intentionally provided by an external CDN/provider.
 
 ## Validation rule
 
