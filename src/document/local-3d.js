@@ -5,18 +5,16 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 /* ========================================================================== *
  * Local3DManager
  *
- * A local model owns one reusable Three.js canvas. That canvas is normally
- * off-DOM and sampled by the document rasteriser, which means the model passes
- * through the exact same CRT shader as every other source pixel.
+ * Local 3D has two deliberately separate surfaces:
  *
- * The canonical asset path is GLB/glTF. The lightweight `jg1500-model-1` JSON
- * format is also supported for projects that need a tiny local geometry
- * preview while preserving the exact same Three.js -> raster -> CRT contract.
- * It describes primitive parts and transforms; it contains no project logic.
+ * 1. renderCanvas — permanently detached from the DOM and sampled by the
+ *    document rasteriser, so every visible 3D pixel goes through FRAG_CRT;
+ * 2. inputProxy — a transparent DOM element used only by OrbitControls while
+ *    the model block is interactive.
  *
- * During interaction the same canvas is mounted as a nearly transparent input
- * proxy above the CRT. OrbitControls receives pointer/wheel events there while
- * the visible model remains the rasterised CRT result underneath.
+ * Never move renderCanvas into the document. Doing so makes the same canvas a
+ * renderer source and a DOM interaction surface at once, which can produce
+ * unstable compositing/feedback while the document scrolls.
  * ========================================================================== */
 
 class Local3DScene {
@@ -26,7 +24,8 @@ class Local3DScene {
     this.canvas = document.createElement('canvas')
     this.canvas.width = 640
     this.canvas.height = 420
-    this.canvas.className = 'document-model3d-input'
+    this.canvas.className = 'document-model3d-render-source'
+    this.inputProxy = null
     this.ready = false
     this.failed = false
     this.interacting = false
@@ -43,7 +42,7 @@ class Local3DScene {
     this.renderer.setSize(this.canvas.width, this.canvas.height, false)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = Number(block.exposure) || 1.12
+    this.renderer.toneMappingExposure = Number(block.exposure) || 1.08
     this.renderer.setClearColor(0x000000, 0)
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
@@ -52,32 +51,44 @@ class Local3DScene {
     this.camera = new THREE.PerspectiveCamera(34, this.canvas.width / this.canvas.height, 0.01, 100)
     this.camera.position.set(2.4, 1.7, 3.2)
 
-    this.controls = new OrbitControls(this.camera, this.canvas)
+    // Controls stay disconnected until an input proxy is mounted. The renderer
+    // canvas therefore remains a pure pixel source for the entire scene life.
+    this.controls = new OrbitControls(this.camera, null)
+    this.controls.enabled = false
     this.controls.enableDamping = true
     this.controls.dampingFactor = 0.07
     this.controls.enablePan = false
     this.controls.minDistance = 1.2
     this.controls.maxDistance = 9
+    this.controls.addEventListener('start', () => {
+      this.interacting = true
+    })
+    this.controls.addEventListener('end', () => {
+      this.interacting = false
+      this.lastTime = performance.now()
+      this.render()
+      this.onDirty()
+    })
     this.controls.addEventListener('change', () => {
       this.render()
       this.onDirty()
     })
 
-    const hemi = new THREE.HemisphereLight(0xd8fff0, 0x07130c, 1.65)
+    const hemi = new THREE.HemisphereLight(0xd8fff0, 0x07130c, 1.45)
     this.scene.add(hemi)
 
-    this.keyLight = new THREE.DirectionalLight(0xffffff, 3.1)
+    this.keyLight = new THREE.DirectionalLight(0xffffff, 2.65)
     this.keyLight.position.set(3, 5, 4)
     this.keyLight.castShadow = true
     this.keyLight.shadow.mapSize.set(1024, 1024)
     this.keyLight.shadow.bias = -0.0005
     this.scene.add(this.keyLight)
 
-    const fill = new THREE.DirectionalLight(0x8ebdff, 1.0)
+    const fill = new THREE.DirectionalLight(0x8ebdff, 0.78)
     fill.position.set(-3, 1.5, 3)
     this.scene.add(fill)
 
-    const rim = new THREE.DirectionalLight(0x48ff9a, 2.15)
+    const rim = new THREE.DirectionalLight(0x48ff9a, 1.35)
     rim.position.set(-4, 2.5, -3)
     this.scene.add(rim)
 
@@ -86,7 +97,7 @@ class Local3DScene {
 
     this.shadow = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
-      new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.22 }),
+      new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.18 }),
     )
     this.shadow.rotation.x = -Math.PI * 0.5
     this.shadow.receiveShadow = true
@@ -98,7 +109,9 @@ class Local3DScene {
   }
 
   _loadModel(src) {
-    const isManifest = String(src || '').startsWith('data:application/json') || /\.model\.json(?:$|[?#])/i.test(String(src || ''))
+    const value = String(src || '')
+    const isManifest = value.startsWith('data:application/json') || /\.model\.json(?:$|[?#])/i.test(value)
+
     if (isManifest) {
       fetch(src)
         .then(response => {
@@ -171,16 +184,16 @@ class Local3DScene {
     const verticalFov = THREE.MathUtils.degToRad(this.camera.fov)
     const horizontalFov = 2 * Math.atan(Math.tan(verticalFov * 0.5) * this.camera.aspect)
     const limitingFov = Math.min(verticalFov, horizontalFov)
-    const distance = safeRadius / Math.sin(limitingFov * 0.5) * 1.14
+    const distance = safeRadius / Math.sin(limitingFov * 0.5) * 1.10
 
-    const direction = new THREE.Vector3(1.18, 0.72, 1.45).normalize()
+    const direction = new THREE.Vector3(0.92, 0.42, 1.55).normalize()
     this.camera.position.copy(direction.multiplyScalar(distance))
     this.camera.near = Math.max(0.001, distance / 100)
     this.camera.far = Math.max(distance * 12, safeRadius * 20)
     this.camera.updateProjectionMatrix()
 
     this.controls.target.set(0, 0, 0)
-    this.controls.minDistance = Math.max(safeRadius * 1.15, distance * 0.36)
+    this.controls.minDistance = Math.max(safeRadius * 1.08, distance * 0.36)
     this.controls.maxDistance = distance * 3.2
     this.controls.update()
   }
@@ -236,9 +249,10 @@ class Local3DScene {
     const dt = Math.min(0.05, Math.max(0, (time - this.lastTime) / 1000))
     this.lastTime = time
 
-    const spin = Number(this.block.autospin ?? 0.14)
+    const spin = Number(this.block.autospin ?? 0.10)
     if (!this.interacting && spin) this.root.rotation.y += spin * dt
     this.controls.update()
+
     if (!this.interacting && spin) {
       this.render()
       this.onDirty()
@@ -253,22 +267,38 @@ class Local3DScene {
   }
 
   mountInput(host) {
-    this.interacting = true
-    this.canvas.classList.add('document-model3d-input--mounted')
-    host.append(this.canvas)
+    this.unmountInput(false)
+
+    const proxy = document.createElement('div')
+    proxy.className = 'document-model3d-input-proxy'
+    proxy.tabIndex = 0
+    proxy.setAttribute('role', 'application')
+    proxy.setAttribute('aria-label', this.block.label || this.block.title || 'Interactive 3D model')
+    host.append(proxy)
+
+    this.inputProxy = proxy
+    this.controls.connect(proxy)
+    this.controls.enabled = true
     this.render()
   }
 
-  unmountInput() {
+  unmountInput(markDirty = true) {
+    if (this.inputProxy) {
+      this.controls.disconnect()
+      this.controls.enabled = false
+      this.inputProxy.remove()
+      this.inputProxy = null
+    }
     this.interacting = false
-    this.canvas.classList.remove('document-model3d-input--mounted')
-    this.canvas.remove()
-    this.render()
-    this.onDirty()
+    this.lastTime = performance.now()
+    if (markDirty) {
+      this.render()
+      this.onDirty()
+    }
   }
 
   dispose() {
-    this.unmountInput()
+    this.unmountInput(false)
     this.controls.dispose()
     this.scene.traverse(object => {
       object.geometry?.dispose?.()
