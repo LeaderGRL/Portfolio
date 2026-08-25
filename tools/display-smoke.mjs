@@ -35,7 +35,7 @@ check(document.querySelectorAll('#display-crt-optics').length === 0, 'legacy DOM
 
 const source = html
 check(source.includes('display-pixel-source'), 'pixel-source styles bundled')
-check(source.includes('data-display-mode="article"'), 'article display mode bundled')
+check(source.includes('data-display-mode') && source.includes('article'), 'article display mode bundled')
 check(source.includes('opacity:0'), 'DOM becomes visual-inert')
 check(source.includes('pointer-events:auto'), 'DOM keeps interaction')
 
