@@ -1,0 +1,61 @@
+/* ============================================================================
+   CRT OFF BYPASS
+
+   The physical CRT switch should be authoritative. When it is OFF, show the
+   currently selected source canvas directly instead of the WebGL composite.
+   This guarantees that bloom, phosphor persistence, barrel distortion,
+   aberration, scanlines, aperture grille and shader vignette are all absent.
+
+   The photographic glass/bezel remain part of the physical machine; only the
+   electronic CRT treatment is bypassed.
+   ============================================================================ */
+
+.tube.is-crt-off #gl{
+  visibility:hidden !important;
+  opacity:0 !important;
+}
+
+.tube.is-crt-off[data-display-mode="article"] #article-source,
+.tube.is-crt-off[data-display-mode="terminal"] #fallback2d{
+  display:block !important;
+  position:absolute;
+  inset:0;
+  z-index:2;
+  width:100%;
+  height:100%;
+  opacity:1 !important;
+  visibility:visible !important;
+  image-rendering:auto;
+}
+
+.tube.is-crt-off[data-display-mode="article"] #fallback2d,
+.tube.is-crt-off[data-display-mode="terminal"] #article-source{
+  display:none !important;
+}
+
+/* Native cross-origin integrations cannot be sampled by FRAG_CRT. Their
+   compositor optics must therefore follow the same physical CRT switch. */
+.tube.is-crt-off .document-inline-integration__surface{
+  filter:none !important;
+}
+
+.tube.is-crt-off .document-inline-integration--youtube::before,
+.tube.is-crt-off .document-inline-integration--youtube::after,
+.tube.is-crt-off .document-inline-integration--sketchfab::before,
+.tube.is-crt-off .document-inline-integration--sketchfab::after,
+.tube.is-crt-off .document-inline-integration--miro::before,
+.tube.is-crt-off .document-inline-integration--miro::after,
+.tube.is-crt-off .document-inline-integration--google::before,
+.tube.is-crt-off .document-inline-integration--google::after,
+.tube.is-crt-off .document-inline-integration--iframe::before,
+.tube.is-crt-off .document-inline-integration--iframe::after{
+  display:none !important;
+}
+
+/* Inline video embeds need breathing room before the next raster block. Keep
+   the layout height stable and reserve the bottom of the embed as whitespace
+   so scrolling / interaction geometry stays synchronized. */
+.document-inline-integration--youtube .document-inline-integration__surface,
+.document-inline-integration--youtube .document-inline-integration__activation{
+  bottom:16px;
+}
