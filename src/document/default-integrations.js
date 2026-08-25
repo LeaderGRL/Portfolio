@@ -21,10 +21,10 @@ export function createDefaultIntegrationRegistry({ local3d }) {
   const registry = new IntegrationRegistry()
 
   registry.register('local-3d', {
-    mount({ block, host }) {
+    mount({ block, host, context }) {
       // Local 3D is already labelled inside the raster source. The DOM layer is
       // input-only so it must never add visible controls above the CRT picture.
-      return local3d.mount(block, host)
+      return local3d.mount(block, host, context)
     },
   })
 
