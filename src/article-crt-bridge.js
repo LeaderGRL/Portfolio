@@ -6,6 +6,8 @@ import { createDefaultBlockRegistry } from './document/default-blocks.js'
 import { createDefaultIntegrationRegistry } from './document/default-integrations.js'
 import { InlineIntegrationController } from './document/inline-integrations.js'
 import { Local3DManager } from './document/local-3d.js'
+import { enhanceMediaBlocks } from './document/media-blocks.js'
+import { MediaViewer } from './document/media-viewer.js'
 import { DocumentProgressOverlay } from './document/progress-overlay.js'
 
 /* ========================================================================== *
@@ -32,12 +34,13 @@ export function attachArticleCRT(app) {
   let interaction = null
   let inlineIntegrations = null
   const progressOverlay = new DocumentProgressOverlay()
+  const mediaViewer = new MediaViewer()
   const local3d = new Local3DManager(() => {
     app.dirty = true
     documentRaster?.markDirty?.()
   })
-  const blockRegistry = createDefaultBlockRegistry({ local3d })
-  const integrations = createDefaultIntegrationRegistry({ local3d })
+  const blockRegistry = enhanceMediaBlocks(createDefaultBlockRegistry({ local3d }))
+  const integrations = createDefaultIntegrationRegistry({ local3d, mediaViewer })
 
   // Dirtying the framebuffer must never synchronously mount/unmount DOM
   // integrations. Local 3D can mark the document dirty while a cleanup is in
@@ -81,6 +84,7 @@ export function attachArticleCRT(app) {
     const itemChanged = documentRaster.setItem(documentItem)
     if (itemChanged) {
       if (interaction.isOpen) interaction.close(false)
+      mediaViewer.close()
       inlineIntegrations.clear()
     }
 
@@ -94,6 +98,7 @@ export function attachArticleCRT(app) {
     tube.classList.toggle('has-dom-surface', Boolean(documentItem))
     tube.classList.toggle('is-reading', Boolean(documentItem))
     if (!documentItem && interaction.isOpen) interaction.close(false)
+    if (!documentItem) mediaViewer.close()
   }
 
   app.raster.paint = (term, reveal, cursorOn) => {
@@ -144,6 +149,7 @@ export function attachArticleCRT(app) {
     integrations,
     inlineIntegrations,
     local3d,
+    mediaViewer,
     progressOverlay,
     interaction,
     pipeline,
@@ -154,6 +160,7 @@ export function attachArticleCRT(app) {
       cancelAnimationFrame(raf)
       inlineIntegrations.destroy()
       interaction.destroy()
+      mediaViewer.destroy()
       local3d.dispose()
       syncArticleReader(null)
       app.raster.paint = terminalPaint
