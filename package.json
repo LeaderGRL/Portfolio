@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "assets": "node tools/assets.mjs",
-    "test": "node tools/smoke.mjs && node tools/smoke.mjs --gl && node tools/interactions.mjs && node tools/display-smoke.mjs"
+    "test": "node tools/smoke.mjs && node tools/smoke.mjs --gl && node tools/interactions.mjs && node tools/display-smoke.mjs && node tools/document-schema-smoke.mjs"
   },
   "devDependencies": {
     "jsdom": "^25.0.0",
