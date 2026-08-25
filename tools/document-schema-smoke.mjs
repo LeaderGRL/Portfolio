@@ -22,6 +22,7 @@ const interaction = fs.readFileSync('src/article-interaction.js', 'utf8')
 const displayCss = fs.readFileSync('src/display.css', 'utf8')
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'))
 const penw = fs.readFileSync('content/projects/penw/index.md', 'utf8')
+const leak = fs.readFileSync('content/projects/leak/index.md', 'utf8')
 
 for (const type of ['image', 'video', 'hero', 'facts', 'pipeline', 'gallery', 'timeline', 'compare', 'model3d', 'embed']) {
   check(hasBlockType(type), `schema contains ${type}`)
@@ -57,6 +58,7 @@ check(integrations.includes("registry.register('youtube'"), 'YouTube adapter reg
 check(integrations.includes('enablejsapi=1'), 'YouTube API is enabled for shield controls')
 check(integrations.includes('scrollwheel=0'), 'Sketchfab does not capture wheel input')
 check(integrations.includes("registry.register('sketchfab'"), 'Sketchfab adapter registered')
+check(integrations.includes("registry.register('miro'"), 'Miro adapter registered')
 check(integrations.includes("registry.register('local-3d'"), 'local 3D adapter registered')
 check(inlineIntegrations.includes('class InlineIntegrationController'), 'inline integration controller exists')
 check(inlineIntegrations.includes('_position(host, entry)'), 'inline integrations follow raster layout')
@@ -72,6 +74,8 @@ check(interaction.includes("entry.type === 'model3d'"), 'modal controller explic
 
 check(local3d.includes('GLTFLoader'), 'local 3D uses GLTFLoader')
 check(local3d.includes('OrbitControls'), 'local 3D uses OrbitControls')
+check(local3d.includes('_fitCamera(radius)'), 'local 3D auto-frames arbitrary model bounds')
+check(local3d.includes('ShadowMaterial'), 'local 3D has reusable contact shadow')
 check(local3d.includes('mountInput'), 'local 3D has CRT-preserving input proxy')
 check(packageJson.dependencies?.three, 'Three.js dependency declared')
 
@@ -92,6 +96,15 @@ check(penw.includes('provider=youtube'), 'PENW uses generic YouTube adapter')
 check(penw.includes('provider=sketchfab'), 'PENW uses generic Sketchfab adapter')
 check(penw.includes('::timeline'), 'PENW uses generic timeline block')
 check(!penw.toLowerCase().includes('genial.ly'), 'PENW no longer embeds Genially')
+
+check(leak.includes('::facts{'), 'Leak reuses generic project facts')
+check(leak.includes('::pipeline{'), 'Leak reuses generic system pipelines')
+check(leak.includes('provider=youtube'), 'Leak reuses YouTube adapter')
+check(leak.includes('provider=sketchfab'), 'Leak reuses Sketchfab adapter')
+check(leak.includes('provider=miro'), 'Leak reuses Miro adapter')
+check(leak.includes('::timeline'), 'Leak reuses generic timeline block')
+check(!leak.toLowerCase().includes('genial.ly'), 'Leak portfolio document omits Genially')
+
 check(!fs.existsSync('src/penw.js'), 'no PENW-specific runtime module')
 check(!fs.existsSync('src/leak.js'), 'no Leak-specific runtime module')
 
