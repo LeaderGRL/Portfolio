@@ -8,6 +8,15 @@ theme: synthwave
 link: https://www.youtube.com/watch?v=gchRNrRPOwI
 ---
 
+::facts{columns=2 label="PROJECT SNAPSHOT"}
+GENRE | RHYTHM GAME / ARCADE
+ENGINE | UNITY
+PLATFORM | CUSTOM ARCADE CABINET
+INPUT | BUTTONS + ROTARY ENCODERS
+TOOLING | WEB LEVEL EDITOR
+PERIOD | 2021 — 2023
+::
+
 ## THE EXPERIENCE
 
 Project Echo: Neon Wave was designed as a complete arcade experience rather than only a game executable. The software, physical cabinet, rotary controls, level editor and visual language were developed as parts of the same system.
@@ -28,6 +37,13 @@ The 3D cabinet below is the original project model hosted on Sketchfab. It uses 
 
 The game combines conventional arcade buttons with rotary encoders. The physical input design and the gameplay mechanic were developed together: turning a real control moves the corresponding slider in the game, making the cabinet part of the mechanic rather than a shell around it.
 
+::pipeline{label="PHYSICAL INPUT LOOP"}
+PHYSICAL CONTROL | ARCADE BUTTONS + ROTARY ENCODERS
+INPUT BRIDGE | HARDWARE SIGNAL / IOT LAYER
+UNITY INPUT | GAMEPLAY STATE + NOTE LOGIC
+PLAYER FEEDBACK | SLIDER MOVEMENT + CAMERA RESPONSE
+::
+
 ::note
 SYSTEM DESIGN — SOFTWARE, HARDWARE AND GAMEPLAY WERE ITERATED AS ONE INPUT LOOP.
 ::
@@ -35,6 +51,13 @@ SYSTEM DESIGN — SOFTWARE, HARDWARE AND GAMEPLAY WERE ITERATED AS ONE INPUT LOO
 ## LEVEL TOOLING
 
 A dedicated level editor was created to place notes against audio, iterate on timing and produce playable charts. This tooling became important because content iteration speed directly affected the quality of the rhythm design.
+
+::pipeline{label="AUTHORING LOOP"}
+AUDIO | IMPORT TRACK + READ TIMING
+CHART AUTHORING | PLACE NOTES AGAINST THE MUSIC
+LEVEL DATA | SAVE THE PLAYABLE SEQUENCE
+UNITY PLAYTEST | TEST RHYTHM, FEEDBACK AND DIFFICULTY
+::
 
 The editor evolved alongside the game instead of being treated as a disposable internal utility. That experience strongly influenced how I think about production tools today: reducing iteration cost is often as valuable as optimizing runtime code.
 
