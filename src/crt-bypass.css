@@ -14,7 +14,7 @@
 
 .tube.is-crt-off[data-display-mode="article"] #article-source,
 .tube.is-crt-off[data-display-mode="terminal"] #fallback2d,
-.tube.is-crt-off[data-display-mode="media"] #media-inspect-source{
+.tube.is-crt-off[data-display-mode="media"] #media-inspect-hires{
   display:block !important;
   position:absolute;
   inset:0;
@@ -28,19 +28,21 @@
 
 .tube.is-crt-off[data-display-mode="article"] #fallback2d,
 .tube.is-crt-off[data-display-mode="article"] #media-inspect-source,
+.tube.is-crt-off[data-display-mode="article"] #media-inspect-hires,
 .tube.is-crt-off[data-display-mode="terminal"] #article-source,
 .tube.is-crt-off[data-display-mode="terminal"] #media-inspect-source,
+.tube.is-crt-off[data-display-mode="terminal"] #media-inspect-hires,
 .tube.is-crt-off[data-display-mode="media"] #article-source,
-.tube.is-crt-off[data-display-mode="media"] #fallback2d{
+.tube.is-crt-off[data-display-mode="media"] #fallback2d,
+.tube.is-crt-off[data-display-mode="media"] #media-inspect-source{
   display:none !important;
 }
 
-/* Power state always wins over display mode. The direct source used by CRT
-   bypass must disappear too, otherwise the rocker changes state while the
-   last framebuffer remains visibly frozen on the tube. */
+/* Power state always wins over display mode. */
 .tube.is-powered-off.is-crt-off #article-source,
 .tube.is-powered-off.is-crt-off #fallback2d,
 .tube.is-powered-off.is-crt-off #media-inspect-source,
+.tube.is-powered-off.is-crt-off #media-inspect-hires,
 .tube.is-powered-off.is-crt-off #gl{
   display:none !important;
   opacity:0 !important;
@@ -48,16 +50,14 @@
   pointer-events:none !important;
 }
 
-/* Shade/gloss are optical CRT treatment too. Leaving them enabled made images
-   look bloomed or washed out even though the electronic shader was bypassed. */
+/* Shade/gloss are optical CRT treatment too. */
 .tube.is-crt-off .tube__shade,
 .tube.is-crt-off .tube__gloss{
   opacity:0 !important;
   visibility:hidden !important;
 }
 
-/* Native cross-origin integrations cannot be sampled by FRAG_CRT. Their
-   compositor optics therefore follow the same physical CRT switch. */
+/* Native cross-origin integrations follow the same CRT switch. */
 .tube.is-crt-off .document-inline-integration__surface{
   filter:none !important;
 }
@@ -75,9 +75,7 @@
   display:none !important;
 }
 
-/* Inline video embeds need breathing room before the next raster block. Keep
-   the layout height stable and reserve the bottom of the embed as whitespace
-   so scrolling / interaction geometry stays synchronized. */
+/* Inline video embeds need breathing room before the next raster block. */
 .document-inline-integration--youtube .document-inline-integration__surface,
 .document-inline-integration--youtube .document-inline-integration__activation{
   bottom:22px;
