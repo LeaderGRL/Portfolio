@@ -1,17 +1,13 @@
 /* ============================================================================
-   SHARED DISPLAY COMPOSITOR
+   SHARED DISPLAY PIPELINE
 
-   The chassis stylesheet owns the physical machine. This file owns the content
-   surface mounted behind the glass, so articles, games, software, WebGL/WASM
-   views and fullscreen mode all inherit the same optical contract.
+   `#gl` is the only visible electronic picture. Terminal, article and future
+   game/software sources are raster canvases sampled by the same CRT shader.
+   DOM stays above the picture only as an interaction/accessibility layer.
    ============================================================================ */
 
-.display-optics-defs{
-  position:absolute;
-  width:0;
-  height:0;
-  overflow:hidden;
-  pointer-events:none;
+.display-pixel-source{
+  display:none !important;
 }
 
 .display-surface{
@@ -27,32 +23,25 @@
   pointer-events:auto;
 }
 
-/* Native DOM pixels receive the same analogue character as the terminal: a
-   restrained bloom plus RGB edge separation. Hit testing still happens on the
-   original DOM geometry; only the composited pixels are filtered. */
-.tube.has-dom-surface:not(.is-crt-off) .display-surface{
-  filter:url("#display-crt-optics");
-}
-
 .display-surface .article-reader{
   z-index:1;
 }
 
-.crt-overlay{
-  position:absolute;
-  inset:0;
-  z-index:3;
-  width:100%;
-  height:100%;
-  display:block;
-  pointer-events:none;
-  opacity:1;
-  mix-blend-mode:normal;
-  transition:opacity .18s ease;
+/* In article mode the actual pixels come from #article-source -> #gl. The DOM
+   remains hit-testable for scrolling, links, video controls and accessibility,
+   but it must not visually cover the CRT output underneath. */
+.tube[data-display-mode="article"] .display-surface{
+  opacity:0;
 }
 
-/* The old article-only pseudo scanlines are replaced by the shared renderer.
-   Keeping both would double the pitch and make authored media excessively dark. */
+.tube[data-display-mode="terminal"] .display-surface{
+  visibility:hidden;
+  pointer-events:none;
+}
+
+/* Remove the old article-specific imitation CRT. The real FRAG_CRT now receives
+   article pixels directly, so an additional grille/scanline layer would double
+   the effect. */
 .tube.has-dom-surface::before,
 .tube.has-dom-surface::after,
 .tube.has-dom-surface .article-reader::before,
@@ -62,29 +51,13 @@
   animation:none !important;
 }
 
-.tube.is-crt-off .display-surface{
-  filter:none;
-}
-
-.tube.is-crt-off .crt-overlay,
-.tube.is-powered-off .crt-overlay{
-  opacity:0;
-}
-
 .tube.is-powered-off .display-surface{
   pointer-events:none;
 }
 
-/* Media should still communicate the work itself. The global CRT optics now
-   provide the analogue treatment, so the old destructive monochrome conversion
-   is softened instead of stacking another full phosphor conversion on top. */
-.tube.has-dom-surface:not(.is-crt-off) .article-reader__media img,
-.tube.has-dom-surface:not(.is-crt-off) .article-reader__media video{
-  filter:contrast(1.08) brightness(.93) saturate(.82) sepia(.18) hue-rotate(58deg);
-}
-
-/* Fullscreen reuses the exact same screen and compositor instead of creating a
-   parallel rendering path. This is important for future games and software. */
+/* Fullscreen enlarges the same physical display. The source resolution can stay
+   480x360 for the authentic mode or be upgraded per source later without
+   changing this layout contract. */
 .screen:fullscreen{
   width:100vw !important;
   height:100vh !important;
@@ -101,9 +74,5 @@
 }
 
 .screen:fullscreen .article-reader{
-  padding:max(42px, 5vh) max(56px, 8vw) max(64px, 8vh);
-}
-
-@media (prefers-reduced-motion: reduce){
-  .crt-overlay{ transition:none; }
+  inset:0;
 }
