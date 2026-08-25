@@ -62,6 +62,16 @@ export function attachArticleCRT(app) {
     Boolean(app.state?.item)
   )
 
+  const hasVisibleLocal3D = () => {
+    for (const entry of documentRaster.layout || []) {
+      if (entry.type !== 'model3d') continue
+      const top = entry.y - documentRaster.scroll
+      const bottom = top + entry.height
+      if (bottom > 1 && top < documentCanvas.height - 1) return true
+    }
+    return false
+  }
+
   const syncSource = () => {
     const documentItem = isDocument() ? app.state.item : null
     syncArticleReader(documentItem)
@@ -108,7 +118,13 @@ export function attachArticleCRT(app) {
     raf = requestAnimationFrame(mediaFrame)
     if (!isDocument()) return
 
-    local3d.tick(time)
+    // An off-screen auto-spinning model must not keep the whole CRT source
+    // dirty. Besides wasting GPU time, continuous repaints while scrolling can
+    // feed many successive document positions into the phosphor persistence
+    // buffer and create severe ghost trails. Pause local 3D completely until
+    // one of its blocks intersects the source viewport again.
+    if (hasVisibleLocal3D()) local3d.tick(time)
+
     interaction.sync()
     inlineIntegrations.sync()
     if (documentRaster.videoNodes.some(video => !video.paused && !video.ended && video.readyState >= 2)) {
