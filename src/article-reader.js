@@ -49,6 +49,10 @@ function richSpacer(block, height, label) {
   return section
 }
 
+function countRows(block) {
+  return String(block.body || '').split('\n').filter(line => line.trim()).length
+}
+
 function renderBlock(block) {
   switch (block.type) {
     case 'heading':
@@ -115,13 +119,22 @@ function renderBlock(block) {
     }
     case 'hero':
       return richSpacer(block, Number(block.height) || 242, block.title || block.eyebrow || 'Project hero')
+    case 'facts': {
+      const count = countRows(block)
+      const cols = Math.max(1, Math.min(3, Number(block.columns) || 2))
+      return richSpacer(block, Math.max(72, Math.ceil(count / cols) * 58 + 14), block.label || 'Project facts')
+    }
+    case 'pipeline': {
+      const count = countRows(block)
+      return richSpacer(block, Math.max(88, count * 42 + 18), block.label || 'System pipeline')
+    }
     case 'gallery': {
-      const count = String(block.body || '').split('\n').filter(line => line.trim()).length
+      const count = countRows(block)
       const cols = Math.max(1, Math.min(3, Number(block.columns) || 2))
       return richSpacer(block, Math.max(166, Math.ceil(count / cols) * 146 + 20), block.label || 'Project gallery')
     }
     case 'timeline': {
-      const count = String(block.body || '').split('\n').filter(line => line.trim()).length
+      const count = countRows(block)
       return richSpacer(block, Math.max(82, count * 34 + 22), block.label || 'Project timeline')
     }
     case 'compare':
