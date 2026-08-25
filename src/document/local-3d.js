@@ -9,6 +9,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
  * off-DOM and sampled by the document rasteriser, which means the model passes
  * through the exact same CRT shader as every other source pixel.
  *
+ * The canonical asset path is GLB/glTF. The lightweight `jg1500-model-1` JSON
+ * format is also supported for projects that need a tiny local geometry
+ * preview while preserving the exact same Three.js -> raster -> CRT contract.
+ * It describes primitive parts and transforms; it contains no project logic.
+ *
  * During interaction the same canvas is mounted as a nearly transparent input
  * proxy above the CRT. OrbitControls receives pointer/wheel events there while
  * the visible model remains the rasterised CRT result underneath.
@@ -89,16 +94,76 @@ class Local3DScene {
     this.scene.add(this.shadow)
 
     this.loader = new GLTFLoader()
+    this._loadModel(block.src)
+  }
+
+  _loadModel(src) {
+    const isManifest = String(src || '').startsWith('data:application/json') || /\.model\.json(?:$|[?#])/i.test(String(src || ''))
+    if (isManifest) {
+      fetch(src)
+        .then(response => {
+          if (!response.ok) throw new Error(`Local 3D manifest returned ${response.status}`)
+          return response.json()
+        })
+        .then(data => this._acceptManifest(data))
+        .catch(error => this._fail(error))
+      return
+    }
+
     this.loader.load(
-      block.src,
+      src,
       gltf => this._accept(gltf.scene),
       undefined,
-      error => {
-        this.failed = true
-        console.warn('Local 3D model failed to load', error)
-        this.onDirty()
-      },
+      error => this._fail(error),
     )
+  }
+
+  _fail(error) {
+    this.failed = true
+    console.warn('Local 3D model failed to load', error)
+    this.onDirty()
+  }
+
+  _acceptManifest(data) {
+    if (data?.format !== 'jg1500-model-1' || !Array.isArray(data.parts)) {
+      this._fail(new Error('Unsupported local 3D manifest'))
+      return
+    }
+
+    const model = new THREE.Group()
+    for (const part of data.parts) {
+      if (!Array.isArray(part.size) || part.size.length !== 3) continue
+      const opacity = Number.isFinite(Number(part.opacity)) ? Number(part.opacity) : 1
+      const material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(part.color || '#808080'),
+        metalness: Number(part.metalness) || 0,
+        roughness: Number.isFinite(Number(part.roughness)) ? Number(part.roughness) : 0.65,
+        transparent: opacity < 1,
+        opacity,
+        depthWrite: opacity >= 0.98,
+        side: opacity < 1 ? THREE.DoubleSide : THREE.FrontSide,
+      })
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(
+          Math.max(Number(part.size[0]) || 0.01, 0.001),
+          Math.max(Number(part.size[1]) || 0.01, 0.001),
+          Math.max(Number(part.size[2]) || 0.01, 0.001),
+        ),
+        material,
+      )
+      mesh.name = String(part.name || '')
+      if (Array.isArray(part.matrix) && part.matrix.length === 16) {
+        mesh.matrix.set(...part.matrix.map(Number))
+        mesh.matrixAutoUpdate = false
+      }
+      model.add(mesh)
+    }
+
+    if (!model.children.length) {
+      this._fail(new Error('Local 3D manifest contains no renderable parts'))
+      return
+    }
+    this._accept(model)
   }
 
   _fitCamera(radius) {
