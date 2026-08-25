@@ -40,9 +40,9 @@ PANEL | CUSTOM MEASURED CONTROL SURFACE
 DISPLAY | GAME + CABINET DESIGNED TOGETHER
 ::
 
-The cabinet below is rendered locally with Three.js from geometry extracted from the original project model. Its visible pixels stay inside the document framebuffer, so rotation, lighting and animation pass through the same CRT shader as the text and local media around it.
+The cabinet below is rendered locally with Three.js from the original project geometry. Its visible pixels stay inside the document framebuffer, so rotation and lighting pass through the same CRT shader as the text and local media around it.
 
-::model3d{src=assets/arcade-cabinet.model.json label="ARCADE CABINET / LOCAL THREE.JS" autospin=0.10 exposure=1.18}
+::model3d{src=/media/penw/arcade-cabinet.glb label="ARCADE CABINET / LOCAL THREE.JS" autospin=0.06 exposure=1.12 shadow=off}
 
 ## INPUT SYSTEM
 
