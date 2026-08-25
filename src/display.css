@@ -2,8 +2,8 @@
    SHARED DISPLAY PIPELINE
 
    `#gl` is the primary electronic picture. Terminal and document sources feed
-   the same CRT shader. Native interaction is exposed explicitly only when a
-   block needs controls that cannot live inside the raster source itself.
+   the same CRT shader. Cross-origin integrations can be mounted inline above
+   the electronic picture while remaining below the photographic glass stack.
    ============================================================================ */
 
 .display-pixel-source{
@@ -47,6 +47,59 @@
   width:100%;
   height:100%;
   image-rendering:pixelated;
+}
+
+/* Inline third-party integrations. The layer itself never blocks the tube;
+   only the currently visible provider boxes receive input. */
+.document-inline-integrations{
+  position:absolute;
+  inset:0;
+  z-index:3;
+  overflow:hidden;
+  pointer-events:none;
+}
+
+.document-inline-integrations[hidden]{
+  display:none !important;
+}
+
+.document-inline-integration{
+  position:absolute;
+  pointer-events:auto;
+  overflow:hidden;
+  background:transparent;
+}
+
+.document-inline-integration .article-interaction__embed{
+  display:block;
+  width:100%;
+  height:100%;
+  border:0;
+  background:transparent;
+}
+
+/* A very light optical texture visually ties native iframes back to the CRT.
+   It is deliberately weaker than the real FRAG_CRT used by local pixels. */
+.document-inline-integration--youtube::after,
+.document-inline-integration--sketchfab::after,
+.document-inline-integration--miro::after,
+.document-inline-integration--google::after,
+.document-inline-integration--iframe::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:
+    repeating-linear-gradient(0deg, rgba(0,6,3,.10) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at center, transparent 58%, rgba(0,18,8,.12) 100%);
+  mix-blend-mode:multiply;
+}
+
+/* Local Three.js is different: the mounted canvas is only an input proxy. The
+   visible 3D pixels continue through article-source -> FRAG_CRT underneath. */
+.document-inline-integration--local-3d{
+  background:transparent;
+  overflow:visible;
 }
 
 .article-interact-trigger{
@@ -128,9 +181,6 @@
   opacity:.40;
 }
 
-/* Local Three.js interaction is different from iframe interaction. The visible
-   model remains in #article-source -> FRAG_CRT. This overlay only captures
-   pointer/wheel input, so its renderer canvas is intentionally near-invisible. */
 .article-interaction.is-model3d-interaction{
   inset:0;
   border:0;
@@ -197,11 +247,13 @@
 }
 
 .tube.is-powered-off .display-surface,
+.tube.is-powered-off .document-inline-integrations,
 .tube.is-powered-off .article-interact-trigger,
 .tube.is-powered-off .article-interaction{
   pointer-events:none;
 }
 
+.tube.is-powered-off .document-inline-integrations,
 .tube.is-powered-off .article-interact-trigger,
 .tube.is-powered-off .article-interaction{
   display:none !important;
