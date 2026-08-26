@@ -6,13 +6,6 @@ import { SRC_H, SRC_W } from '../core.js'
  * Cross-origin iframe pixels cannot be sampled by the CRT WebGL shader. They
  * can, however, remain embedded in the physical screen and receive compositor
  * optics without exposing their pixels to JavaScript.
- *
- * Interaction policy:
- * - integrations are visible immediately;
- * - wheel always belongs to the document while the shield is active;
- * - YouTube stays shielded permanently and is controlled through postMessage;
- * - integrations that require direct pointer input can still opt into a short
- *   active state, restored to scroll mode when the pointer leaves.
  * ========================================================================== */
 export class InlineIntegrationController {
   constructor({ tube, rasteriser, registry }) {
@@ -30,6 +23,9 @@ export class InlineIntegrationController {
     this.layer.className = 'document-inline-integrations'
     this.layer.setAttribute('aria-label', 'Interactive project integrations')
     this.tube?.append(this.layer)
+
+    this.onWindowMessage = event => this._handleProviderMessage(event)
+    addEventListener('message', this.onWindowMessage)
   }
 
   get isPoweredOn() {
@@ -53,9 +49,7 @@ export class InlineIntegrationController {
     try {
       image = ctx.createImageData?.(size, size)
     } catch {}
-    if (!image?.data || image.data.length < size * size * 4) {
-      return this._neutralBarrelMap()
-    }
+    if (!image?.data || image.data.length < size * size * 4) return this._neutralBarrelMap()
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -161,22 +155,57 @@ export class InlineIntegrationController {
 
   _scrollDocument(deltaY) {
     const reader = this.rasteriser?.reader
-    if (!reader) return
-    reader.scrollTop += deltaY
+    if (reader) reader.scrollTop += deltaY
+  }
+
+  _youtubeIframe(instance) {
+    return instance?.surface?.querySelector('iframe') || null
   }
 
   _postYouTube(instance, command) {
-    const iframe = instance?.surface?.querySelector('iframe')
-    iframe?.contentWindow?.postMessage?.(
+    this._youtubeIframe(instance)?.contentWindow?.postMessage?.(
       JSON.stringify({ event: 'command', func: command, args: [] }),
       '*',
     )
   }
 
+  _setYouTubeState(instance, state) {
+    if (!instance || !Number.isFinite(Number(state))) return
+    instance.youtubeState = Number(state)
+    const playing = instance.youtubeState === 1
+    instance.host.classList.toggle('is-playing', playing)
+    instance.shield?.setAttribute(
+      'aria-label',
+      playing
+        ? 'Pause embedded video; use the wheel to scroll the document'
+        : 'Play embedded video; use the wheel to scroll the document',
+    )
+  }
+
+  _handleProviderMessage(event) {
+    for (const instance of this.instances.values()) {
+      if (instance.descriptor?.provider !== 'youtube') continue
+      const iframe = this._youtubeIframe(instance)
+      if (!iframe?.contentWindow || event.source !== iframe.contentWindow) continue
+
+      let data = event.data
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data) } catch { continue }
+      }
+      if (!data || typeof data !== 'object') continue
+
+      if (data.event === 'onStateChange') {
+        this._setYouTubeState(instance, data.info)
+      } else if (data.event === 'infoDelivery' && Number.isFinite(Number(data.info?.playerState))) {
+        this._setYouTubeState(instance, data.info.playerState)
+      }
+    }
+  }
+
   _toggleYouTube(instance) {
-    instance.youtubePlaying = !instance.youtubePlaying
-    this._postYouTube(instance, instance.youtubePlaying ? 'playVideo' : 'pauseVideo')
-    instance.host.classList.toggle('is-playing', instance.youtubePlaying)
+    // State 1 is the only confirmed playing state. Unknown, ended, cued,
+    // unstarted and paused states all safely issue playVideo.
+    this._postYouTube(instance, instance.youtubeState === 1 ? 'pauseVideo' : 'playVideo')
   }
 
   _setActive(instance, active) {
@@ -216,7 +245,7 @@ export class InlineIntegrationController {
       shield.setAttribute(
         'aria-label',
         resolved.provider === 'youtube'
-          ? 'Play or pause embedded video; use the wheel to scroll the document'
+          ? 'Play embedded video; use the wheel to scroll the document'
           : 'Activate embedded integration',
       )
     }
@@ -237,7 +266,7 @@ export class InlineIntegrationController {
       cleanup: typeof cleanup === 'function' ? cleanup : null,
       entry,
       descriptor,
-      youtubePlaying: false,
+      youtubeState: null,
     }
 
     const relayWheel = event => {
@@ -333,6 +362,7 @@ export class InlineIntegrationController {
 
   destroy() {
     this.clear()
+    removeEventListener('message', this.onWindowMessage)
     this.layer.remove()
   }
 }
