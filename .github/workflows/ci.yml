@@ -12,55 +12,6 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
-jobs:
-  build-and-test:
-    name: Build and test
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install asset pipeline dependencies
-        run: python -m pip install pillow numpy scipy
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Generate assets
-        run: npm run assets
-
-      - name: Build production bundle
-        run: npm run build
-
-      - name: Run tests
-        run: npm test
-name: CI
-
-on:
-  workflow_dispatch:
-  pull_request:
-  push:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
-
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: leadergrl/portfolio
@@ -105,7 +56,7 @@ jobs:
     name: Publish production image
     needs: build-and-test
 
-    # Only publish after a successful push to master.
+    # Only publish production after a successful push to master.
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
 
     runs-on: ubuntu-latest
