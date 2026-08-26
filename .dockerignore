@@ -1,0 +1,13 @@
+.git
+.gitignore
+
+node_modules
+dist
+assets/build
+
+Dockerfile
+compose.yml
+
+README.md
+
+*.log
