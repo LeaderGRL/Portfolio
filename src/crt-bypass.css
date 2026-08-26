@@ -1,0 +1,82 @@
+/* ============================================================================
+   CRT OFF BYPASS
+
+   The physical CRT switch is authoritative. When it is OFF, show the selected
+   source canvas directly instead of the WebGL composite and remove the optical
+   glass overlays. The bezel remains because it is part of the machine, but the
+   picture itself becomes a neutral digital display for inspecting media.
+   ============================================================================ */
+
+.tube.is-crt-off #gl{
+  visibility:hidden !important;
+  opacity:0 !important;
+}
+
+.tube.is-crt-off[data-display-mode="article"] #article-source,
+.tube.is-crt-off[data-display-mode="terminal"] #fallback2d,
+.tube.is-crt-off[data-display-mode="media"] #media-inspect-hires{
+  display:block !important;
+  position:absolute;
+  inset:0;
+  z-index:2;
+  width:100%;
+  height:100%;
+  opacity:1 !important;
+  visibility:visible !important;
+  image-rendering:auto;
+}
+
+.tube.is-crt-off[data-display-mode="article"] #fallback2d,
+.tube.is-crt-off[data-display-mode="article"] #media-inspect-source,
+.tube.is-crt-off[data-display-mode="article"] #media-inspect-hires,
+.tube.is-crt-off[data-display-mode="terminal"] #article-source,
+.tube.is-crt-off[data-display-mode="terminal"] #media-inspect-source,
+.tube.is-crt-off[data-display-mode="terminal"] #media-inspect-hires,
+.tube.is-crt-off[data-display-mode="media"] #article-source,
+.tube.is-crt-off[data-display-mode="media"] #fallback2d,
+.tube.is-crt-off[data-display-mode="media"] #media-inspect-source{
+  display:none !important;
+}
+
+/* Power state always wins over display mode. */
+.tube.is-powered-off.is-crt-off #article-source,
+.tube.is-powered-off.is-crt-off #fallback2d,
+.tube.is-powered-off.is-crt-off #media-inspect-source,
+.tube.is-powered-off.is-crt-off #media-inspect-hires,
+.tube.is-powered-off.is-crt-off #gl{
+  display:none !important;
+  opacity:0 !important;
+  visibility:hidden !important;
+  pointer-events:none !important;
+}
+
+/* Shade/gloss are optical CRT treatment too. */
+.tube.is-crt-off .tube__shade,
+.tube.is-crt-off .tube__gloss{
+  opacity:0 !important;
+  visibility:hidden !important;
+}
+
+/* Native cross-origin integrations follow the same CRT switch. */
+.tube.is-crt-off .document-inline-integration__surface{
+  filter:none !important;
+}
+
+.tube.is-crt-off .document-inline-integration--youtube::before,
+.tube.is-crt-off .document-inline-integration--youtube::after,
+.tube.is-crt-off .document-inline-integration--sketchfab::before,
+.tube.is-crt-off .document-inline-integration--sketchfab::after,
+.tube.is-crt-off .document-inline-integration--miro::before,
+.tube.is-crt-off .document-inline-integration--miro::after,
+.tube.is-crt-off .document-inline-integration--google::before,
+.tube.is-crt-off .document-inline-integration--google::after,
+.tube.is-crt-off .document-inline-integration--iframe::before,
+.tube.is-crt-off .document-inline-integration--iframe::after{
+  display:none !important;
+}
+
+/* Inline video embeds need breathing room before the next raster block. */
+.document-inline-integration--youtube .document-inline-integration__surface,
+.document-inline-integration--youtube .document-inline-integration__activation{
+  bottom:22px;
+}

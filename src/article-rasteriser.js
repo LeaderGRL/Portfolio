@@ -1,4 +1,5 @@
 import { SRC_H, SRC_W } from './core.js'
+import { getDocumentTheme } from './document/themes.js'
 
 const COLORS = {
   bg: '#031009',
@@ -8,6 +9,8 @@ const COLORS = {
   bright: '#6bf39a',
   core: '#b9ffc9',
   amber: '#ffb347',
+  glowInner: 'rgba(16,64,36,.36)',
+  glowOuter: 'rgba(2,10,5,0)',
 }
 
 const FONT = 'ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace'
@@ -27,13 +30,14 @@ function stripInline(text = '') {
 }
 
 export class ArticleRasteriser {
-  constructor(canvas, reader, onDirty = () => {}) {
+  constructor(canvas, reader, onDirty = () => {}, options = {}) {
     this.canvas = canvas
     this.canvas.width = SRC_W
     this.canvas.height = SRC_H
     this.ctx = canvas.getContext('2d', { alpha: false })
     this.reader = reader
     this.onDirty = onDirty
+    this.blockRegistry = options.blockRegistry || null
     this.item = null
     this.scroll = 0
     this.maxScroll = 0
@@ -56,6 +60,7 @@ export class ArticleRasteriser {
   setItem(item) {
     if (this.item?.id === item?.id) return false
     this.item = item || null
+    Object.assign(COLORS, getDocumentTheme(this.item?.theme))
     this.scroll = 0
     this.layout = []
     this.videoNodes = []
@@ -83,6 +88,19 @@ export class ArticleRasteriser {
     return out
   }
 
+  _blockEnv() {
+    return {
+      rasteriser: this,
+      item: this.item,
+      images: this.images,
+      colors: COLORS,
+      loadImage: src => this._loadImage(src),
+      drawLines: (...args) => this._drawLines(...args),
+      wrap: (text, width, size, weight = 500) => this._measureWrapped(text, width, size, weight),
+      markDirty: () => this.markDirty(),
+    }
+  }
+
   _layout() {
     const x = 42
     const width = SRC_W - x * 2
@@ -92,7 +110,7 @@ export class ArticleRasteriser {
       y += entry.height
     }
 
-    push({ type: 'eyebrow', text: 'ARTICLE / LOCAL ARCHIVE', height: 23 })
+    push({ type: 'eyebrow', text: 'DOCUMENT / LOCAL ARCHIVE', height: 23 })
     const title = this._measureWrapped(this.item.label || '', width, 18, 700)
     push({ type: 'title', lines: title, height: Math.max(28, title.length * 21 + 7) })
     if (this.item.sub) {
@@ -102,7 +120,16 @@ export class ArticleRasteriser {
     push({ type: 'rule', height: 24 })
 
     let videoIndex = 0
+    const env = this._blockEnv()
     for (const block of this.item.blocks || []) {
+      const handler = this.blockRegistry?.get(block.type)
+      if (handler?.measure) {
+        const measured = handler.measure(this.ctx, block, env) || {}
+        push({ type: block.type, block, height: measured.height || 120, meta: measured.meta })
+        handler.preload?.(block, env)
+        continue
+      }
+
       switch (block.type) {
         case 'heading': {
           const size = block.level >= 3 ? 11 : 13
@@ -137,7 +164,7 @@ export class ArticleRasteriser {
           this._loadImage(block.src)
           break
         case 'video':
-          push({ type: 'video', block, videoIndex: videoIndex++, height: 220 })
+          push({ type: 'video', block, videoIndex: videoIndex++, height: Number(block.height) || 236 })
           break
         case 'embed':
           push({ type: 'embed', block, height: 150 })
@@ -192,7 +219,9 @@ export class ArticleRasteriser {
     let best = null
     let bestVisible = 0
     for (const entry of this.layout) {
-      if (entry.type !== 'video' && entry.type !== 'embed') continue
+      const handler = this.blockRegistry?.get(entry.type)
+      const interactive = entry.type === 'video' || entry.type === 'embed' || Boolean(handler?.getInteraction)
+      if (!interactive) continue
       const top = entry.y - this.scroll
       const bottom = top + entry.height
       const visible = Math.max(0, Math.min(bottom, SRC_H - 20) - Math.max(top, 20))
@@ -202,6 +231,23 @@ export class ArticleRasteriser {
       }
     }
     return bestVisible >= 32 ? best : null
+  }
+
+  getInteraction(entry) {
+    if (!entry) return null
+    if (entry.type === 'video') {
+      return {
+        provider: 'video',
+        block: entry.block,
+        entry,
+        inline: true,
+        direct: true,
+      }
+    }
+    if (entry.type === 'embed') return { provider: entry.block.provider || 'iframe', block: entry.block, entry }
+    const handler = this.blockRegistry?.get(entry.type)
+    const descriptor = handler?.getInteraction?.(entry.block, entry, this._blockEnv())
+    return descriptor ? { ...descriptor, entry } : null
   }
 
   _drawLines(lines, x, y, size, lineHeight, color, weight = 500) {
@@ -215,7 +261,7 @@ export class ArticleRasteriser {
     const g = this.ctx
     const x = entry.x
     const maxW = entry.width
-    const maxH = entry.height - 24
+    const maxH = entry.height - 28
 
     if (source && (source.complete || source.readyState >= 2)) {
       const sw = source.videoWidth || source.naturalWidth || source.width || 1
@@ -226,19 +272,41 @@ export class ArticleRasteriser {
       const dx = x + (maxW - dw) * .5
       const dy = y + (maxH - dh) * .5
 
-      // Transparent images composite directly over the article phosphor.
-      // Videos remain opaque presentation surfaces and keep their own frame.
-      if (entry.type === 'video') {
-        g.fillStyle = '#010805'
-        g.fillRect(dx, dy, dw, dh)
-      }
-
       try { g.drawImage(source, dx, dy, dw, dh) } catch {}
 
       if (entry.type === 'video') {
         g.strokeStyle = COLORS.dim
         g.lineWidth = 1
         g.strokeRect(dx + .5, dy + .5, Math.max(0, dw - 1), Math.max(0, dh - 1))
+        const playing = !source.paused && !source.ended
+
+        if (!playing) {
+          const buttonW = 68
+          const buttonH = 30
+          const bx = dx + (dw - buttonW) * .5
+          const by = dy + (dh - buttonH) * .5
+          g.fillStyle = 'rgba(1,8,4,.82)'
+          g.fillRect(bx, by, buttonW, buttonH)
+          g.strokeStyle = COLORS.mid
+          g.strokeRect(bx + .5, by + .5, buttonW - 1, buttonH - 1)
+          this._font(10, 700)
+          g.fillStyle = COLORS.amber
+          g.textAlign = 'center'
+          g.textBaseline = 'middle'
+          g.fillText('▶ PLAY', bx + buttonW * .5, by + buttonH * .5 + .5)
+          g.textAlign = 'left'
+          g.textBaseline = 'alphabetic'
+        }
+
+        this._drawLines(
+          [playing ? 'PAUSE' : 'PLAY'],
+          dx + 8,
+          dy + dh - 9,
+          7,
+          9,
+          playing ? COLORS.core : COLORS.amber,
+          700,
+        )
       }
       return
     }
@@ -262,8 +330,8 @@ export class ArticleRasteriser {
     g.fillStyle = COLORS.bg
     g.fillRect(0, 0, SRC_W, SRC_H)
     const glow = g.createRadialGradient(SRC_W * .43, SRC_H * .35, 8, SRC_W * .5, SRC_H * .5, SRC_W * .62)
-    glow.addColorStop(0, 'rgba(16,64,36,.36)')
-    glow.addColorStop(1, 'rgba(2,10,5,0)')
+    glow.addColorStop(0, COLORS.glowInner)
+    glow.addColorStop(1, COLORS.glowOuter)
     g.fillStyle = glow
     g.fillRect(0, 0, SRC_W, SRC_H)
 
@@ -272,10 +340,17 @@ export class ArticleRasteriser {
     g.rect(26, 20, SRC_W - 52, SRC_H - 40)
     g.clip()
 
+    const env = this._blockEnv()
     for (const entry of this.layout) {
       const y = entry.y - this.scroll
       if (y + entry.height < 14 || y > SRC_H - 8) continue
       const x = entry.x
+
+      const handler = this.blockRegistry?.get(entry.type)
+      if (handler?.paint) {
+        handler.paint(g, entry.block, { ...entry, y }, env)
+        continue
+      }
 
       switch (entry.type) {
         case 'eyebrow':
@@ -300,7 +375,7 @@ export class ArticleRasteriser {
           break
         case 'code': {
           const h = entry.height - 9
-          g.fillStyle = '#010b06'; g.fillRect(x, y, entry.width, h)
+          g.fillStyle = COLORS.panel; g.fillRect(x, y, entry.width, h)
           g.strokeStyle = COLORS.dim; g.strokeRect(x + .5, y + .5, entry.width - 1, h - 1)
           if (entry.language) {
             this._drawLines([entry.language.toUpperCase()], x + 9, y + 13, 7, 9, COLORS.amber, 700)
@@ -316,7 +391,7 @@ export class ArticleRasteriser {
           this._drawMediaFrame(entry, y, this.videoNodes[entry.videoIndex])
           break
         case 'embed': {
-          g.fillStyle = '#010b06'; g.fillRect(x, y, entry.width, entry.height - 10)
+          g.fillStyle = COLORS.panel; g.fillRect(x, y, entry.width, entry.height - 10)
           g.strokeStyle = COLORS.dim; g.strokeRect(x + .5, y + .5, entry.width - 1, entry.height - 11)
           this._drawLines(['EXTERNAL / INTERACTIVE SURFACE', entry.block.label || entry.block.title || 'OPEN EMBED'], x + 12, y + 28, 9, 18, COLORS.amber, 700)
           this._drawLines(['Use INTERACT when this block is visible.'], x + 12, y + 70, 8, 12, COLORS.mid, 500)
@@ -324,8 +399,8 @@ export class ArticleRasteriser {
         }
         case 'note': {
           g.fillStyle = 'rgba(255,179,71,.07)'; g.fillRect(x, y, entry.width, entry.height - 8)
-          g.fillStyle = COLORS.amber; g.fillRect(x, y, 2, entry.height - 8)
-          this._drawLines(entry.lines, x + 12, y + 16, 9, 15, COLORS.bright, 500)
+          g.strokeStyle = 'rgba(255,179,71,.42)'; g.strokeRect(x + .5, y + .5, entry.width - 1, entry.height - 9)
+          this._drawLines(entry.lines, x + 11, y + 16, 10, 15, COLORS.amber, 600)
           break
         }
       }

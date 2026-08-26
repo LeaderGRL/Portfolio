@@ -38,9 +38,8 @@
     </div>
 
     <!-- One physical CRT, multiple pixel sources. `gl` is always the visible
-         WebGL output. `fallback2d` and `article-source` are source canvases.
-         Native video/iframe UI is mounted temporarily above the framebuffer
-         only while the user explicitly enters interaction mode. -->
+         WebGL output. Local document media is rasterised into article-source;
+         cross-origin integrations are mounted inline below the glass stack. -->
     <div class="screen" id="screen">
       <div class="tube" id="tube" data-display-mode="terminal">
         <canvas id="gl"></canvas>
@@ -50,17 +49,6 @@
         <div class="display-surface" id="display-surface">
           <article class="article-reader" id="article-reader" tabindex="0" hidden></article>
         </div>
-
-        <button class="article-interact-trigger" id="article-interact-trigger" type="button" hidden>
-          INTERACT
-        </button>
-
-        <section class="article-interaction" id="article-interaction" aria-label="Interactive article media" hidden>
-          <button class="article-interaction__close" id="article-interaction-close" type="button" aria-label="Close interactive media">
-            × CLOSE
-          </button>
-          <div class="article-interaction__content" id="article-interaction-content"></div>
-        </section>
 
         <img class="tube__shade" alt="" data-asset="glass-shade">
         <img class="tube__gloss tube__gloss--soft" alt="" data-asset="glass-gloss">

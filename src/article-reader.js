@@ -1,9 +1,8 @@
-/* Rich article surface inside the physical CRT aperture.
+/* Rich semantic document surface inside the physical CRT aperture.
  *
- * The raster terminal remains the canonical navigation and accessibility
- * representation. Article detail gets this DOM layer so authored media can
- * retain the semantics a canvas cannot provide: selectable code, native video
- * controls, responsive images, and sandboxed third-party embeds.
+ * Visible pixels come from the raster/CRT pipeline. This DOM mirror owns
+ * semantics, native media controls and the scroll range used by long-form
+ * ARTICLES and PROJECTS.
  */
 
 const make = (tag, className, text) => {
@@ -42,6 +41,88 @@ function appendInline(node, value = '') {
 
 const makeRich = (tag, className, text) => appendInline(make(tag, className), text)
 
+function richSpacer(block, height, label) {
+  const section = make('section', 'article-reader__rich-spacer')
+  section.style.minHeight = `${height}px`
+  section.dataset.blockType = block.type
+  section.setAttribute('aria-label', label)
+  return section
+}
+
+function countRows(block) {
+  return String(block.body || '').split('\n').filter(line => line.trim()).length
+}
+
+function clampMediaHeight(value) {
+  const height = Number(value) || 246
+  return Math.max(150, Math.min(340, height))
+}
+
+function mediaGap(value) {
+  const gap = Number(value)
+  if (Number.isFinite(gap)) return Math.max(12, Math.min(48, gap))
+  return 24
+}
+
+let volumeObserver = null
+let observedVolumeControl = null
+let mediaLifecycleBound = false
+let powerObserver = null
+
+function panelMediaVolume() {
+  const control = document.getElementById('volume')
+  const value = Number(control?.getAttribute('aria-valuenow'))
+  if (!Number.isFinite(value)) return 0.35
+  return Math.max(0, Math.min(1, value / 100))
+}
+
+function syncPanelMediaVolume(reader = document.getElementById('article-reader')) {
+  if (!reader) return
+  const volume = panelMediaVolume()
+  for (const video of reader.querySelectorAll('video')) video.volume = volume
+}
+
+export function pauseArticleMedia(reader = document.getElementById('article-reader')) {
+  if (!reader) return
+  for (const video of reader.querySelectorAll('video')) {
+    if (!video.paused) video.pause()
+  }
+}
+
+function bindPanelMediaVolume() {
+  const control = document.getElementById('volume')
+  if (!control || observedVolumeControl === control) return
+
+  volumeObserver?.disconnect()
+  observedVolumeControl = control
+  volumeObserver = new MutationObserver(() => syncPanelMediaVolume())
+  volumeObserver.observe(control, {
+    attributes: true,
+    attributeFilter: ['aria-valuenow'],
+  })
+}
+
+function bindMediaLifecycle() {
+  if (mediaLifecycleBound) return
+  mediaLifecycleBound = true
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pauseArticleMedia()
+  })
+  addEventListener('pagehide', () => pauseArticleMedia())
+
+  const tube = document.getElementById('tube')
+  if (tube) {
+    powerObserver = new MutationObserver(() => {
+      if (tube.classList.contains('is-powered-off')) pauseArticleMedia()
+    })
+    powerObserver.observe(tube, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+  }
+}
+
 function renderBlock(block) {
   switch (block.type) {
     case 'heading':
@@ -77,31 +158,23 @@ function renderBlock(block) {
       const frame = make('div', 'article-reader__frame')
       const video = make('video')
       video.src = block.src
-      video.controls = true
-      video.preload = 'metadata'
+      video.controls = false
+      video.preload = 'none'
       video.playsInline = true
+      video.volume = panelMediaVolume()
       if (block.loop) {
         video.loop = true
         video.autoplay = true
         video.muted = true
+        video.preload = 'auto'
       }
       frame.append(video)
       figure.append(frame)
       if (block.alt) figure.append(make('figcaption', '', block.alt))
       return figure
     }
-    case 'embed': {
-      const frame = make('div', 'article-reader__embed')
-      const iframe = make('iframe')
-      iframe.src = block.src
-      iframe.title = block.title || block.label || 'Article integration'
-      iframe.loading = 'lazy'
-      iframe.referrerPolicy = 'strict-origin-when-cross-origin'
-      iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups')
-      frame.append(iframe)
-      if (block.label) frame.append(make('p', 'article-reader__caption', block.label))
-      return frame
-    }
+    case 'embed':
+      return richSpacer(block, Number(block.height) || 214, block.title || block.label || 'Interactive integration')
     case 'note':
       return make('aside', 'article-reader__note', block.body || '')
     case 'figure': {
@@ -109,6 +182,37 @@ function renderBlock(block) {
       pre.textContent = [block.cols, block.body].filter(Boolean).join('\n')
       return pre
     }
+    case 'hero':
+      return richSpacer(block, Number(block.height) || 242, block.title || block.eyebrow || 'Project hero')
+    case 'media':
+      return richSpacer(block, clampMediaHeight(block.height) + mediaGap(block.gap), block.label || 'Project media')
+    case 'facts': {
+      const count = countRows(block)
+      const cols = Math.max(1, Math.min(3, Number(block.columns) || 2))
+      return richSpacer(block, Math.max(72, Math.ceil(count / cols) * 58 + 14), block.label || 'Project facts')
+    }
+    case 'system': {
+      const count = countRows(block)
+      const cols = Math.max(1, Math.min(2, Number(block.columns) || 2))
+      return richSpacer(block, Math.max(98, Math.ceil(count / cols) * 78 + 20), block.label || 'System overview')
+    }
+    case 'pipeline': {
+      const count = countRows(block)
+      return richSpacer(block, Math.max(88, count * 42 + 18), block.label || 'System pipeline')
+    }
+    case 'gallery': {
+      const count = countRows(block)
+      const cols = Math.max(1, Math.min(3, Number(block.columns) || 2))
+      return richSpacer(block, Math.max(166, Math.ceil(count / cols) * 146 + 20), block.label || 'Project gallery')
+    }
+    case 'timeline': {
+      const count = countRows(block)
+      return richSpacer(block, Math.max(82, count * 34 + 22), block.label || 'Project timeline')
+    }
+    case 'compare':
+      return richSpacer(block, 224, block.label || 'Before and after comparison')
+    case 'model3d':
+      return richSpacer(block, 248, block.label || block.title || 'Interactive 3D model')
     default:
       return null
   }
@@ -119,7 +223,12 @@ let currentId = null
 export function syncArticleReader(item) {
   const reader = document.getElementById('article-reader')
   if (!reader) return
+
+  bindPanelMediaVolume()
+  bindMediaLifecycle()
+
   if (!item) {
+    pauseArticleMedia(reader)
     reader.hidden = true
     reader.setAttribute('aria-hidden', 'true')
     currentId = null
@@ -128,12 +237,17 @@ export function syncArticleReader(item) {
 
   reader.hidden = false
   reader.setAttribute('aria-hidden', 'false')
-  if (currentId === item.id) return
+  if (currentId === item.id) {
+    syncPanelMediaVolume(reader)
+    return
+  }
+
+  pauseArticleMedia(reader)
   currentId = item.id
   reader.replaceChildren()
 
   const header = make('header', 'article-reader__header')
-  header.append(make('p', 'article-reader__eyebrow', 'ARTICLE / LOCAL ARCHIVE'))
+  header.append(make('p', 'article-reader__eyebrow', 'DOCUMENT / LOCAL ARCHIVE'))
   header.append(make('h1', 'article-reader__title', item.label))
   if (item.sub) header.append(make('p', 'article-reader__sub', item.sub))
   reader.append(header)
@@ -142,6 +256,7 @@ export function syncArticleReader(item) {
     const node = renderBlock(block)
     if (node) reader.append(node)
   }
+  syncPanelMediaVolume(reader)
   reader.scrollTop = 0
 }
 
@@ -149,6 +264,9 @@ export function articleReaderScroll(command) {
   const reader = document.getElementById('article-reader')
   if (!reader || reader.hidden) return false
   const page = Math.max(120, reader.clientHeight * 0.82)
+  const line = Math.max(28, reader.clientHeight * 0.08)
+  if (command === 'line-down') reader.scrollBy({ top: line, behavior: 'smooth' })
+  if (command === 'line-up') reader.scrollBy({ top: -line, behavior: 'smooth' })
   if (command === 'down') reader.scrollBy({ top: page, behavior: 'smooth' })
   if (command === 'up') reader.scrollBy({ top: -page, behavior: 'smooth' })
   if (command === 'home') reader.scrollTo({ top: 0, behavior: 'smooth' })
