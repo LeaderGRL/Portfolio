@@ -18,6 +18,17 @@ if (!/^[a-z0-9][a-z0-9-_]*$/.test(project)) {
   process.exit(1)
 }
 
+const isPlainFilename = (
+  !path.isAbsolute(filename) &&
+  filename === path.basename(filename) &&
+  filename === path.posix.basename(filename) &&
+  filename === path.win32.basename(filename)
+)
+if (!isPlainFilename) {
+  console.error('The destination filename must not contain a path')
+  process.exit(1)
+}
+
 if (!filename.toLowerCase().endsWith('.glb')) {
   console.error('The destination filename must end in .glb')
   process.exit(1)
