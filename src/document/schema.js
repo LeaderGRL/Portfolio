@@ -12,19 +12,19 @@ export const BLOCK_DEFINITIONS = Object.freeze({
   prose: Object.freeze({ kind: 'text' }),
   list: Object.freeze({ kind: 'text' }),
   code: Object.freeze({ kind: 'text' }),
-  figure: Object.freeze({ kind: 'text' }),
-  note: Object.freeze({ kind: 'text' }),
+  figure: Object.freeze({ kind: 'text', body: true }),
+  note: Object.freeze({ kind: 'text', body: true }),
 
   image: Object.freeze({ kind: 'media', assetFields: ['src'] }),
   video: Object.freeze({ kind: 'media', assetFields: ['src'], interactive: true }),
 
   hero: Object.freeze({ kind: 'composition', assetFields: ['media', 'poster'] }),
   media: Object.freeze({ kind: 'composition', assetFields: ['src'], interactive: true }),
-  facts: Object.freeze({ kind: 'composition' }),
-  system: Object.freeze({ kind: 'composition' }),
-  pipeline: Object.freeze({ kind: 'composition' }),
-  gallery: Object.freeze({ kind: 'composition' }),
-  timeline: Object.freeze({ kind: 'composition' }),
+  facts: Object.freeze({ kind: 'composition', body: true }),
+  system: Object.freeze({ kind: 'composition', body: true }),
+  pipeline: Object.freeze({ kind: 'composition', body: true }),
+  gallery: Object.freeze({ kind: 'composition', body: true }),
+  timeline: Object.freeze({ kind: 'composition', body: true }),
   compare: Object.freeze({ kind: 'composition', assetFields: ['before', 'after'] }),
 
   model3d: Object.freeze({
