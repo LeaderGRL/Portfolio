@@ -106,15 +106,11 @@ function bindMediaLifecycle() {
   if (mediaLifecycleBound) return
   mediaLifecycleBound = true
 
-  // Hidden browser tabs and page navigation must never leave portfolio media
-  // playing in the background. Playback only resumes after a fresh user action.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) pauseArticleMedia()
   })
   addEventListener('pagehide', () => pauseArticleMedia())
 
-  // The machine power switch is represented by the physical tube state. Keep
-  // the media lifecycle tied to that state without coupling it to CRT effects.
   const tube = document.getElementById('tube')
   if (tube) {
     powerObserver = new MutationObserver(() => {
@@ -163,8 +159,6 @@ function renderBlock(block) {
       const video = make('video')
       video.src = block.src
       video.controls = false
-      // Local project video is user-initiated. Avoid fetching metadata/media for
-      // every project video during document construction; play() triggers load.
       video.preload = 'none'
       video.playsInline = true
       video.volume = panelMediaVolume()
@@ -248,7 +242,6 @@ export function syncArticleReader(item) {
     return
   }
 
-  // Explicitly stop the previous document before replacing its media nodes.
   pauseArticleMedia(reader)
   currentId = item.id
   reader.replaceChildren()
@@ -271,6 +264,9 @@ export function articleReaderScroll(command) {
   const reader = document.getElementById('article-reader')
   if (!reader || reader.hidden) return false
   const page = Math.max(120, reader.clientHeight * 0.82)
+  const line = Math.max(28, reader.clientHeight * 0.08)
+  if (command === 'line-down') reader.scrollBy({ top: line, behavior: 'smooth' })
+  if (command === 'line-up') reader.scrollBy({ top: -line, behavior: 'smooth' })
   if (command === 'down') reader.scrollBy({ top: page, behavior: 'smooth' })
   if (command === 'up') reader.scrollBy({ top: -page, behavior: 'smooth' })
   if (command === 'home') reader.scrollTo({ top: 0, behavior: 'smooth' })
