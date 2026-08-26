@@ -58,6 +58,12 @@ function clampMediaHeight(value) {
   return Math.max(150, Math.min(340, height))
 }
 
+function mediaGap(value) {
+  const gap = Number(value)
+  if (Number.isFinite(gap)) return Math.max(12, Math.min(48, gap))
+  return 24
+}
+
 function renderBlock(block) {
   switch (block.type) {
     case 'heading':
@@ -93,7 +99,7 @@ function renderBlock(block) {
       const frame = make('div', 'article-reader__frame')
       const video = make('video')
       video.src = block.src
-      video.controls = true
+      video.controls = false
       video.preload = 'metadata'
       video.playsInline = true
       if (block.loop) {
@@ -118,7 +124,7 @@ function renderBlock(block) {
     case 'hero':
       return richSpacer(block, Number(block.height) || 242, block.title || block.eyebrow || 'Project hero')
     case 'media':
-      return richSpacer(block, clampMediaHeight(block.height), block.label || 'Project media')
+      return richSpacer(block, clampMediaHeight(block.height) + mediaGap(block.gap), block.label || 'Project media')
     case 'facts': {
       const count = countRows(block)
       const cols = Math.max(1, Math.min(3, Number(block.columns) || 2))
