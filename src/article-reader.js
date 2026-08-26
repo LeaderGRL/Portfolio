@@ -66,6 +66,8 @@ function mediaGap(value) {
 
 let volumeObserver = null
 let observedVolumeControl = null
+let mediaLifecycleBound = false
+let powerObserver = null
 
 function panelMediaVolume() {
   const control = document.getElementById('volume')
@@ -80,6 +82,13 @@ function syncPanelMediaVolume(reader = document.getElementById('article-reader')
   for (const video of reader.querySelectorAll('video')) video.volume = volume
 }
 
+export function pauseArticleMedia(reader = document.getElementById('article-reader')) {
+  if (!reader) return
+  for (const video of reader.querySelectorAll('video')) {
+    if (!video.paused) video.pause()
+  }
+}
+
 function bindPanelMediaVolume() {
   const control = document.getElementById('volume')
   if (!control || observedVolumeControl === control) return
@@ -91,6 +100,31 @@ function bindPanelMediaVolume() {
     attributes: true,
     attributeFilter: ['aria-valuenow'],
   })
+}
+
+function bindMediaLifecycle() {
+  if (mediaLifecycleBound) return
+  mediaLifecycleBound = true
+
+  // Hidden browser tabs and page navigation must never leave portfolio media
+  // playing in the background. Playback only resumes after a fresh user action.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pauseArticleMedia()
+  })
+  addEventListener('pagehide', () => pauseArticleMedia())
+
+  // The machine power switch is represented by the physical tube state. Keep
+  // the media lifecycle tied to that state without coupling it to CRT effects.
+  const tube = document.getElementById('tube')
+  if (tube) {
+    powerObserver = new MutationObserver(() => {
+      if (tube.classList.contains('is-powered-off')) pauseArticleMedia()
+    })
+    powerObserver.observe(tube, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+  }
 }
 
 function renderBlock(block) {
@@ -194,8 +228,10 @@ export function syncArticleReader(item) {
   if (!reader) return
 
   bindPanelMediaVolume()
+  bindMediaLifecycle()
 
   if (!item) {
+    pauseArticleMedia(reader)
     reader.hidden = true
     reader.setAttribute('aria-hidden', 'true')
     currentId = null
@@ -208,6 +244,9 @@ export function syncArticleReader(item) {
     syncPanelMediaVolume(reader)
     return
   }
+
+  // Explicitly stop the previous document before replacing its media nodes.
+  pauseArticleMedia(reader)
   currentId = item.id
   reader.replaceChildren()
 
