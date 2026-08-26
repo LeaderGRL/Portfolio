@@ -22,6 +22,7 @@ export function attachArticleCRT(app) {
 
   const terminalCanvas = app.raster.canvas
   const terminalPaint = app.raster.paint.bind(app.raster)
+  const previousDisplayPipeline = app.displayPipeline
   const pipeline = new DisplayPipeline({
     crt: app.crt,
     sources: {
@@ -39,12 +40,7 @@ export function attachArticleCRT(app) {
     onChange: ({ open } = {}) => {
       app.dirty = true
       if (open) inlineIntegrations?.clear?.()
-      else {
-        // The viewer temporarily owns article-source. When it closes, force the
-        // document rasteriser to repaint the exact same scroll position before
-        // the next CRT upload.
-        documentRaster?.markDirty?.()
-      }
+      else documentRaster?.markDirty?.()
     },
   })
   const local3d = new Local3DManager(() => {
@@ -69,15 +65,16 @@ export function attachArticleCRT(app) {
     Boolean(app.state?.item)
   )
 
-  const hasVisibleLocal3D = () => {
-    if (mediaViewer.isOpen) return false
+  const visibleLocal3DBlocks = () => {
+    if (mediaViewer.isOpen) return []
+    const visible = []
     for (const entry of documentRaster.layout || []) {
       if (entry.type !== 'model3d') continue
       const top = entry.y - documentRaster.scroll
       const bottom = top + entry.height
-      if (bottom > 1 && top < documentCanvas.height - 1) return true
+      if (bottom > 1 && top < documentCanvas.height - 1) visible.push(entry.block)
     }
-    return false
+    return visible
   }
 
   const syncSource = () => {
@@ -90,8 +87,6 @@ export function attachArticleCRT(app) {
       inlineIntegrations.clear()
     }
 
-    // Media inspection intentionally reuses the document source. The viewer
-    // owns article-source while open, so no third WebGL source is selected.
     const nextId = documentItem ? 'document' : 'terminal'
     if (pipeline.setSource(nextId)) {
       app.dirty = true
@@ -108,11 +103,7 @@ export function attachArticleCRT(app) {
 
   app.raster.paint = (term, reveal, cursorOn) => {
     syncSource()
-    if (mediaViewer.isOpen) {
-      // The MediaViewer owns article-source while open. Returning true ensures
-      // App.frame uploads those pixels to the existing CRT texture this frame.
-      return true
-    }
+    if (mediaViewer.isOpen) return true
     if (isDocument()) {
       const painted = documentRaster.paint(true)
       progressOverlay.paint(documentRaster)
@@ -149,7 +140,7 @@ export function attachArticleCRT(app) {
       return
     }
 
-    if (hasVisibleLocal3D()) local3d.tick(time)
+    for (const block of visibleLocal3DBlocks()) local3d.tick(block, time)
 
     inlineIntegrations.sync()
     if (documentRaster.videoNodes.some(video => !video.paused && !video.ended && video.readyState >= 2)) {
@@ -177,12 +168,15 @@ export function attachArticleCRT(app) {
     destroy() {
       cancelAnimationFrame(raf)
       app.back = originalBack
+      app.render = originalRender
       inlineIntegrations.destroy()
       mediaViewer.destroy()
       local3d.dispose()
       syncArticleReader(null)
       app.raster.paint = terminalPaint
       pipeline.setSource('terminal')
+      if (previousDisplayPipeline === undefined) delete app.displayPipeline
+      else app.displayPipeline = previousDisplayPipeline
       tube.dataset.displayMode = 'terminal'
       tube.classList.remove('has-dom-surface', 'is-reading', 'is-media-inspecting')
       delete app.__articleCRTBridge
