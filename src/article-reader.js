@@ -12,7 +12,7 @@ const make = (tag, className, text) => {
   return node
 }
 
-const INLINE_TOKEN = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_)/g
+const INLINE_TOKEN = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*\*?|_[^_\n]+_)/g
 
 function appendInline(node, value = '') {
   let cursor = 0
@@ -64,6 +64,35 @@ function mediaGap(value) {
   return 24
 }
 
+let volumeObserver = null
+let observedVolumeControl = null
+
+function panelMediaVolume() {
+  const control = document.getElementById('volume')
+  const value = Number(control?.getAttribute('aria-valuenow'))
+  if (!Number.isFinite(value)) return 0.35
+  return Math.max(0, Math.min(1, value / 100))
+}
+
+function syncPanelMediaVolume(reader = document.getElementById('article-reader')) {
+  if (!reader) return
+  const volume = panelMediaVolume()
+  for (const video of reader.querySelectorAll('video')) video.volume = volume
+}
+
+function bindPanelMediaVolume() {
+  const control = document.getElementById('volume')
+  if (!control || observedVolumeControl === control) return
+
+  volumeObserver?.disconnect()
+  observedVolumeControl = control
+  volumeObserver = new MutationObserver(() => syncPanelMediaVolume())
+  volumeObserver.observe(control, {
+    attributes: true,
+    attributeFilter: ['aria-valuenow'],
+  })
+}
+
 function renderBlock(block) {
   switch (block.type) {
     case 'heading':
@@ -102,6 +131,7 @@ function renderBlock(block) {
       video.controls = false
       video.preload = 'metadata'
       video.playsInline = true
+      video.volume = panelMediaVolume()
       if (block.loop) {
         video.loop = true
         video.autoplay = true
@@ -162,6 +192,9 @@ let currentId = null
 export function syncArticleReader(item) {
   const reader = document.getElementById('article-reader')
   if (!reader) return
+
+  bindPanelMediaVolume()
+
   if (!item) {
     reader.hidden = true
     reader.setAttribute('aria-hidden', 'true')
@@ -171,7 +204,10 @@ export function syncArticleReader(item) {
 
   reader.hidden = false
   reader.setAttribute('aria-hidden', 'false')
-  if (currentId === item.id) return
+  if (currentId === item.id) {
+    syncPanelMediaVolume(reader)
+    return
+  }
   currentId = item.id
   reader.replaceChildren()
 
@@ -185,6 +221,7 @@ export function syncArticleReader(item) {
     const node = renderBlock(block)
     if (node) reader.append(node)
   }
+  syncPanelMediaVolume(reader)
   reader.scrollTop = 0
 }
 
