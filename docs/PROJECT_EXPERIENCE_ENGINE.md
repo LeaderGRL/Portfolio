@@ -69,15 +69,19 @@ This removes an unnecessary competing visual state from the CRT pipeline.
 
 ## Local video lifecycle
 
-User-started local video uses `preload="none"`. Playback is explicit and obeys the physical machine:
+User-started local video begins with `preload="none"` while the document is constructed. When its block becomes visible, the inline video adapter promotes that element to `preload="auto"` and calls `load()` so the browser can decode the first frame without starting playback. This avoids an empty `MEDIA LOADING...` state while still preventing every MP4 in a long project from loading at once.
+
+Playback remains explicit and obeys the physical machine:
 
 ```text
-click / keyboard  -> play / pause
-VOLUME             -> media volume
-POWER OFF          -> pause
-project switch     -> pause
-browser hidden     -> pause
-return / power on  -> remain paused until user action
+block offscreen        -> no eager video request
+block becomes visible  -> load/decode first frame
+click / keyboard       -> play / pause
+VOLUME                 -> media volume
+POWER OFF              -> pause
+project switch         -> pause
+browser hidden         -> pause
+return / power on      -> remain paused until user action
 ```
 
 Autoplay loops are a special case: they must be muted and may opt into eager loading.
@@ -87,7 +91,7 @@ Autoplay loops are a special case: they must be muted and may opt into eager loa
 The engine avoids eagerly constructing a complete rich project in memory:
 
 - large `media`, `gallery` and `compare` images request their asset on first visible paint;
-- local user-started video uses `preload="none"`;
+- local user-started video is created with `preload="none"`, then only the visible block is promoted and decoded far enough to expose its first frame;
 - remote iframes use `loading="lazy"` and are only mounted for visible blocks;
 - local 3D animation ticks only while the model block intersects the CRT viewport;
 - image decode results are cached in the document rasteriser;
@@ -148,7 +152,6 @@ There is no PENW-specific runtime code.
 
 LEAK stresses a very different project structure:
 
-- three local MP4 sequences through the same real CRT video path as PENW;
 - ordered survival/information loop;
 - Director Utility AI + Creature Behavior Tree represented as non-linear systems;
 - movement/noise/distraction counterplay;
@@ -156,10 +159,10 @@ LEAK stresses a very different project structure:
 - diegetic audio decryption workflow;
 - environment-production decisions;
 - Skull optimization study;
-- Sketchfab, YouTube and Miro fallbacks where local equivalents are not yet curated;
+- local project videos plus YouTube/Sketchfab/Miro fallbacks where appropriate;
 - development timeline and team process.
 
-There is **no Leak-specific runtime code**. `Leak.mp4`, the hiding-system demo and the character demo are local. A fourth ambiguously named `Leak (1).mp4` is intentionally not referenced until its role is verified rather than guessed.
+There is **no Leak-specific runtime code**. Curated static imagery and a redistributable Skull GLB remain optional asset upgrades.
 
 ## Graceful degradation
 
@@ -182,7 +185,7 @@ Static/DOM smoke tests lock the architecture around:
 - shared schema/block/provider registration;
 - media inspector layering;
 - configurable/lazy editorial media;
-- local video play/pause, volume and lifecycle;
+- local video first-frame loading, play/pause, volume and lifecycle;
 - lazy remote iframes;
 - Three.js disposal and offscreen animation gating;
 - PENW and LEAK both using the same engine.
@@ -195,10 +198,10 @@ A passing build is necessary but not sufficient. Before merge, manually exercise
 
 1. PENW desktop with CRT ON and OFF;
 2. image inspection and return to the same scroll position;
-3. PENW local video play/pause, VOLUME and POWER OFF;
-4. PENW local 3D rotate/scroll/zoom/reset;
+3. local video first-frame preview, play/pause, VOLUME and POWER OFF;
+4. local 3D rotate/scroll/zoom/reset;
 5. browser-tab background pause;
-6. LEAK main/hiding/character local videos, Skull viewer and Miro scrolling;
+6. LEAK local videos, Skull viewer and Miro scrolling;
 7. one mobile viewport for PENW and LEAK;
 8. a long scroll from top to bottom looking for semantic/raster drift.
 
@@ -209,15 +212,14 @@ A passing build is necessary but not sufficient. Before merge, manually exercise
 - [x] Local image/video/3D pixels remain eligible for the real CRT shader.
 - [x] Cross-origin integrations are inline and visibility-gated.
 - [x] Image inspection remains inside the CRT.
+- [x] Visible local video decodes its first frame without requiring playback.
 - [x] Local video follows physical volume and power state.
 - [x] Background browser tabs cannot leave local project video playing.
 - [x] Large editorial media and external iframes have lazy-loading boundaries.
 - [x] Three.js teardown disposes GPU resources.
 - [x] Legacy generic interaction modal has been removed.
 - [x] PENW has local MP4 and local GLB reference-quality paths.
-- [x] LEAK has local main/hiding/character MP4s and reuses the same video lifecycle.
 - [x] LEAK can express its AI/gameplay/design structure without project-specific code.
-- [ ] Curated local LEAK static images and a redistributable Skull GLB remain optional asset-quality upgrades.
 - [ ] Final visual browser QA must still be performed on desktop and mobile before taking the PR out of Draft.
 
 See `docs/ADDING_PROJECTS.md` for the authoring reference.
