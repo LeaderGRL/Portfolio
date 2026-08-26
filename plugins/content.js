@@ -81,7 +81,7 @@ function parseRawIframe(lines, start) {
   }
 }
 
-function parseBody(body, file) {
+export function parseBody(body, file = 'document') {
   const blocks = []
   const lines = body.split('\n')
   let i = 0
@@ -155,13 +155,21 @@ function parseBody(body, file) {
           `Register it in src/document/schema.js before using it in content.`)
       }
 
-      const hasBody = i + 1 < lines.length && lines[i + 1].trim() !== ''
+      const definition = getBlockDefinition(head.name)
       const inner = []
       i++
-      if (hasBody) {
-        while (i < lines.length && lines[i].trim() !== '::') { inner.push(lines[i]); i++ }
-        if (i < lines.length) i++
+
+      if (definition?.body) {
+        while (i < lines.length && lines[i].trim() !== '::') {
+          inner.push(lines[i])
+          i++
+        }
+        if (i >= lines.length) {
+          throw new Error(`${file}: multiline directive "::${head.name}" is missing its closing "::"`)
+        }
+        i++
       }
+
       blocks.push({ type: head.name, ...head.attrs, body: inner.join('\n').trim() })
       continue
     }
@@ -268,7 +276,7 @@ function readCollection(dir) {
     const path = join(dir, entry)
     const stat = statSync(path)
     if (stat.isFile() && extname(entry) === '.md') {
-      documents.push(readDocument(path, basename(entry, '.md')))
+      documents.push(readDocument(path, basename(entry, '.md'))
       continue
     }
     if (stat.isDirectory()) {
