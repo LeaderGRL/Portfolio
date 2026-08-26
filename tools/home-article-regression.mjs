@@ -28,7 +28,7 @@ check(integrations.includes('Open document image'), 'media inspector copy is pro
 check(frogbyte.includes('https://github.com/FrogbyteEngine/Frogbyte'), 'Frogbyte points to the current organization repository')
 check(frogbyte.includes('MIRI'), 'Frogbyte documents memory-model validation')
 check(frogbyte.includes('DEPENDABOT'), 'Frogbyte documents dependency automation')
-check(frogbyte.includes('GENERational'.toUpperCase().slice(0, 0)) || frogbyte.includes('GENERATIONAL'), 'Frogbyte documents generational entity identity')
+check(/generational/i.test(frogbyte), 'Frogbyte documents generational entity identity')
 check(!/Benchmarked against Bevy/i.test(frogbyte), 'stale Bevy benchmark claim has been removed')
 check(!/frogbyte-bench\.png/i.test(frogbyte), 'missing benchmark image is no longer referenced')
 
