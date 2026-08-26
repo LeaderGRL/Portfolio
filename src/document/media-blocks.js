@@ -27,9 +27,9 @@ function hasPanelBackground(block) {
   return !['off', 'false', 'none', 'transparent', '0'].includes(value)
 }
 
-function paintPanel(g, x, y, width, height, env, enabled = true) {
+function paintPanel(g, x, y, width, height, enabled = true, color = '#020d07') {
   if (!enabled) return
-  g.fillStyle = env.colors.panel
+  g.fillStyle = color
   g.fillRect(x, y, width, height)
 }
 
@@ -50,7 +50,10 @@ export function enhanceMediaBlocks(registry) {
       const mediaH = Math.max(1, visualHeight - footerH)
       const panel = hasPanelBackground(block)
 
-      paintPanel(g, layout.x, layout.y, layout.width, visualHeight, env, panel)
+      // Keep the original near-black media well used before configurable
+      // backgrounds were introduced. It is intentionally darker than the
+      // general document panel token so technical drawings remain isolated.
+      paintPanel(g, layout.x, layout.y, layout.width, visualHeight, panel, '#020d07')
 
       const painted = drawByFit(
         g,
@@ -119,7 +122,7 @@ export function enhanceMediaBlocks(registry) {
         const y = layout.y + row * 146
         const mediaH = cellH - 23
 
-        paintPanel(g, x, y, cellW, cellH, env, panel)
+        paintPanel(g, x, y, cellW, cellH, panel, '#020d07')
         drawByFit(g, imageFrom(env, item.value), x, y, cellW, mediaH, fit)
 
         if (item.label) {
@@ -165,7 +168,7 @@ export function enhanceMediaBlocks(registry) {
 
       entries.forEach(([src, label], index) => {
         const x = layout.x + index * (half + gap)
-        paintPanel(g, x, layout.y, half, mediaH, env, panel)
+        paintPanel(g, x, layout.y, half, mediaH, panel, '#020c06')
         drawByFit(g, imageFrom(env, src), x, layout.y, half, mediaH, fit)
         if (panel) {
           g.fillStyle = 'rgba(1,9,5,.78)'
