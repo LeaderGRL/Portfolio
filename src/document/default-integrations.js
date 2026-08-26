@@ -108,6 +108,15 @@ function localVideoAdapter() {
       const video = rasteriser?.videoNodes?.[entry?.videoIndex]
       if (!video) return null
 
+      // Video elements start with preload="none" so a long project does not
+      // fetch every MP4 during document construction. This adapter is mounted
+      // only while the corresponding block is visible, which makes it the
+      // correct boundary for decoding the first frame without starting playback.
+      if (video.preload === 'none' && video.readyState < 2) {
+        video.preload = 'auto'
+        try { video.load() } catch {}
+      }
+
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'document-media-hotspot document-video-hotspot'
