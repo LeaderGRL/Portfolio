@@ -121,8 +121,12 @@ export const PAGES = {
     chrome(t, "HOME");
     const s = 4;
     const w = bitmapWidth(CONTENT.identity.name, s);
-    t.op(0, g => {
-      const x = (SRC_W - w) / 2, y = 52;
+
+    // The headline belongs to rows 2-4. It previously used an absolute y=52
+    // inside op(0), which put its upper pixels on top of chrome()'s header rule.
+    t.opAt(2, (g, py) => {
+      const x = (SRC_W - w) / 2;
+      const y = py + 2;
       g.save(); g.globalAlpha = 0.35;
       bitmapText(g, CONTENT.identity.name, x - 1, y - 1, s, SHADE.dim);
       g.restore();
@@ -132,9 +136,9 @@ export const PAGES = {
     t.center(7, '"' + CONTENT.identity.tagline + '"', "dim");
 
     t.box(2, 9, 23, 7, "STATUS", "dim");
-    t.put(5, 10, "STATE   AVAILABLE", "bright");
-    t.put(5, 11, "BASE    PARIS / FR", "mid");
-    t.put(5, 12, "STACK   RUST·C#·TS", "mid");
+    t.put(5, 10, `STATE   ${CONTENT.identity.state || 'AVAILABLE'}`, "bright");
+    t.put(5, 11, `BASE    ${CONTENT.identity.base || ''}`, "mid");
+    t.put(5, 12, `STACK   ${(CONTENT.identity.stack || '').replace(/\s+/g, '')}`, "mid");
     t.put(5, 13, "UPTIME  " + st.uptime, "dim");
     t.put(5, 14, "TUBE    P1 OK", "dim");
 
