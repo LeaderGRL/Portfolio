@@ -99,6 +99,46 @@ function mediaCompareAdapter(viewer) {
   }
 }
 
+function localVideoAdapter() {
+  return {
+    mount({ host, context }) {
+      const entry = context?.entry
+      const rasteriser = context?.rasteriser
+      const video = rasteriser?.videoNodes?.[entry?.videoIndex]
+      if (!video) return null
+
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'document-media-hotspot document-video-hotspot'
+      button.style.inset = '0'
+      button.setAttribute('aria-label', 'Play or pause local project video')
+
+      const toggle = async () => {
+        if (video.paused || video.ended) {
+          try { await video.play() } catch {}
+        } else {
+          video.pause()
+        }
+        rasteriser.markDirty()
+      }
+
+      button.addEventListener('click', event => {
+        event.preventDefault()
+        event.stopPropagation()
+        toggle()
+      })
+      button.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        toggle()
+      })
+
+      host.append(button)
+      return () => button.remove()
+    },
+  }
+}
+
 export function createDefaultIntegrationRegistry({ local3d, mediaViewer }) {
   const registry = new IntegrationRegistry()
 
@@ -110,6 +150,7 @@ export function createDefaultIntegrationRegistry({ local3d, mediaViewer }) {
     },
   })
 
+  registry.register('video', localVideoAdapter())
   registry.register('media-single', mediaSingleAdapter(mediaViewer))
   registry.register('media-gallery', mediaGalleryAdapter(mediaViewer))
   registry.register('media-compare', mediaCompareAdapter(mediaViewer))
