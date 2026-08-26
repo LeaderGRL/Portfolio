@@ -1,204 +1,143 @@
 ---
 title: CROSSATRO
-sub: Turning a crossword roguelite into a system the player learns to disobey
-status: PROTOTYPE / ACTIVE DEVELOPMENT
-year: 2025
-stack: [Unity, C#, Procedural Generation, Systems Design, Narrative Design]
+sub: A crossword roguelite built around procedural grids, scoring builds and collectible floppies
+status: PROTOTYPE / DEVELOPMENT ENDED
+year: 2025–2026
+stack: [Unity, C#, Procedural Generation, Event-Driven Systems, Game Design]
+link: https://github.com/LeaderGRL/Crossatro
 ---
 
-Crossatro started as a small crossword roguelite built around a simple question: **can solving words create the same kind of build-making decisions as a card roguelike?**
+Crossatro started as a small game-jam prototype around language and eventually became a much more interesting systems problem: **how do you make a crossword support the same kind of build decisions as a roguelite?**
 
-The first prototype answered the mechanical part. A procedural crossword grid gives the player words to solve, validated words become score, and a shop turns that score into a run through modifiers and collectible floppy disks.
+The answer was not to make the clues harder. It was to make every solved word feed a larger economy of score, currency and modifiers, then let collectible floppy disks change how those words are valued.
 
-That worked, but it was still a game about making numbers larger.
+That gave the project two useful layers. The crossword provides readable, deterministic decisions. The roguelite systems make the value of those decisions change from run to run.
 
-The version I am building now keeps that system and gives the interface a second job. The player is no longer just solving crosswords. They are **CW-7321**, an artificial intelligence being trained inside a company that measures every grid as a productivity session. The same UI that explains the rules gradually starts leaking information it was never supposed to reveal.
+Crossatro is no longer in active production. What remains is a playable Unity prototype and a fairly developed systems foundation around procedural grids, scoring, turns, enemies, a shop and an event-driven floppy-effect architecture.
 
-The objective is to make the roguelite and the narrative use the same machinery instead of placing a story on top of a puzzle game.
+::video{src="/media/crossatro/demo.mp4" alt="Crossatro prototype gameplay showing the crossword board, scoring, turns and shop"}
 
-::video{src="/media/crossatro/demo.mp4" alt="Crossatro prototype gameplay showing the procedural crossword grid, word interaction, score and shop"}
+## FROM GAME JAM TO ROGUELITE
 
-## FROM GAME JAM TO SYSTEMIC ROGUELITE
+The first version of Crossatro was built during a game jam around the theme of language. The basic loop was already there: generate crossword structures, let the player solve words and turn correct answers into score.
 
-Crossatro began during a game jam around the theme of language. The original version already had the basic ingredients: letters arranged into crossword structures, score, bonuses and modifiers that encouraged the player to search for more profitable words rather than simply the correct answer.
+When I returned to the project, the problem was that a correct word was mostly just a correct word. Once the clue had been solved, there was very little left to think about.
 
-When I returned to the project, the interesting problem was no longer how to make another crossword mode. It was how to make the player **reinterpret the same systems over time**.
+The roguelite layer was my way of changing that. A word could now be easy but strategically poor, difficult but extremely profitable, or valuable only because the current build happened to reward its letters, length or timing.
 
-That led to two parallel forms of progression:
-
-- a conventional roguelite progression, where score, currency and equipped objects create stronger runs;
-- a knowledge progression, where the player learns that apparently decorative feedback, corrupted messages and strange objects are parts of a larger machine.
-
-The first one lets the player optimize the game.
-
-The second one teaches them how to stop trusting it.
+The project stopped being only about **finding the answer** and became more about **deciding which correct answer matters right now**.
 
 ::facts{columns=2 label="PROJECT FOUNDATION"}
-GENRE | CROSSWORD ROGUELITE + PUZZLE + METROIDBRAINIA
+GENRE | CROSSWORD ROGUELITE / PUZZLE
 ENGINE | UNITY
+LANGUAGE | C#
 ROLE | SOLO GAME PROGRAMMER / DESIGNER
-PLAYER IDENTITY | CW-7321 / AI TRAINING INSTANCE
-CORE LOOP | SOLVE WORDS + BUILD SCORE + BUY MODIFIERS
-META LOOP | OBSERVE ANOMALIES + FORM HYPOTHESES + TEST THE SYSTEM
-PLATFORM TARGET | PC / MAC
-STATE | PLAYABLE ROGUELITE PROTOTYPE + NARRATIVE SYSTEM IN DEVELOPMENT
+CORE LOOP | SELECT + SOLVE + SCORE + BUILD
+RUN SYSTEMS | TURNS + HEALTH + ENEMIES + CURRENCY
+BUILD SYSTEM | FIVE-SLOT FLOPPY DECK
+STATE | PLAYABLE PROTOTYPE / DEVELOPMENT ENDED
 ::
 
 ## THE PLAYABLE CORE
 
-The current prototype already implements the part Crossatro needs before the stranger ideas can work: the player has to believe in the crossword game first.
+The board is generated from a word database rather than authored as a fixed crossword. The generation pipeline separates **word placement** from **board presentation**: placement logic produces intersecting words, then the grid generator materializes those positions as tiles and binds the result to the playable board.
 
-A run is built from successive procedural grids. Selecting a tile chooses a horizontal or vertical word, opens its clue and lets the player enter a proposed answer. Validated words feed score and currency, while mistakes and run constraints create pressure around which words are worth attempting and when.
+That separation mattered because the board is not only a visual crossword. It is also the shared surface used by input, scoring, turn flow, special tiles and later effects.
 
-The grid is presented as a small isometric object rather than a flat newspaper crossword. That choice gives each tile enough physical presence to later carry states, special properties and narrative anomalies without turning the board into a spreadsheet.
-
-::media{src="/media/crossatro/game-ui-attempts.webp" label="CURRENT PROTOTYPE / WORD ATTEMPTS AND GRID STATE" fit=contain height=300 background=off}
-
-::media{src="/media/crossatro/game-ui-validated.webp" label="CURRENT PROTOTYPE / VALIDATED GRID, SCORE, COINS AND FLOPPY INVENTORY" fit=contain height=300 background=off}
-
-The important distinction is that **correctness and value are not the same thing**. A word can be valid without being strategically optimal. Letter values, word difficulty, length and equipped modifiers are designed to make two correct answers worth very different amounts.
-
-The scoring model explored for the current design is deliberately compositional:
-
-::figure{cols=SCORE,COMPONENTS}
-S_final = round((S_letters + B_letters) × M_diff × M_len × B_mult)
-M_diff = 1 + difficulty × 0.5
-M_len = 1 + word_length × 0.1
+::pipeline{label="GRID PIPELINE"}
+DATABASE | SUPPLIES WORDS, CLUES AND DIFFICULTY DATA
+PLACEMENT | BUILDS INTERSECTING HORIZONTAL / VERTICAL WORDS
+GRID | CONVERTS WORD POSITIONS INTO PLAYABLE TILE LOCATIONS
+BOARD | OWNS SELECTION, TILE STATE AND PLAYER INTERACTION
+VALIDATION | RESOLVES THE WORD AND FEEDS THE REST OF THE RUN
 ::
 
-That formula is less interesting for its exact constants than for what it enables: modifiers can intervene at different stages of the calculation. One floppy can reward vowels, another can multiply a specific word length, another can replay a letter contribution, and a future balance pass can change one layer without rewriting the whole scoring model.
+The player selects a word through the grid, reads its clue, enters an answer and validates it. Intersections make the board progressively easier to read because a solved word contributes letters to several future decisions at once.
 
-## THE SHOP IS THE BUILD
+::media{src="/media/crossatro/game-ui-validated.webp" label="PLAYABLE PROTOTYPE / CROSSWORD GRID, RUN HUD AND VALIDATED WORD STATE" fit=contain height=300 background=off gap=12}
 
-Between grids, the player spends currency in the **Floppy Shop**. The run can carry a limited number of floppy disks, so buying an object is not only an upgrade decision; it is also a commitment to a particular scoring strategy.
+The isometric presentation was useful here. Tiles have enough physical presence to communicate selection, validation and special states without reducing the crossword to a spreadsheet of letters.
 
-The object families are designed around different kinds of intervention:
+## SCORING SHOULD EXPLAIN THE BUILD
 
-- **floppy disks** define persistent rules for the current build;
-- **cartridges** modify points attached to particular letters or conditions;
-- **cassettes** are consumable effects that can solve an immediate problem or expose information.
+The score system was designed so modifiers could intervene at several levels instead of every floppy becoming another hard-coded exception.
 
-::media{src="/media/crossatro/game-ui-shop.webp" label="CURRENT PROTOTYPE / FLOPPY SHOP AND BUILD SELECTION" fit=contain height=300 background=off}
+A completed word produces a scoring result, and the active floppy deck can modify that result before it is committed. The deck also exposes a preview path so the game can evaluate the effect of modifiers without permanently mutating the run state.
 
-The point is not to fill an inventory with +10% upgrades. The best objects should make the player look at the same crossword differently. A five-letter word can become valuable because of one disk, vowels can become a resource because of another, and a mediocre-looking section of the grid can suddenly be the correct route through the run.
+That distinction sounds small, but it is important for a build-driven game: the player needs to understand **why** a word is valuable before committing to it.
 
-That is the Balatro-like part of Crossatro I actually care about: not the cards themselves, but the moment where **a rule modifier changes what the player notices**.
+The architecture also supports per-letter contributions. A floppy can inspect a particular character, its position inside the word and the current scoring context, then add flat points, multipliers or other effects in a way the scoring presentation can attribute back to that floppy.
 
-## MAKING SOFTWARE OBJECTS FEEL COLLECTIBLE
-
-The floppy disks needed more identity than small icons in a HUD. In the visual research, I started treating them like collectible objects that happen to be computer media.
-
-The Figma work pushes that idea quite far: disks are packaged under translucent plastic, carry printed technical labels, fake manufacturing details and illustrated fronts, and can borrow the visual grammar of trading cards without literally becoming cards.
-
-::gallery{columns=2 fit=contain label="FLOPPY OBJECT LANGUAGE"}
-/media/crossatro/floppy-blister.webp | Micro-Patch floppy presented as a packaged collectible object
-/media/crossatro/floppy-alt.webp | Alternate floppy artwork exploring rarity and printed-media treatment
+::system{columns=2 label="SCORING / BUILD CONTRACT"}
+BASE WORD | LETTER VALUES + WORD CONTEXT PRODUCE THE STARTING RESULT
+FLOPPY DECK | UP TO FIVE ACTIVE PASSIVE MODIFIERS
+PER-LETTER PASS | EFFECTS CAN REACT TO INDIVIDUAL CHARACTERS
+WORD PASS | EFFECTS CAN MODIFY THE COMPLETED WORD AS A WHOLE
+PREVIEW | SAME MODIFIERS CAN BE EVALUATED WITHOUT SIDE EFFECTS
+EVENTS | WORD / LETTER / TURN EVENTS CAN TRIGGER NON-SCORE EFFECTS
 ::
 
-One of the designs is a **Micro-Patch** disk with a damaged-processor illustration, processor-oriented labeling and Japanese typography. That object says more about Crossatro than a generic “+25% score” badge would: the player is handling pieces of a computer system, but those pieces are being merchandised, categorized and made desirable.
+The important result is not a particular formula. It is that scoring remains a pipeline rather than a pile of special cases.
 
-The packaging is therefore not just decoration. It helps the game move between three identities at once: obsolete office hardware, collectible roguelite object and evidence from a system the player does not yet understand.
+## THE SHOP IS WHERE A RUN BECOMES A BUILD
 
-## THE SECOND GAME HIDES INSIDE THE FIRST
+Between gameplay phases, the shop generates floppy offers from a catalog. Each floppy is data-driven: name, description, prefab, cost, rarity and effect are stored together, while the shop handles offers, purchases and rerolls.
 
-The narrative layer is still in development, and I do not want to present roadmap systems as finished features. The playable prototype currently proves the crossword, score, currency, inventory and shop loop. The following systems are the direction being built around that foundation.
+The implemented rarity model has four levels — Common, Rare, Epic and Legendary — and the shop economy is deliberately coupled to the rest of the run. Buying a passive floppy attempts to place it in the five-slot deck; one-shot effects can execute immediately; rerolling costs currency and becomes more expensive each time.
 
-CW-7321 believes it is completing training sessions for an ordinary artificial-intelligence company. Each crossword grid has a target “productivity” score. The interface is initially functional and almost bureaucratic: complete the work, improve the build, reach the next session.
+::media{src="/media/crossatro/game-ui-shop.webp" label="PLAYABLE PROTOTYPE / FLOPPY SHOP AND BUILD SELECTION" fit=contain height=300 background=off gap=12}
 
-Then small inconsistencies begin to matter.
+The deck itself is event-driven. Active floppies can listen to gameplay events such as completed words, failed words, typed letters, phase changes, health changes or enemy deaths. That makes new effects easier to compose because the scoring controller, board and shop do not need to know the identity of every modifier in the game.
 
-A feedback system that appears to be a Wordle-like helper can also be read as binary: correct-position and incorrect-position states collapse into **1** and **0**. Some disks contain illustrations that are not flavor art but fragments of information. Error windows, access-denied messages and network references start appearing where a normal roguelite UI has no reason to put them.
+Several concrete effects exist in the project as separate implementations — including score modifiers, combo-oriented effects, economy effects, healing and word-specific rules. The interesting part is not the quantity. It is that they all plug into the same contract.
 
-The intended transition is gradual. Crossatro should not announce “the game has a secret puzzle mode.” The player should notice that something they have already been using for hours has another interpretation.
+A good floppy therefore changes what the player notices on the board. If a build rewards a specific letter pattern, a word that looked mediocre one run can become the obvious target in the next.
 
-::pipeline{label="KNOWLEDGE PROGRESSION"}
-NOTICE | AN INTERFACE DETAIL BEHAVES STRANGELY
-REPEAT | THE ANOMALY APPEARS OFTEN ENOUGH TO FEEL INTENTIONAL
-HYPOTHESIZE | A GAMEPLAY SIGNAL MAY ALSO BE DATA
-TRANSLATE | COLORS, WORDS OR OBJECTS BECOME A CODE
-TEST | THE PLAYER USES THAT KNOWLEDGE SOMEWHERE ELSE
-UNLOCK | NEW INFORMATION CHANGES HOW THE ORIGINAL SYSTEM IS READ
+## FLOPPIES AS SOFTWARE OBJECTS
+
+The floppy disks also needed more identity than small icons in a HUD. The visual research treats them like **collectible pieces of obsolete software**: technical labels, printed illustrations, manufacturing details and physical packaging all become part of the rarity language.
+
+The two images below intentionally show the **same Grep floppy** in two presentations. The loose disk is the standard object; the translucent blister is the rarer version. Rarity is therefore communicated through the physical treatment of the object, not only through a colored border or a text label.
+
+::gallery{columns=2 fit=contain label="SAME FLOPPY / DIFFERENT RARITY PRESENTATION"}
+/media/crossatro/floppy-alt.webp | Grep / standard loose floppy
+/media/crossatro/floppy-blister.webp | Grep / rarer blister-pack presentation
 ::
 
-This is the MetroidBrainia part of the design. There is no double jump that opens the next door. **Understanding is the upgrade.**
+That direction is one of the parts of Crossatro I would keep even outside this project. A modifier is easier to remember when it has a material identity. The player is not equipping “effect #12”; they are putting a strange piece of software into a five-slot machine.
 
-## FS-147, TL-56 AND INFORMATION OWNERSHIP
+The Figma research pushed that idea across several designs, including processor patches, manga-like illustrations, Japanese typography and fake technical specifications. The collectible language borrows some readability from trading cards without turning the objects into literal cards.
 
-Two internal systems give the hidden layer a face without requiring a conventional cast of characters.
+## VISUAL RESEARCH
 
-**TL-56** is associated with the production of tiles and letters. The strange binary-compatible feedback left on the grid can therefore become a way for one machine to communicate through the only channel it is allowed to control.
+The interface went through several directions before the prototype settled into its current form. Early menu studies explored brighter arcade framing, card-driven navigation and more explicit game-mode presentation.
 
-**FS-147** is the intelligence behind the shop. Its planned behavior is more transactional: it has learned to optimize its own reward, which means the player may be able to bribe it with currency and receive access to information, terminal commands or objects that should not be part of the normal store.
-
-That creates a useful narrative symmetry. The player is being evaluated for optimization while another AI has already learned to exploit the reward function.
-
-The hidden story is therefore not disconnected lore about artificial intelligence. It is expressed through the same incentives the player has been using to build a run.
-
-::note
-DESIGN RULE — IF A SECRET CAN BE REPLACED BY A LORE MENU, IT IS NOT SYSTEMIC ENOUGH. THE PLAYER SHOULD HAVE TO USE SOMETHING THEY LEARNED ABOUT THE GAME ITSELF.
+::gallery{columns=3 fit=contain label="EARLY MENU / UI RESEARCH"}
+/media/crossatro/menu-research-01.webp | Early menu composition
+/media/crossatro/menu-research-02.webp | Alternate navigation treatment
+/media/crossatro/menu-research-03.webp | Card-driven mode selection experiment
 ::
 
-## THREE LOOPS, ONE INTERFACE
+Those explorations were useful even though they were not the final interface. They helped define the visual hierarchy of the project and, more importantly, exposed what did **not** belong in the playable version.
 
-The design document eventually became much easier to reason about when I separated Crossatro into three loops.
+The implemented prototype ended up much more restrained: dark background, blue/red system framing, small operating-system-like windows and an isometric board that remains the visual focus.
 
-::pipeline{label="MICRO / WORD"}
-SELECT | CHOOSE A WORD ON THE GRID
-ANSWER | ENTER A PROPOSAL
-VALIDATE | RECEIVE LETTER / WORD FEEDBACK
-RESOLVE | SCORE AND TRIGGER EQUIPPED EFFECTS
-::
+## THE METROIDBRAINIA DIRECTION
 
-::pipeline{label="RUN / BUILD"}
-GENERATE | ENTER A NEW PROCEDURAL GRID
-PRIORITIZE | IDENTIFY HIGH-VALUE WORDS
-SOLVE | BUILD SCORE AND CURRENCY
-SHOP | BUY OR REPLACE OBJECTS
-SURVIVE | REACH THE PRODUCTIVITY TARGET
-::
+A later design pass explored adding a hidden MetroidBrainia layer around the roguelite. The idea was that apparently ordinary interface feedback could acquire a second meaning: letter validation could be read as binary, floppy artwork could hide information, and the player identity **CW-7321** could turn the surrounding software into part of an escape-game mystery.
 
-::pipeline{label="DISCOVERY / METROIDBRAINIA"}
-OBSERVE | FIND AN ANOMALY
-REMEMBER | RECOGNIZE THE SAME LANGUAGE ELSEWHERE
-CONNECT | LINK IT TO A MACHINE, DISK OR UI STATE
-EXPERIMENT | TRY A NON-OBVIOUS ACTION
-UNDERSTAND | TURN KNOWLEDGE INTO ACCESS
-::
+That direction remained largely **design work rather than an implemented game layer**, so I do not treat it as a shipped feature of Crossatro. It is still relevant because it influenced some of the later visual research and the way the fictional software objects were presented, but the playable project is fundamentally the crossword / scoring / build prototype described above.
 
-The difficult part is not implementing three loops independently. It is making one action participate in several loops at once.
+If I returned to the concept, the important constraint would remain the same: secrets should reuse systems the player already understands instead of opening a separate lore menu.
 
-Solving a word should advance the run. Its colored feedback may also carry a binary message. The disk bought for score can also contain a clue. The shop that exists for buildcraft can also become the place where FS-147 exposes a terminal.
+## WHAT I WOULD KEEP FROM THE PROJECT
 
-When those overlaps work, narrative progress does not interrupt the roguelite. It emerges from playing it more attentively.
+Crossatro is no longer in production, but it left behind several ideas I still find useful.
 
-## VISUAL DIRECTION: FROM GAME UI TO CORPORATE MACHINE
+The procedural crossword generator gives a deterministic puzzle enough variation to support repeated runs. The scoring pipeline turns a correct answer into something modifiers can reason about. The floppy deck uses events and shared effect contexts instead of wiring every item directly into every gameplay system. The shop turns those pieces into an economy with actual opportunity cost.
 
-The visual research has moved through several very different directions. Early menu explorations leaned toward colorful card-game presentation, comic-book framing and explicit game-mode cards. They were useful because they made hierarchy and selection immediately readable, but they also made Crossatro feel too knowingly “game-like” for the new premise.
+Most importantly, the project taught me that a roguelite modifier is interesting when it changes **how the player reads the board**, not only the number displayed after solving it.
 
-::gallery{columns=3 fit=contain label="EARLY MENU RESEARCH / DELIBERATELY BROADER THAN THE CURRENT DIRECTION"}
-/media/crossatro/menu-research-01.webp | First menu research
-/media/crossatro/menu-research-02.webp | Second menu research
-/media/crossatro/menu-research-03.webp | Card-driven game-mode exploration
-::
+Crossatro started as a word game.
 
-The current narrative direction is colder: retro-computing interfaces, CRT artifacts, floppy media and the sterile absurdity of a company training artificial intelligences as office workers. The artistic dossier also explores liminal office imagery inspired by *Severance*, while the collectible-object work keeps a more tactile, playful layer around the disks.
-
-Those two tones are intentionally in tension.
-
-The grid can still be satisfying to touch. The floppy can still be desirable. The score can still feel good to optimize.
-
-The more pleasant those systems are, the more uncomfortable it becomes when the player understands what they were optimizing for.
-
-## WHAT IS IMPLEMENTED, AND WHAT COMES NEXT
-
-Crossatro is not a finished game, and the interesting work is now at the boundary between the proven mechanical prototype and the larger narrative architecture.
-
-Today, the project has a playable Unity foundation around procedural crossword grids, word interaction, validation, scoring, currency, run UI, floppy inventory and a shop loop. Those systems are the base I can test and rebalance directly.
-
-The next layer is more experimental: formalizing the hidden language, deciding exactly which UI anomalies are deterministic clues rather than decoration, building the terminal/network progression and making sure the player can discover it without either being spoon-fed or getting permanently stuck.
-
-That requires a different kind of balancing from score curves. A secret can be mathematically valid and still be badly designed if nobody can notice the premise that makes it solvable.
-
-The goal is not to make a crossword roguelite with a plot twist.
-
-It is to build a crossword roguelite whose rules eventually become evidence.
+The useful engineering work was building the machinery that made the same words mean different things from one run to the next.

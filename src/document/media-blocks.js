@@ -1,4 +1,4 @@
-import { drawContainedImage, drawCoverImage, parsePipeRows } from './default-blocks.js'
+import { drawCoverImage, parsePipeRows } from './default-blocks.js'
 
 function imageFrom(env, src) {
   if (!src) return null
@@ -6,11 +6,33 @@ function imageFrom(env, src) {
   return env.images.get(src) || null
 }
 
+function isContain(fit) {
+  return String(fit || '').toLowerCase() === 'contain'
+}
+
+function drawContainedImageWithRect(g, image, x, y, width, height) {
+  if (!image?.complete || !image.naturalWidth || !image.naturalHeight) return null
+  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight)
+  const dw = image.naturalWidth * scale
+  const dh = image.naturalHeight * scale
+  const dx = x + (width - dw) * 0.5
+  const dy = y + (height - dh) * 0.5
+  g.drawImage(image, dx, dy, dw, dh)
+  return { x: dx, y: dy, width: dw, height: dh }
+}
+
 function drawByFit(g, image, x, y, width, height, fit) {
-  if (String(fit || '').toLowerCase() === 'contain') {
-    return drawContainedImage(g, image, x, y, width, height)
+  if (isContain(fit)) {
+    return drawContainedImageWithRect(g, image, x, y, width, height)
   }
   return drawCoverImage(g, image, x, y, width, height)
+    ? { x, y, width, height }
+    : null
+}
+
+function captionTopFor(paintedRect, fallbackTop, fit) {
+  if (!paintedRect || !isContain(fit)) return fallbackTop
+  return Math.min(fallbackTop, paintedRect.y + paintedRect.height)
 }
 
 function clampHeight(value, fallback = 246) {
@@ -21,7 +43,7 @@ function clampHeight(value, fallback = 246) {
 function mediaGap(block) {
   const value = Number(block.gap)
   if (Number.isFinite(value)) return Math.max(12, Math.min(48, value))
-  return 24
+  return 14
 }
 
 function hasPanelBackground(block) {
@@ -51,6 +73,7 @@ export function enhanceMediaBlocks(registry) {
       const footerH = hasLabel ? 23 : 0
       const mediaH = Math.max(1, visualHeight - footerH)
       const panel = hasPanelBackground(block)
+      const fit = block.fit || 'cover'
 
       paintPanel(g, layout.x, layout.y, layout.width, visualHeight, panel, '#020d07')
 
@@ -61,7 +84,7 @@ export function enhanceMediaBlocks(registry) {
         layout.y,
         layout.width,
         mediaH,
-        block.fit || 'cover',
+        fit,
       )
 
       if (!painted) {
@@ -77,14 +100,15 @@ export function enhanceMediaBlocks(registry) {
       }
 
       if (hasLabel) {
+        const captionTop = captionTopFor(painted, layout.y + mediaH, fit)
         if (panel) {
           g.fillStyle = 'rgba(1,10,5,.86)'
-          g.fillRect(layout.x, layout.y + mediaH, layout.width, footerH)
+          g.fillRect(layout.x, captionTop, layout.width, footerH)
         }
         env.drawLines(
           env.wrap(block.label, layout.width - 14, 7, 600).slice(0, 2),
           layout.x + 7,
-          layout.y + visualHeight - 9,
+          captionTop + 14,
           7,
           9,
           env.colors.mid,
@@ -123,17 +147,18 @@ export function enhanceMediaBlocks(registry) {
         const mediaH = cellH - 23
 
         paintPanel(g, x, y, cellW, cellH, panel, '#020d07')
-        drawByFit(g, imageFrom(env, item.value), x, y, cellW, mediaH, fit)
+        const painted = drawByFit(g, imageFrom(env, item.value), x, y, cellW, mediaH, fit)
 
         if (item.label) {
+          const captionTop = captionTopFor(painted, y + mediaH, fit)
           if (panel) {
             g.fillStyle = 'rgba(1,10,5,.86)'
-            g.fillRect(x, y + mediaH, cellW, 23)
+            g.fillRect(x, captionTop, cellW, 23)
           }
           env.drawLines(
             env.wrap(item.label, cellW - 10, 7, 600).slice(0, 2),
             x + 6,
-            y + cellH - 11,
+            captionTop + 12,
             7,
             9,
             env.colors.mid,
