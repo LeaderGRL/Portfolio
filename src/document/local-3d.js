@@ -326,9 +326,6 @@ class Local3DScene {
     proxy.setAttribute('role', 'application')
     proxy.setAttribute('aria-label', this.block.label || this.block.title || 'Interactive 3D model')
 
-    // Normal wheel input always scrolls the surrounding document. Holding Ctrl
-    // explicitly opts into model zoom, so zoom remains available without ever
-    // trapping ordinary page navigation.
     proxy.addEventListener('wheel', event => {
       event.preventDefault()
       event.stopImmediatePropagation()
@@ -354,10 +351,6 @@ class Local3DScene {
   }
 
   unmountInput(markDirty = false) {
-    // Teardown must be side-effect free with respect to the document renderer.
-    // In particular, never render or dirty the document from cleanup: doing so
-    // can synchronously re-enter integration synchronization while this same
-    // instance is being removed.
     const proxy = this.inputProxy
     this.inputProxy = null
     if (proxy) {
@@ -419,8 +412,11 @@ export class Local3DManager {
     return Boolean(this.ensure(block)?.failed)
   }
 
-  tick(time) {
-    for (const scene of this.scenes.values()) scene.tick(time)
+  // Animation is explicitly targeted. Calling tick must never wake every scene
+  // retained in the cache just because one model happens to be visible.
+  tick(block, time) {
+    const scene = this.scenes.get(this.key(block))
+    return scene?.tick(time) || false
   }
 
   mount(block, host, context) {
