@@ -45,11 +45,12 @@ Computer science mentor, Lyon Ynov Campus.
 
 ## 2025 — PRESENT · FROGBYTE
 
-Performance-oriented 3D engine written in Rust.
+Experimental data-oriented 3D engine in Rust, rebuilt from LeaderEngine with a
+stronger professional software-engineering foundation.
 
-- Data-oriented architecture and zero-overhead abstractions.
-- Custom hybrid ECS with field-level Structure of Arrays storage.
-- Cache locality, memory throughput, and SIMD optimization.
+- Generational entities, type-erased contiguous component storage, and archetype foundations.
+- Explicit unsafe invariants, Miri validation, Criterion benchmarks, and strict workspace lints.
+- Cross-platform CI, rustdoc/doctests, security checks, dependency automation, and scheduled toolchain validation.
 
 ## EDUCATION
 

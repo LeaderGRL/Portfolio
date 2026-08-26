@@ -118,6 +118,7 @@
 .document-inline-integration--sketchfab::before,
 .document-inline-integration--miro::before,
 .document-inline-integration--google::before,
+.document-inline-integration--gist::before,
 .document-inline-integration--iframe::before{
   content:"";
   position:absolute;
@@ -140,6 +141,7 @@
 .document-inline-integration--sketchfab::after,
 .document-inline-integration--miro::after,
 .document-inline-integration--google::after,
+.document-inline-integration--gist::after,
 .document-inline-integration--iframe::after{
   content:"";
   position:absolute;

@@ -3,118 +3,163 @@ title: ECS #2 · GENERATIONAL IDS
 sub: Safe entity recycling in Rust
 year: 2026
 ---
-
-# Entity Management: IDs, Generations, and the Art of Recycling
-
-*This is the second article in a series about building a high-performance Entity Component System from scratch in Rust. In this article, we tackle a deceptively simple question: how do you identify an entity?*
-
----
-
-## The Deceptively Simple Problem
-
-At first glance, entity identification seems trivial. Just use an integer, right?
-
+*How do you identify an entity ? A subject that can be useful in contexts other than an ECS* ! *This is the second article in a series about building a high performance Entity Component System from scratch in Rust.*
+## Quick Reminder: What is an Entity?
+In our ECS architecture, an **Entity** is the simplest possible thing: just a unique identifier. Nothing more.
+Unlike Object Oriented Programming where a `Player` object contains its data (health, position, inventory) and its behavior (move, attack, die), an Entity in ECS is just a number that says "this thing exists."
+The Entity doesn’t *contain* anything. Instead, it’s a **key** that links components together:
+```rust
+Entity 42:
+    -> Position component: { x: 10.0, y: 0.0, z: 5.0 }
+    -> Health component: { current: 100, max: 100 }
+    -> PlayerController component: { ... }
+```
+Think of it like a database primary key. The number itself has no meaning, it just uniquely identifies a “row” of data spread across multiple tables (component storages).
+This separation is what gives ECS its power: systems can process all `Position` components in a tight loop without caring whether they belong to players, enemies, or bullets.
+Now, the question becomes: **how do we generate and manage these identifiers?**
+## Starting Simple: The Naive Approach
+et’s build entity management from scratch, starting with the simplest possible implementation and improving it as we discover problems.
+### Version 0: Just a Counter
 ```rust
 type Entity = u32;
 
-fn spawn(world: &mut World) -> Entity {
-    let id = world.next_id;
-    world.next_id += 1;
-    id
+pub struct World {
+    next_id: u32,
+    // ... component storage (we'll cover this in future articles)
+}
+
+impl World {
+    pub fn new() -> Self {
+        Self { next_id: 0 }
+    }
+
+    pub fn spawn(&mut self) -> Entity {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
+    }
+
+    pub fn delete(&mut self, entity: Entity) {
+        // Remove components for this entity
+        // But what happens to the ID?
+    }
 }
 ```
-
-Simple. Clean. And completely broken for any real game.
-
-Let me show you why.
-
----
-
+This works! Entities get IDs 0, 1, 2, 3… Simple and fast. But there’s a critical flaw hiding here. Let me show you.
 ## The Dangling Reference Problem
-
 Imagine a simple game scenario:
-
 ```rust
-// Frame 1: Spawn an enemy, player stores reference to target
-let enemy = world.spawn(Enemy::new());
-player.target = Some(enemy);  // enemy has id = 42
+fn game_loop(world: &mut World) {
+    // Frame 1: Spawn an enemy, player stores reference to target
+    let enemy = world.spawn();  // enemy = 42
+    let mut player_target: Option<Entity> = Some(enemy);
+
+    // Frame 2: Enemy dies
+    world.delete(enemy);
+
+    // Frame 3: Spawn a health pickup
+    let pickup = world.spawn();  // pickup = 43
+
+    // Frame 4: Player attacks their "target"
+    if let Some(target) = player_target {
+        world.deal_damage(target, 50);  // What happens here?
+    }
+}
+```
+With our naive implementation, `pickup` gets ID 43. The player still targets ID 42, which no longer exists. We'd need to check if the entity exists before every operation. Annoying, but manageable. But what if we want to **recycle IDs**?
+### Why Recycle IDs?
+You might think: “Why bother recycling? Just use `u64` and never run out!" A `u64` can hold 18 quintillion values. At 1 million spawns per second, it would take more than 584,000 years to overflow. Problem solved, right?
+**Wrong.** The problem isn’t running out of numbers, it’s **memory**. In my ECS, I use entity IDs as **array indices** for fast O(1) lookups:
+```rust
+struct World {
+    // Index = entity ID, Value = data for that entity
+    generations: Vec<u32>,            // generations[entity_id]
+    locations: Vec<Option<Location>>, // locations[entity_id]
+    // ... more arrays indexed by entity ID
+}
+```
+Without recycling, if your game spawns entity #1,000,000, your arrays need **1 million slots** even if only 100 entities are alive at any moment.
+Without recycling (after 1 million spawns, 100 alive):
+- generations: [0, 0, 0, 0, 0, …] -> 1,000,000 slots = 4 MB
+- locations: [None, None, None, None, …] -> 1,000,000 slots = 24 MB -> 99.99% wasted
+With recycling (max 100 alive at once):
+- generations: [3, 7, 2, 5, …] -> 100 slots = 400 bytes
+- locations: [Some, Some, …] -> 100 slots = 2.4 KB
+A bullet-hell game spawning 10,000 projectiles per second would consume gigabytes of RAM in minutes without recycling. Not because we ran out of IDs, but because our arrays grew unbounded.
+**Recycling keeps IDs compact.** If you never have more than N entities alive simultaneously, your arrays stay around size N.
+So let’s add recycling:
+```rust
+pub struct World {
+    next_id: u32,
+    free_ids: Vec<u32>,  // Pool of reusable IDs
+}
+
+impl World {
+    pub fn spawn(&mut self) -> Entity {
+        if let Some(id) = self.free_ids.pop() {
+            return id;
+        }
+
+        let id = self.next_id;
+        self.next_id += 1;
+        id
+    }
+
+    pub fn delete(&mut self, entity: Entity) {
+        // Return ID to the pool
+        self.free_ids.push(entity);
+    }
+}
+```
+Now we have a **real problem**:
+```rust
+// Frame 1: Spawn enemy
+let enemy = world.spawn();  // enemy = 42
+player.target = Some(enemy);
 
 // Frame 2: Enemy dies
-world.delete(enemy);
+world.delete(enemy);  // 42 goes into free_ids
 
-// Frame 3: Spawn a health pickup (reuses id = 42)
-let pickup = world.spawn(HealthPickup::new());
+// Frame 3: Spawn pickup -> Reuse ID 42
+let pickup = world.spawn();  // pickup = 42 (recycled)
 
-// Frame 4: Player attacks their "target"
-if let Some(target) = player.target {
-    world.deal_damage(target, 50);  // Oops! Damages the health pickup!
+// Frame 4: Player attacks... the health pickup
+if let Some(target) = player.target {  // target = 42
+    world.deal_damage(target, 50);  // Oops! Damages the pickup!
 }
 ```
-
-The player is still holding `Entity(42)`, but that ID now refers to a completely different entity. This is the **ABA problem**—the ID was A (enemy), became nothing (deleted), then became A again (same numeric value, different entity).
-
-In the best case, you get weird bugs. In the worst case, you corrupt game state in ways that are nearly impossible to debug.
-
-### Why This Happens More Than You'd Think
-
-This isn't a contrived example. Real games constantly store entity references:
-
-- AI systems store targets, allies, patrol points
-- Physics joints connect two bodies
-- Parent-child hierarchies for scene graphs
-- Particle emitters attached to entities
-- Quest systems tracking objective entities
-- UI elements bound to world entities
-
-Every one of these is a potential dangling reference waiting to happen.
-
----
-
-## The Generation Solution
-
+The player is holding `Entity(42)`, but that ID now refers to a completely different entity. This is the **ABA problem**. The ID was A (enemy), became nothing (deleted), then became A again (same numeric value, different logical entity).
+::media{src=medium/ecs-entity-management/01.webp label="Player attack the health pickup" fit=contain background=off height=300}
+### This Happens Constantly in Real Games
+This isn’t a contrived example. Real games store entity references everywhere:
+- **AI systems**: targets, allies, patrol waypoints, flee-from entities
+- **Physics**: joints connecting two bodies, collision pairs
+- **Scene graphs**: parent-child relationships
+- **Attachments**: particles attached to characters, weapons in hands
+- **Quests**: objective entities, NPCs to talk to
+- **UI**: health bars bound to world entities
+Every one of these is a potential dangling reference waiting to corrupt your game state.
+## Solution: Generational IDs
 The fix is elegant: pair each ID with a **generation counter**.
-
 ```rust
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Entity {
-    pub id: u32,
-    pub generation: u32,
+    pub id: u32,         // The slot number (recycled)
+    pub generation: u32, // Incremented each time slot is reused
 }
 ```
-
-Here's how it works:
-
-1. When we spawn entity #42 for the first time, it gets `Entity { id: 42, generation: 0 }`
-2. When we delete it, we increment the generation: slot 42 now expects generation 1
-3. When we reuse slot 42, the new entity gets `Entity { id: 42, generation: 1 }`
-4. The old reference `Entity { id: 42, generation: 0 }` no longer matches
-
+Here’s the key insight:
+1. When we create entity #42 for the first time → `Entity { id: 42, generation: 0 }`
+2. When we delete it -> we **increment** the generation for slot 42
+3. When we reuse slot 42 -> new entity gets `Entity { id: 42, generation: 1 }`
+4. Old reference `{ id: 42, generation: 0 }` != new entity `{ id: 42, generation: 1 }`
+The player still holds: Entity { id: 42, generation: 0 } The new pickup is: Entity { id: 42, generation: 1 } These are not equal. The stale reference is now detectable!
+Let’s implement this properly.
+### Implementation v1: Basic Generations
 ```rust
-// The player still holds: Entity { id: 42, generation: 0 }
-// The new pickup is:      Entity { id: 42, generation: 1 }
-// These are NOT equal - the old reference is now detectably stale!
-```
-
-Let's implement this properly.
-
----
-
-## Implementation: The Entity Struct
-
-Here's my actual implementation:
-
-```rust
-use std::hash::{Hash, Hasher};
-
-/// A unique identifier for an entity in the world.
-/// 
-/// The combination of `id` and `generation` ensures that even when
-/// IDs are recycled, old references can be detected as stale.
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Entity {
-    /// The index/slot number. Gets recycled when entities are deleted.
     pub id: u32,
-    /// Incremented each time this slot is reused. Detects stale references.
     pub generation: u32,
 }
 
@@ -124,67 +169,205 @@ impl Entity {
     }
 }
 
-impl Hash for Entity {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        // Both fields contribute to the hash for use in HashMaps
-        state.write_u32(self.id);
-        state.write_u32(self.generation);
+pub struct World {
+    next_id: u32,
+
+    /// Current generation for each ID slot
+    /// Index = entity ID, Value = current generation
+    generations: Vec<u32>,
+
+    /// Pool of IDs available for reuse
+    free_ids: Vec<u32>,
+}
+
+impl World {
+    pub fn new() -> Self {
+        Self {
+            next_id: 0,
+            generations: Vec::new(),
+            free_ids: Vec::new(),
+        }
+    }
+
+    pub fn spawn(&mut self) -> Entity {
+        let id = if let Some(recycled) = self.free_ids.pop() {
+            recycled
+        } else {
+            let fresh = self.next_id;
+            self.next_id += 1;
+            fresh
+        };
+
+        // Ensure generations array is large enough
+        if (id as usize) >= self.generations.len() {
+            self.generations.resize(id as usize + 1, 0);
+        }
+
+        // Create entity with current generation for this slot
+        let generation = self.generations[id as usize];
+        Entity::new(id, generation)
+    }
+
+    pub fn delete(&mut self, entity: Entity) -> bool {
+        let id = entity.id as usize;
+
+        // Bounds check
+        if id >= self.generations.len() {
+            return false;
+        }
+
+        // Verify generation matches
+        // This detects attempts to delete already deleted entities
+        if self.generations[id] != entity.generation {
+            return false;  // Stale reference -> entity already deleted
+        }
+
+        // Increment generation -> this invalidates all old references
+        self.generations[id] = self.generations[id].wrapping_add(1);
+
+        // Return ID to the pool for reuse
+        self.free_ids.push(entity.id);
+
+        true
     }
 }
 ```
+::media{src=medium/ecs-entity-management/02.webp label="Generation" fit=contain background=off height=300}
+We’ve solved the ABA problem. But there’s still room for improvement.
+## Optimization: FIFO vs LIFO Recycling
+Look at our current `free_ids`:
+```rust
+free_ids: Vec<u32>
 
-### Why These Traits Matter
+// Vec::push() adds to the END
+// Vec::pop() removes from the END
+// This is LIFO -> Last In, First Out
+```
+With LIFO recycling:
+```rust
+// Spawn entities 0, 1, 2
+world.spawn();  // id = 0
+world.spawn();  // id = 1
+world.spawn();  // id = 2
 
-**`Copy` and `Clone`**: Entities are just two integers—8 bytes total. They should be trivially copyable. No heap allocation, no reference counting, just raw data.
+// Delete in order: 0, 1, 2
+world.delete(e0);  // free_ids = [0]
+world.delete(e1);  // free_ids = [0, 1]
+world.delete(e2);  // free_ids = [0, 1, 2]
 
-**`Eq` and `PartialEq`**: Two entities are equal only if *both* id and generation match. This is the core of stale reference detection.
-
-**`Hash`**: Entities are often used as keys in `HashMap<Entity, T>` for sparse data. Both fields must contribute to the hash to avoid collisions between generations.
-
-**`Debug`**: Essential for debugging. You want to see `Entity { id: 42, generation: 3 }` in your logs, not some opaque number.
-
----
-
-## Implementation: The World's Entity Management
-
-Now let's look at how the World manages entity lifecycles:
-
+// Spawn 3 new entities
+world.spawn();  // pops 2 — just deleted!
+world.spawn();  // pops 1 — just deleted!
+world.spawn();  // pops 0 — deleted longest ago
+```
+The most recently deleted IDs are reused immediately. This **maximizes** the chance that someone is still holding a stale reference.
+### FIFO: First In, First Out
 ```rust
 use std::collections::VecDeque;
 
 pub struct World {
-    /// The next ID to assign if no recycled IDs are available
     next_id: u32,
-    
-    /// Generation counter for each ID slot. Index = entity ID.
     generations: Vec<u32>,
-    
-    /// Queue of IDs available for reuse (FIFO)
     free_ids: VecDeque<u32>,
-    
-    /// Maps entity ID to its location in storage (for O(1) component access)
-    locations: Vec<Option<EntityLocation>>,
-    
-    /// All currently alive entities (for iteration)
-    entities: Vec<Entity>,
-    
-    // ... component storage, archetypes, etc.
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct EntityLocation {
-    pub archetype_index: usize,
-    pub chunk_index: usize,   // For chunked storage
-    pub slot_index: usize,    // Position within chunk/archetype
+impl World {
+    pub fn spawn(&mut self) -> Entity {
+        let id = if let Some(recycled) = self.free_ids.pop_front() {  // Take from front
+            recycled
+        } else {
+            let fresh = self.next_id;
+            self.next_id += 1;
+            fresh
+        };
+        // ...
+    }
+
+    pub fn delete(&mut self, entity: Entity) -> bool {
+        // ...
+        self.free_ids.push_back(entity.id);  // Add to back
+        true
+    }
 }
 ```
-
-### Spawning an Entity
-
+Now with FIFO:
 ```rust
+// Delete in order: 0, 1, 2
+world.delete(e0);  // free_ids = [0]
+world.delete(e1);  // free_ids = [0, 1]
+world.delete(e2);  // free_ids = [0, 1, 2]
+
+// Spawn 3 new entities
+world.spawn();  // pops 0 — deleted longest ago (GOOD!)
+world.spawn();  // pops 1
+world.spawn();  // pops 2 — just deleted, reused last
+```
+FIFO ensures **maximum “cooling time”** between deletion and reuse. The longer an ID sits in the queue, the more likely stale references have been cleared by game logic. It gives the rest of the game the maximum amount of time to realize the entity is dead before we dare to reuse this slot.
+## The Complete Entity Implementation
+Here’s our final, production ready entity management:
+```rust
+use std::collections::VecDeque;
+use std::hash::{Hash, Hasher};
+
+/// A unique identifier for an entity in the world.
+///
+/// The combination of id and generation ensures that even when
+/// IDs are recycled, old references can be detected as stale.
+///
+/// # Size
+/// 8 bytes total (two u32 values), trivially copyable.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct Entity {
+    /// The index/slot number. Gets recycled when entities are deleted.
+    pub id: u32,
+    /// Incremented each time this slot is reused. Prevents ABA problem.
+    pub generation: u32,
+}
+
+impl Entity {
+    #[inline]
+    pub fn new(id: u32, generation: u32) -> Self {
+        Entity { id, generation }
+    }
+}
+
+impl Hash for Entity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Both fields must contribute to hash for HashMap usage
+        state.write_u32(self.id);
+        state.write_u32(self.generation);
+    }
+}
+
+pub struct World {
+    /// Next fresh ID to assign if no recycled IDs available
+    next_id: u32,
+
+    /// Current generation for each ID slot.
+    /// Index = entity ID, Value = current generation for that slot.
+    generations: Vec<u32>,
+
+    /// Queue of IDs available for reuse (FIFO for maximum cooling time)
+    free_ids: VecDeque<u32>,
+
+    /// Number of currently alive entities
+    alive_count: usize,
+}
+
 impl World {
-    pub fn spawn(&mut self, components: &[&dyn Component]) -> Entity {
-        // Step 1: Get an ID (recycled or fresh)
+    pub fn new() -> Self {
+        Self {
+            next_id: 0,
+            generations: Vec::new(),
+            free_ids: VecDeque::new(),
+            alive_count: 0,
+        }
+    }
+
+    /// Spawn a new entity and return its handle.
+    ///
+    /// Prefers recycled IDs over fresh IDs.
+    pub fn spawn(&mut self) -> Entity {
         let id = if let Some(recycled) = self.free_ids.pop_front() {
             recycled
         } else {
@@ -192,655 +375,225 @@ impl World {
             self.next_id += 1;
             fresh
         };
-        
-        // Step 2: Ensure generations array is large enough
+
+        // Ensure generations array can hold this ID
         if (id as usize) >= self.generations.len() {
             self.generations.resize(id as usize + 1, 0);
         }
-        
-        // Step 3: Create entity with current generation
+
         let generation = self.generations[id as usize];
-        let entity = Entity::new(id, generation);
-        
-        // Step 4: Store components in archetype (covered in future article)
-        let location = self.store_components(entity, components);
-        
-        // Step 5: Track the entity's location
-        if (id as usize) >= self.locations.len() {
-            self.locations.resize(id as usize + 1, None);
-        }
-        self.locations[id as usize] = Some(location);
-        
-        // Step 6: Add to live entities list
-        self.entities.push(entity);
-        
-        entity
+        self.alive_count += 1;
+
+        Entity::new(id, generation)
     }
-}
-```
 
-### Deleting an Entity
-
-```rust
-impl World {
+    /// Delete an entity, making its ID available for reuse.
+    ///
+    /// Returns true if the entity was alive and is now destroyed.
+    /// Returns false if the entity was already dead (stale reference).
     pub fn delete(&mut self, entity: Entity) -> bool {
         let id = entity.id as usize;
-        
+
         // Bounds check
-        if id >= self.locations.len() {
-            return false;
-        }
-        
-        // Check if entity is still alive (location exists)
-        let location = match self.locations[id].take() {
-            Some(loc) => loc,
-            None => return false,  // Already deleted
-        };
-        
-        // Verify generation matches (detect stale references)
-        if self.generations[id] != entity.generation {
-            return false;  // Stale reference to old entity
-        }
-        
-        // INCREMENT GENERATION - this is the key!
-        // Any old references with the previous generation are now invalid
-        self.generations[id] = self.generations[id].wrapping_add(1);
-        
-        // Return ID to the recycling pool
-        self.free_ids.push_back(entity.id);
-        
-        // Remove from component storage (swap-remove for O(1))
-        self.remove_from_storage(location);
-        
-        // Remove from live entities list
-        if let Some(pos) = self.entities.iter().position(|&e| e == entity) {
-            self.entities.swap_remove(pos);
-        }
-        
-        true
-    }
-}
-```
-
-### Validating an Entity Reference
-
-Sometimes you just want to check if an entity is still alive:
-
-```rust
-impl World {
-    /// Check if an entity reference is still valid
-    pub fn is_alive(&self, entity: Entity) -> bool {
-        let id = entity.id as usize;
-        
         if id >= self.generations.len() {
             return false;
         }
-        
-        // Must match current generation AND have a valid location
-        self.generations[id] == entity.generation 
-            && self.locations[id].is_some()
+
+        // Verify this entity is still alive (generation matches)
+        if self.generations[id] != entity.generation {
+            return false; // Stale reference
+        }
+
+        // Increment generation -> invalidates all references to this slot
+        self.generations[id] = self.generations[id].wrapping_add(1);
+
+        // Return ID to recycling queue
+        self.free_ids.push_back(entity.id);
+        self.alive_count -= 1;
+
+        true
     }
-    
-    /// Get an entity's location if it's alive, None if stale/dead
-    pub fn get_location(&self, entity: Entity) -> Option<EntityLocation> {
-        if self.is_alive(entity) {
-            self.locations[entity.id as usize]
-        } else {
-            None
+
+    /// Check if an entity handle still refers to a living entity.
+    #[inline]
+    pub fn is_alive(&self, entity: Entity) -> bool {
+        let id = entity.id as usize;
+
+        id < self.generations.len()
+            && self.generations[id] == entity.generation
+    }
+}
+```
+### Entities recycling example:
+Try entities recycling with this interface
+::embed{provider=iframe src="https://codepen.io/Leader_/embed/preview/OPXaRMZ?default-tabs=css%2Cresult&height=600&host=https%3A%2F%2Fcodepen.io&slug-hash=OPXaRMZ" title="Interactive CodePen" height=300}
+## Why These Trait Implementations Matter
+### `Copy` and `Clone:`
+```rust
+#[derive(Copy, Clone, ...)]
+pub struct Entity { ... }
+```
+With two integers, entities are just 8 bytes. They should be trivially copyable like `i32` or `f64`. No heap allocation, no reference counting, just raw data that can be memcpy.
+```rust
+let e1 = world.spawn();
+let e2 = e1;  // Copy, not move!
+// Both e1 and e2 are valid
+```
+### `Eq` and `PartialEq:`
+```rust
+#[derive(Eq, PartialEq, ...)]
+```
+Two entities are equal **only if both ID and generation match**. This is the core of stale reference detection:
+```rust
+let enemy = world.spawn();     // { id: 42, generation: 0 }
+world.delete(enemy);
+let pickup = world.spawn();    // { id: 42, generation: 1 }
+
+assert_ne!(enemy, pickup);     // Different generations!
+```
+### Hash:
+```rust
+impl Hash for Entity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u32(self.id);
+        state.write_u32(self.generation);
+    }
+}
+```
+Entities are often used as keys in `HashMap<Entity, T>` for sparse component storage or caching. **Both fields must contribute to the hash**. Otherwise `{ id: 42, gen: 0 }` and `{ id: 42, gen: 1 }` would hash to the same bucket, causing incorrect lookups.
+### `Debug:`
+Essential for debugging. You want to see `Entity { id: 42, generation: 3 }` in your logs, not some opaque memory address.
+## Performance Analysis
+::media{src=medium/ecs-entity-management/03.webp label="Article illustration" fit=contain background=off height=300}
+::note
+The O(1) Amortized means it is fast 99% of the time, but you occasionally pay a heavy “tax” to resize the storage. In a game engine, this tax manifests as a lag spike. This is why pre allocating memory or batch spawning is critical to avoid stuttering during gameplay.
+::
+### Memory Usage
+For a game with `N` entity slots ever used:
+::media{src=medium/ecs-entity-management/04.webp label="Article illustration" fit=contain background=off height=300}
+This is minimal overhead for the safety it provides.
+## Common Pitfalls
+### 1. Storing Raw IDs Instead of Entities
+```rust
+// BAD: Loses generation, can't detect stale references
+struct AIController {
+    target_id: u32,  // Just the ID!
+}
+
+// GOOD: Full entity with generation
+struct AIController {
+    target: Option<Entity>,
+}
+```
+### 2. Forgetting to Validate Before Access
+```rust
+// BAD: Panics or corrupts if entity was deleted
+fn damage_target(world: &World, target: Entity, amount: f32) {
+    let health = world.get_component::<Health>(target).unwrap(); // 💥
+}
+
+// GOOD: Handle stale references gracefully
+fn damage_target(world: &World, target: Entity, amount: f32) -> bool {
+    if !world.is_alive(target) {
+        return false;
+    }
+
+    true
+}
+```
+### 3. Not Handling Double Delete
+```rust
+// BAD: Might cause logic errors
+fn cleanup(world: &mut World, entities: &[Entity]) {
+    for &e in entities {
+        world.delete(e); // What if same entity appears twice?
+    }
+}
+
+// GOOD: Check return value
+fn cleanup(world: &mut World, entities: &[Entity]) {
+    for &e in entities {
+        if world.delete(e) {
+            println!("Deleted {:?}", e);
         }
     }
 }
 ```
-
----
-
-## Why FIFO Recycling?
-
-You might wonder: why use a `VecDeque` (queue) instead of a `Vec` (stack) for recycled IDs?
-
-### The Problem with LIFO (Stack)
-
+## What’s Missing? The Eternal O(n) Problem
+We now have robust entity identification, but there’s a critical piece missing: **how do we find an entity’s components?**
+This is actually one of the most fundamental problems in programming and one of the main reasons ECS architecture exists.
+### The Problem: Linear Search Everywhere
+Think about how many times you’ve written code like this:
 ```rust
-// Using Vec with push/pop (LIFO - Last In, First Out)
-free_ids: Vec<u32>
-
-// Scenario:
-spawn() -> id 0
-spawn() -> id 1
-spawn() -> id 2
-delete(id 2)  // free_ids = [2]
-delete(id 1)  // free_ids = [2, 1]
-delete(id 0)  // free_ids = [2, 1, 0]
-spawn() -> pops 0, reuses immediately
-spawn() -> pops 1, reuses immediately
-spawn() -> pops 2, reuses immediately
-```
-
-With LIFO, recently deleted IDs are reused immediately. This maximizes the chance that someone is still holding a reference to that entity.
-
-### The Advantage of FIFO (Queue)
-
-```rust
-// Using VecDeque with push_back/pop_front (FIFO - First In, First Out)
-free_ids: VecDeque<u32>
-
-// Scenario:
-spawn() -> id 0
-spawn() -> id 1  
-spawn() -> id 2
-delete(id 2)  // free_ids = [2]
-delete(id 1)  // free_ids = [2, 1]
-delete(id 0)  // free_ids = [2, 1, 0]
-spawn() -> pops 2 (oldest deletion)
-spawn() -> pops 1
-spawn() -> pops 0 (most recent deletion, reused last)
-```
-
-FIFO ensures maximum "cooling time" between deletion and reuse. The longer an ID sits in the queue, the more likely any stale references have been cleared.
-
-### Does This Actually Matter?
-
-With generations, stale references are always *detectable*. But detection isn't free—you have to actually check. FIFO recycling reduces the frequency of stale reference checks failing, which can matter for:
-
-- AI systems that batch-validate targets
-- Physics systems with many constraints
-- Any system that caches entity references between frames
-
-It's a small optimization, but it's also free (same performance as LIFO).
-
----
-
-## The EntityLocation: O(1) Component Access
-
-When you have an entity and want its components, you need to find where they're stored. Without any indexing, you'd have to search through all archetypes:
-
-```rust
-// Slow: O(archetypes × entities_per_archetype)
-fn get_component<T>(&self, entity: Entity) -> Option<&T> {
-    for archetype in &self.archetypes {
-        for (i, &e) in archetype.entities.iter().enumerate() {
-            if e == entity {
-                return Some(archetype.get::<T>(i));
-            }
+// Find a user by ID
+fn find_user(users: &[User], id: u64) -> Option<&User> {
+    for user in users {
+        if user.id == id {
+            return Some(user);
         }
     }
     None
 }
-```
 
-Instead, we maintain a **sparse array** mapping entity ID → location:
-
-```rust
-#[derive(Copy, Clone, Debug)]
-pub struct EntityLocation {
-    pub archetype_index: usize,  // Which archetype
-    pub chunk_index: usize,      // Which chunk within archetype (if chunked)
-    pub slot_index: usize,       // Which slot within chunk
+// Find an item in inventory
+fn find_item(inventory: &[Item], name: &str) -> Option<&Item> {
+    inventory.iter().find(|item| item.name == name)
 }
 
-// In World:
-locations: Vec<Option<EntityLocation>>
-
-// O(1) component access
-fn get_component<T>(&self, entity: Entity) -> Option<&T> {
-    // Validate entity is alive
-    let location = self.get_location(entity)?;
-    
-    // Direct access via indices
-    let archetype = &self.archetypes[location.archetype_index];
-    let chunk = &archetype.chunks[location.chunk_index];
-    Some(chunk.get::<T>(location.slot_index))
+// Find an enemy to attack
+fn find_target(enemies: &[Enemy], target_id: u32) -> Option<&Enemy> {
+    enemies.iter().find(|e| e.id == target_id)
 }
 ```
-
-This is a classic space-time tradeoff:
-- **Extra memory**: One `EntityLocation` (24 bytes typically) per entity slot ever used
-- **Gained speed**: O(1) instead of O(n) for entity → component lookup
-
-For a game with 100,000 entity slots, that's ~2.4 MB. Absolutely worth it.
-
----
-
-## Handling Swap-Remove: Keeping Locations Consistent
-
-When we delete an entity, we typically use **swap-remove** for O(1) deletion from contiguous storage:
-
-```
-Before delete(entity at slot 1):
-Slots: [A, B, C, D]  (we want to remove B)
-
-After swap-remove:
-Slots: [A, D, C]  (D moved from slot 3 to slot 1)
-```
-
-The problem: entity D's location is now wrong! It thinks it's at slot 3, but it's at slot 1.
-
-Here's how we fix it:
-
+Every single one of these is **O(n)**. We scan through the entire collection to find what we want. With 10 items, who cares? With 100,000 entities updated 60 times per second, this becomes catastrophic.
+### In Games, This Multiplies Fast
+A typical game frame might need to:
 ```rust
-impl World {
-    pub fn delete(&mut self, entity: Entity) {
-        let id = entity.id as usize;
-        let location = self.locations[id].take().unwrap();
-        
-        // Increment generation, recycle ID...
-        self.generations[id] = self.generations[id].wrapping_add(1);
-        self.free_ids.push_back(entity.id);
-        
-        // Perform swap-remove in archetype, get the moved entity (if any)
-        let archetype = &mut self.archetypes[location.archetype_index];
-        let moved_entity = archetype.swap_remove(location.chunk_index, location.slot_index);
-        
-        // UPDATE THE MOVED ENTITY'S LOCATION
-        if let Some(moved) = moved_entity {
-            // The entity that was at the end is now at the deleted slot
-            self.locations[moved.id as usize] = Some(EntityLocation {
-                archetype_index: location.archetype_index,
-                chunk_index: location.chunk_index,
-                slot_index: location.slot_index,  // It took the deleted slot
-            });
+// For each bullet, find its target
+for bullet in &bullets {                           // n bullets
+    if let Some(target) = find_entity(world, bullet.target_id) {  // O(m) search
+        // Deal damage
+    }
+}
+// Total: O(n × m) — potentially millions of operations!
+
+// For each AI, find nearby enemies
+for ai in &ai_controllers {                        // n AIs
+    for potential_target in &all_entities {        // m entities
+        if is_enemy(ai, potential_target) && in_range(ai, potential_target) {
+            // React
         }
     }
 }
+// Total: O(n × m) -> quadratic explosion!
 ```
-
-The archetype's `swap_remove` returns which entity got moved:
-
-```rust
-impl Archetype {
-    /// Remove entity at given slot by swapping with the last element.
-    /// Returns the Entity that was moved into the hole (if any).
-    pub fn swap_remove(&mut self, chunk_idx: usize, slot_idx: usize) -> Option<Entity> {
-        let chunk = &mut self.chunks[chunk_idx];
-        let last_idx = chunk.count - 1;
-        
-        let moved_entity = if slot_idx != last_idx {
-            // We're moving the last entity into this slot
-            Some(chunk.entities[last_idx])
-        } else {
-            // Removing the last element, no swap needed
-            None
-        };
-        
-        if moved_entity.is_some() {
-            // Copy component data from last slot to removed slot
-            unsafe {
-                let dst = chunk.ptr.add(slot_idx * chunk.layout.size());
-                let src = chunk.ptr.add(last_idx * chunk.layout.size());
-                std::ptr::copy_nonoverlapping(src, dst, chunk.layout.size());
-            }
-            // Swap entity handles
-            chunk.entities.swap(slot_idx, last_idx);
-        }
-        
-        // Pop the last element
-        chunk.entities.pop();
-        chunk.count -= 1;
-        self.len -= 1;
-        
-        moved_entity
-    }
-}
-```
-
-This pattern—swap-remove with location fixup—is fundamental to ECS performance. You'll see it everywhere.
-
----
-
-## Optimizations and Variations
-
-### Packing ID and Generation Together
-
-Some engines pack both values into a single `u64`:
-
-```rust
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
-pub struct Entity(u64);
-
-impl Entity {
-    const ID_BITS: u32 = 32;
-    const GEN_BITS: u32 = 32;
-    const ID_MASK: u64 = (1 << Self::ID_BITS) - 1;
-    
-    pub fn new(id: u32, generation: u32) -> Self {
-        Entity(((generation as u64) << Self::ID_BITS) | (id as u64))
-    }
-    
-    pub fn id(self) -> u32 {
-        (self.0 & Self::ID_MASK) as u32
-    }
-    
-    pub fn generation(self) -> u32 {
-        (self.0 >> Self::ID_BITS) as u32
-    }
-}
-```
-
-**Pros:**
-- Single 64-bit value, efficient to pass around
-- Atomic operations possible (for lock-free structures)
-
-**Cons:**
-- Bit manipulation on every access
-- Less readable in debuggers
-
-I prefer the struct with two fields for clarity, but both approaches work.
-
-### Smaller Generations
-
-32 bits for generation is overkill. At 60 deletions per second, a 32-bit counter overflows after ~2.2 years. You could use:
-
-```rust
-pub struct Entity {
-    pub id: u32,
-    pub generation: u16,  // 65,536 generations per slot
-}
-// Total: 6 bytes (or 8 with padding)
-```
-
-Or even pack into 32 bits total:
-
-```rust
-pub struct Entity(u32);
-
-impl Entity {
-    // 20 bits for ID (1 million entities max)
-    // 12 bits for generation (4096 reuses per slot)
-    const ID_BITS: u32 = 20;
-    const GEN_BITS: u32 = 12;
-    // ...
-}
-```
-
-The tradeoff is maximum entity count vs. generation safety margin.
-
-### Generational Indices in Other Languages
-
-This pattern exists outside Rust too:
-
-- **C++**: Often called "handle" or "slot map"
-- **Unity DOTS**: `Entity` struct with Index and Version
-- **Flecs**: `ecs_entity_t` with similar semantics
-
-It's a universal solution to the entity reference problem.
-
----
-
-## Testing Entity Management
-
-Here are tests that verify correctness:
-
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_spawn_assigns_sequential_ids() {
-        let mut world = World::new();
-        
-        let e0 = world.spawn(&[]);
-        let e1 = world.spawn(&[]);
-        let e2 = world.spawn(&[]);
-        
-        assert_eq!(e0.id, 0);
-        assert_eq!(e1.id, 1);
-        assert_eq!(e2.id, 2);
-        
-        // All should have generation 0
-        assert_eq!(e0.generation, 0);
-        assert_eq!(e1.generation, 0);
-        assert_eq!(e2.generation, 0);
-    }
-
-    #[test]
-    fn test_delete_increments_generation() {
-        let mut world = World::new();
-        
-        let e0 = world.spawn(&[]);
-        assert_eq!(e0.generation, 0);
-        
-        world.delete(e0);
-        
-        // Spawn again - should reuse id 0 with generation 1
-        let e0_new = world.spawn(&[]);
-        assert_eq!(e0_new.id, 0);
-        assert_eq!(e0_new.generation, 1);
-        
-        // Old reference should not equal new entity
-        assert_ne!(e0, e0_new);
-    }
-
-    #[test]
-    fn test_fifo_recycling_order() {
-        let mut world = World::new();
-        
-        let e0 = world.spawn(&[]);
-        let e1 = world.spawn(&[]);
-        let e2 = world.spawn(&[]);
-        
-        // Delete in order: 0, 1, 2
-        world.delete(e0);
-        world.delete(e1);
-        world.delete(e2);
-        
-        // FIFO: should reuse in order 0, 1, 2
-        let new0 = world.spawn(&[]);
-        let new1 = world.spawn(&[]);
-        let new2 = world.spawn(&[]);
-        
-        assert_eq!(new0.id, 0);  // First deleted, first reused
-        assert_eq!(new1.id, 1);
-        assert_eq!(new2.id, 2);  // Last deleted, last reused
-    }
-
-    #[test]
-    fn test_is_alive_detects_stale_references() {
-        let mut world = World::new();
-        
-        let enemy = world.spawn(&[]);
-        assert!(world.is_alive(enemy));
-        
-        world.delete(enemy);
-        assert!(!world.is_alive(enemy));  // Stale reference
-        
-        let pickup = world.spawn(&[]);  // Reuses same ID
-        assert!(!world.is_alive(enemy));  // Still stale (wrong generation)
-        assert!(world.is_alive(pickup));  // New entity is alive
-    }
-
-    #[test]
-    fn test_delete_stale_reference_returns_false() {
-        let mut world = World::new();
-        
-        let e = world.spawn(&[]);
-        world.delete(e);
-        
-        // Trying to delete again should fail
-        assert!(!world.delete(e));
-        
-        // Spawn new entity in same slot
-        let _ = world.spawn(&[]);
-        
-        // Old reference should still fail to delete
-        assert!(!world.delete(e));
-    }
-
-    #[test]
-    fn test_swap_remove_updates_moved_entity_location() {
-        let mut world = World::new();
-        
-        // Create some components for testing
-        register::<Position>();
-        
-        let p = Position { x: 0.0, y: 0.0, z: 0.0 };
-        
-        let e0 = world.spawn(&[&p]);
-        let e1 = world.spawn(&[&p]);
-        let e2 = world.spawn(&[&p]);
-        
-        // All in same archetype: slots [0, 1, 2]
-        // Delete e0: e2 moves to slot 0
-        world.delete(e0);
-        
-        // e2's location should now be slot 0
-        let loc = world.get_location(e2).unwrap();
-        assert_eq!(loc.slot_index, 0);
-        
-        // e1 should still be at slot 1
-        let loc1 = world.get_location(e1).unwrap();
-        assert_eq!(loc1.slot_index, 1);
-    }
-
-    #[test]
-    fn test_generation_wrapping() {
-        let mut world = World::new();
-        
-        // Manually set generation near max to test wrapping
-        world.generations.push(u32::MAX);
-        world.next_id = 1;
-        
-        let e = world.spawn(&[]);
-        assert_eq!(e.id, 0);
-        assert_eq!(e.generation, u32::MAX);
-        
-        world.delete(e);
-        
-        // After delete, generation should wrap to 0
-        let e_new = world.spawn(&[]);
-        assert_eq!(e_new.id, 0);
-        assert_eq!(e_new.generation, 0);  // Wrapped around
-    }
-}
-```
-
----
-
-## Common Pitfalls
-
-### 1. Forgetting to Update Locations After Swap-Remove
-
-This is the most common bug. If you swap-remove without updating the moved entity's location, you'll get:
-- Wrong components returned
-- Corruption when deleting the wrong entity
-- Undefined behavior in unsafe code
-
-Always pair swap-remove with location fixup.
-
-### 2. Not Validating Before Access
-
-```rust
-// BAD: Assumes entity is valid
-fn deal_damage(&mut self, target: Entity, amount: f32) {
-    let loc = self.locations[target.id as usize].unwrap();  // Panics on stale!
-    // ...
-}
-
-// GOOD: Handle stale references gracefully
-fn deal_damage(&mut self, target: Entity, amount: f32) -> bool {
-    let Some(loc) = self.get_location(target) else {
-        return false;  // Entity no longer exists
-    };
-    // ...
-    true
-}
-```
-
-### 3. Storing Raw IDs Instead of Entities
-
-```rust
-// BAD: Loses generation information
-struct AITarget {
-    target_id: u32,  // Can't detect if target was deleted and ID reused!
-}
-
-// GOOD: Keeps full entity reference
-struct AITarget {
-    target: Entity,  // Can validate with is_alive()
-}
-```
-
-### 4. Double-Free Bugs
-
-With generations, double-free is detectable but you should still handle it:
-
-```rust
-pub fn delete(&mut self, entity: Entity) -> bool {
-    // ...
-    
-    // This check prevents double-free
-    if self.generations[id] != entity.generation {
-        return false;  // Already deleted (or reused)
-    }
-    
-    // ...
-}
-```
-
----
-
-## Performance Characteristics
-
-Let's analyze the complexity of our entity operations:
-
-| Operation | Time Complexity | Notes |
-|-----------|-----------------|-------|
-| `spawn()` | O(1) amortized | Vec resize can cause O(n) rarely |
-| `delete()` | O(1) | Swap-remove + location update |
-| `is_alive()` | O(1) | Array lookup + comparison |
-| `get_location()` | O(1) | Array lookup |
-| `get_component<T>()` | O(1) | Location lookup + archetype access |
-
-Memory usage:
-- `generations: Vec<u32>` — 4 bytes per entity slot ever used
-- `locations: Vec<Option<EntityLocation>>` — ~24 bytes per slot (with padding)
-- `free_ids: VecDeque<u32>` — 4 bytes per currently-free ID
-- `entities: Vec<Entity>` — 8 bytes per currently-alive entity
-
-For a game that spawns 100,000 entities total with 10,000 alive at once:
-- generations: 400 KB
-- locations: 2.4 MB
-- free_ids: ~360 KB (90,000 free IDs)
-- entities: 80 KB
-
-Total: ~3.2 MB for entity management. Trivial for modern systems.
-
----
-
+This is why naive game engines (like my first one) hit a wall around a few thousand entities. The algorithms are fundamentally O(n²) or worse.
+### The Solutions We’ll Build
+The entire ECS architecture is designed to eliminate these linear searches:
+::media{src=medium/ecs-entity-management/05.webp label="Article illustration" fit=contain background=off height=300}
+The key insights we’ll explore:
+1. **BlobVec**: Store components contiguously so iteration is cache friendly
+2. **HashMap for entity -> location**: Trade memory for O(1) lookup
+3. **Archetypes**: Group entities by their component “signature” so we never check entities that don’t match our query
+4. **Sorted signatures**: Use binary search instead of linear search for component lookups
+Each of these techniques attacks the O(n) problem from a different angle. Combined, they turn an O(n²) game loop into something closer to O(n) and that O(n) iteration happens over cache friendly, contiguous memory.
+## The Fundamental Trade-off
+There’s no magic here, just the classic **space-time trade-off**:
+::note
+More memory (indexesn hashmaps, caches) = Faster lookups
+Less memory (just arrays) = Slower lookups (linear search)
+::
+In the next articles, we’ll build these solutions step by step, starting with the most fundamental building block inspired (like many things in this article) by the famous Bevy Engine: **BlobVec**. A way to store any component type in contiguous, cache friendly memory.
 ## Conclusion
-
-Entity management seems simple—until it isn't. The generation pattern solves a real problem that *will* bite you in any non-trivial game:
-
-1. **IDs alone aren't enough** — Recycled IDs cause dangling references
-2. **Generations detect staleness** — A 32-bit counter makes old references detectable
-3. **FIFO recycling maximizes safety** — Oldest deletions get reused first
-4. **Location tracking enables O(1) access** — Sparse array maps entity → storage location
-5. **Swap-remove requires fixup** — Always update moved entity locations
-
-This foundation supports everything we'll build on top: archetypes, queries, systems, and parallelism.
-
-In the next article, we'll explore **BlobVec: Type-Erased Component Storage**—how to store components of any type in contiguous memory without boxing, and why it's essential for cache-friendly iteration.
-
----
-
-*Next article: "BlobVec: Type-Erased Contiguous Storage for Any Component"*
-
-*All code from this series is available on GitHub: [link to your repo]*
-
----
-
-### Key Takeaways
-
-- An `Entity` is just `{ id: u32, generation: u32 }`
-- Generation increments on delete, invalidating old references
-- Use FIFO (`VecDeque`) for ID recycling to maximize "cooling time"
-- Maintain `EntityLocation` mapping for O(1) component access
-- Always fix up locations after swap-remove operations
-- Validate entities before access: `is_alive()` or `get_location()`
-
-### Further Reading
-
-- [Rust Book: Smart Pointers](https://doc.rust-lang.org/book/ch15-00-smart-pointers.html) — Understanding ownership models
-- [Generational Indices](https://lucassardois.medium.com/generational-indices-guide-8e3c5f7fd594) — In-depth explanation of the pattern
-- [Slot Map Pattern](https://docs.rs/slotmap/latest/slotmap/) — Rust crate implementing this pattern
-- [Catherine West's RustConf Talk](https://www.youtube.com/watch?v=aKLntZcp27M) — Covers entity management in ECS
+Entity management seems trivial until you need ID recycling. Then the ABA problem bites hard.
+The generational index pattern solves this elegantly:
+1. **ID + Generation** makes references unique across time
+2. **Generation increment on delete** invalidates all old references
+3. **FIFO recycling** maximizes time before ID reuse
+4. `is_alive()` **check** catches stale references explicitly
+This pattern is universal, you’ll find it in Unity DOTS, Flecs, Bevy, and countless custom engines. It's the right solution.
+In the next article, we’ll build **BlobVec**: a type erased, cache friendly storage for any component type. It’s the building block that makes everything else possible.
+*Next article: “BlobVec: Type-Erased Contiguous Storage”*
+## Further Reading
+- [Catherine West’s RustConf 2018 Talk](https://www.youtube.com/watch?v=aKLntZcp27M) — ECS architecture in Rust
+- [Unity DOTS Entity](https://docs.unity3d.com/Packages/com.unity.entities@1.0/manual/concepts-entities.html) — Same pattern in Unity

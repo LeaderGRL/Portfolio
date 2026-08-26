@@ -18,6 +18,39 @@ function iframeAdapter(resolveSrc) {
   }
 }
 
+function gistAdapter() {
+  return {
+    canHandle(block) {
+      try {
+        const url = new URL(block.src)
+        return url.protocol === 'https:' && url.hostname === 'gist.github.com' && url.pathname.endsWith('.js')
+      } catch {
+        return false
+      }
+    },
+    mount({ block, host }) {
+      const iframe = document.createElement('iframe')
+      iframe.className = 'article-interaction__embed article-interaction__embed--gist'
+      iframe.title = block.title || block.label || 'GitHub Gist'
+      iframe.loading = 'lazy'
+      iframe.referrerPolicy = 'no-referrer'
+      iframe.setAttribute('sandbox', 'allow-scripts allow-popups')
+
+      // Gist embeds are script-based rather than normal iframe endpoints. Keep
+      // that script inside its own sandboxed document so the main portfolio
+      // never executes third-party code in the parent page.
+      const scriptSrc = String(block.src || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('"', '&quot;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+      iframe.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff;overflow:auto}body{font:12px ui-monospace,SFMono-Regular,Consolas,monospace}.gist{margin:0!important}</style></head><body><script src="${scriptSrc}"><\/script></body></html>`
+      host.append(iframe)
+      return () => iframe.remove()
+    },
+  }
+}
+
 function galleryItems(block) {
   return String(block.body || '')
     .split('\n')
@@ -37,7 +70,7 @@ function mediaSingleAdapter(viewer) {
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'document-media-hotspot'
-      button.setAttribute('aria-label', block.label ? `Open ${block.label}` : 'Open project image')
+      button.setAttribute('aria-label', block.label ? `Open ${block.label}` : 'Open document image')
       button.style.inset = '0'
       button.addEventListener('click', () => viewer.open([{ src: block.src, label: block.label || '' }], 0))
       host.append(button)
@@ -57,7 +90,7 @@ function mediaGalleryAdapter(viewer) {
         const button = document.createElement('button')
         button.type = 'button'
         button.className = 'document-media-hotspot'
-        button.setAttribute('aria-label', item.label ? `Open ${item.label}` : 'Open project image')
+        button.setAttribute('aria-label', item.label ? `Open ${item.label}` : 'Open document image')
 
         const col = index % columns
         const row = Math.floor(index / columns)
@@ -108,10 +141,9 @@ function localVideoAdapter() {
       const video = rasteriser?.videoNodes?.[entry?.videoIndex]
       if (!video) return null
 
-      // Video elements start with preload="none" so a long project does not
-      // fetch every MP4 during document construction. This adapter is mounted
-      // only while the corresponding block is visible, which makes it the
-      // correct boundary for decoding the first frame without starting playback.
+      // Video elements start with preload="none" so a long document does not
+      // fetch every MP4 during construction. This adapter is mounted only while
+      // the corresponding block is visible, which is the right first-frame boundary.
       if (video.preload === 'none' && video.readyState < 2) {
         video.preload = 'auto'
         try { video.load() } catch {}
@@ -121,7 +153,7 @@ function localVideoAdapter() {
       button.type = 'button'
       button.className = 'document-media-hotspot document-video-hotspot'
       button.style.inset = '0'
-      button.setAttribute('aria-label', 'Play or pause local project video')
+      button.setAttribute('aria-label', 'Play or pause local document video')
 
       const toggle = async () => {
         if (video.paused || video.ended) {
@@ -154,8 +186,6 @@ export function createDefaultIntegrationRegistry({ local3d, mediaViewer }) {
 
   registry.register('local-3d', {
     mount({ block, host, context }) {
-      // Local 3D is already labelled inside the raster source. The DOM layer is
-      // input-only so it must never add visible controls above the CRT picture.
       return local3d.mount(block, host, context)
     },
   })
@@ -165,6 +195,7 @@ export function createDefaultIntegrationRegistry({ local3d, mediaViewer }) {
   registry.register('media-gallery', mediaGalleryAdapter(mediaViewer))
   registry.register('media-compare', mediaCompareAdapter(mediaViewer))
   registry.register('iframe', iframeAdapter(block => block.src))
+  registry.register('gist', gistAdapter())
   registry.register('youtube', iframeAdapter(block => {
     if (block.src) return block.src
     const id = block.id || block.uid || ''
