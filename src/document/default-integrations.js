@@ -18,6 +18,39 @@ function iframeAdapter(resolveSrc) {
   }
 }
 
+function gistAdapter() {
+  return {
+    canHandle(block) {
+      try {
+        const url = new URL(block.src)
+        return url.protocol === 'https:' && url.hostname === 'gist.github.com' && url.pathname.endsWith('.js')
+      } catch {
+        return false
+      }
+    },
+    mount({ block, host }) {
+      const iframe = document.createElement('iframe')
+      iframe.className = 'article-interaction__embed article-interaction__embed--gist'
+      iframe.title = block.title || block.label || 'GitHub Gist'
+      iframe.loading = 'lazy'
+      iframe.referrerPolicy = 'no-referrer'
+      iframe.setAttribute('sandbox', 'allow-scripts allow-popups')
+
+      // Gist embeds are script-based rather than normal iframe endpoints. Keep
+      // that script inside its own sandboxed document so the main portfolio
+      // never executes third-party code in the parent page.
+      const scriptSrc = String(block.src || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('"', '&quot;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+      iframe.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff;overflow:auto}body{font:12px ui-monospace,SFMono-Regular,Consolas,monospace}.gist{margin:0!important}</style></head><body><script src="${scriptSrc}"><\/script></body></html>`
+      host.append(iframe)
+      return () => iframe.remove()
+    },
+  }
+}
+
 function galleryItems(block) {
   return String(block.body || '')
     .split('\n')
@@ -162,6 +195,7 @@ export function createDefaultIntegrationRegistry({ local3d, mediaViewer }) {
   registry.register('media-gallery', mediaGalleryAdapter(mediaViewer))
   registry.register('media-compare', mediaCompareAdapter(mediaViewer))
   registry.register('iframe', iframeAdapter(block => block.src))
+  registry.register('gist', gistAdapter())
   registry.register('youtube', iframeAdapter(block => {
     if (block.src) return block.src
     const id = block.id || block.uid || ''
