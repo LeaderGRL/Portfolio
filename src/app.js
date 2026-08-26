@@ -133,8 +133,18 @@ export class App {
       const num = "12345".indexOf(k);
       if (num >= 0) { this.navKeys[ROUTES[num + 1].id].tap(); this.go(ROUTES[num + 1].id); return; }
       if (k === "0" || k === "h") { this.navKeys.home.tap(); this.go("home"); return; }
-      if (k === "ArrowDown") { e.preventDefault(); this.state.item ? this.scrollBy(2) : this.move(1); }
-      else if (k === "ArrowUp") { e.preventDefault(); this.state.item ? this.scrollBy(-2) : this.move(-1); }
+      if (k === "ArrowDown") {
+        e.preventDefault();
+        if (this.state.item) {
+          if (!articleReaderScroll('line-down')) this.scrollBy(2);
+        } else this.move(1);
+      }
+      else if (k === "ArrowUp") {
+        e.preventDefault();
+        if (this.state.item) {
+          if (!articleReaderScroll('line-up')) this.scrollBy(-2);
+        } else this.move(-1);
+      }
       else if (k === "PageDown") { e.preventDefault(); if (!articleReaderScroll('down')) this.scrollBy(this.term.rows - 2); }
       else if (k === "PageUp") { e.preventDefault(); if (!articleReaderScroll('up')) this.scrollBy(-(this.term.rows - 2)); }
       else if (k === "Home" && this.state.item) { e.preventDefault(); if (!articleReaderScroll('home')) this.scrollTo(0); }
@@ -241,15 +251,26 @@ export class App {
     const st = this.state;
     const keepScroll = this.term.scroll;
     this.term.clear();
-    const page = st.item ? PAGES.detail : (PAGES[st.route] || PAGES.home);
-    page(this.term, st);
+
+    // Project/article details are owned by the document runtime. Do not also
+    // render their authored blocks into the hidden terminal buffer: doing so
+    // would instantiate a second set of local videos through pages.js/media.js.
+    const documentItem = (st.route === 'articles' || st.route === 'projects') && st.item
+      ? st.item
+      : null;
+
+    if (documentItem) {
+      this.term.put(4, 3, documentItem.label.slice(0, this.term.cols - 8), "bright");
+      if (documentItem.sub) this.term.put(4, 5, documentItem.sub.slice(0, this.term.cols - 8), "dim");
+      this.term.put(4, 7, "DOCUMENT VIEW ACTIVE", "mid");
+    } else {
+      const page = st.item ? PAGES.detail : (PAGES[st.route] || PAGES.home);
+      page(this.term, st);
+    }
 
     // Articles and projects are both long-form documents now. The same DOM
     // mirror supplies semantics, native media elements and scroll state while
     // the visible pixels continue to come from the raster/CRT pipeline.
-    const documentItem = (st.route === 'articles' || st.route === 'projects') && st.item
-      ? st.item
-      : null;
     syncArticleReader(documentItem);
     document.getElementById('tube').classList.toggle('is-reading', Boolean(documentItem));
 
