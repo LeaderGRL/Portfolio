@@ -1,8 +1,6 @@
 services:
   portfolio:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/leadergrl/portfolio:production
 
     container_name: portfolio
 
