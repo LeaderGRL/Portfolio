@@ -5,7 +5,7 @@ status: UNREAL ENGINE · HORROR · AI
 year: 2023
 stack: [Unreal Engine, AI, Game Design, Horror]
 theme: horror
-link: https://www.youtube.com/watch?v=_FgVGmmpo1c
+link: /media/Leak/Leak.mp4
 ---
 
 ::facts{columns=2 label="PROJECT SNAPSHOT"}
@@ -25,7 +25,7 @@ LEAK is a first-person horror project set inside an isolated French manor used f
 
 The horror is built around vulnerability rather than combat dominance. The player is treated as prey: observation, route choice, noise management, distraction and escape are more important than defeating the threat directly.
 
-::embed{provider=youtube id=_FgVGmmpo1c label="PROJECT PRESENTATION" title="LEAK project presentation"}
+::video{src="/media/Leak/Leak.mp4" alt="LEAK project presentation and gameplay"}
 
 ## NARRATIVE PRESSURE
 
@@ -45,6 +45,8 @@ ADAPT | CHANGE ROUTES, DISTRACT THE CREATURE AND SURVIVE
 ::
 
 The loop deliberately creates return trips. Finding a file is only the beginning; extracting useful information requires the player to expose themselves again while the AI continues to create pressure.
+
+::video{src="/media/Leak/Leak - Hiding system demo V1.mp4" alt="LEAK hiding system demonstration"}
 
 ## ADAPTIVE AI
 
@@ -101,6 +103,8 @@ INVENTORY | INVISIBLE STORAGE FOR AMMO, SD CARDS, STACKABLE AND UNIQUE ITEMS
 FLASHLIGHT | WEAPON-MOUNTED LIGHT FOR DARK NAVIGATION
 BODY CAM | FISHEYE VIEW, CAMERA SWAY AND WEAPON SWAY
 ::
+
+::video{src="/media/Leak/Leak _ Character demo V1.mp4" alt="LEAK character and player-system demonstration"}
 
 The flashlight was also explored as a possible danger indicator: its behavior could become less stable as the creature gets closer, communicating threat without adding a conventional HUD meter.
 
