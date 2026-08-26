@@ -119,7 +119,7 @@ check(penw.includes('::timeline'), 'PENW exercises timeline')
 
 check(leak.includes('UTILITY AI'), 'Leak documents Director Utility AI')
 check(leak.includes('BEHAVIOR TREE'), 'Leak documents Creature Behavior Tree')
-check(leak.includes('DISTRACTION'), 'Leak documents noise/distraction counterplay')
+check(/distraction/i.test(leak), 'Leak documents noise/distraction counterplay')
 check(leak.includes('BODY CAM'), 'Leak documents body-cam systems')
 check(leak.includes('DECRYPTION FLOW'), 'Leak documents diegetic decryption workflow')
 check(leak.includes('TEN-DAY') || leak.includes('ten-day'), 'Leak documents team sprint cadence')
