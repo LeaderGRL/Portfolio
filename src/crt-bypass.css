@@ -70,6 +70,8 @@
 .tube.is-crt-off .document-inline-integration--miro::after,
 .tube.is-crt-off .document-inline-integration--google::before,
 .tube.is-crt-off .document-inline-integration--google::after,
+.tube.is-crt-off .document-inline-integration--gist::before,
+.tube.is-crt-off .document-inline-integration--gist::after,
 .tube.is-crt-off .document-inline-integration--iframe::before,
 .tube.is-crt-off .document-inline-integration--iframe::after{
   display:none !important;
