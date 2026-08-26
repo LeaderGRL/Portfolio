@@ -66,6 +66,7 @@ export function assertBlockType(type, context = 'document') {
 
 export const INTEGRATION_PROVIDERS = Object.freeze([
   'iframe',
+  'gist',
   'sketchfab',
   'youtube',
   'miro',
