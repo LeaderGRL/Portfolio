@@ -37,7 +37,7 @@ function mediaSingleAdapter(viewer) {
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'document-media-hotspot'
-      button.setAttribute('aria-label', block.label ? `Open ${block.label}` : 'Open project image')
+      button.setAttribute('aria-label', block.label ? `Open ${block.label}` : 'Open document image')
       button.style.inset = '0'
       button.addEventListener('click', () => viewer.open([{ src: block.src, label: block.label || '' }], 0))
       host.append(button)
@@ -57,7 +57,7 @@ function mediaGalleryAdapter(viewer) {
         const button = document.createElement('button')
         button.type = 'button'
         button.className = 'document-media-hotspot'
-        button.setAttribute('aria-label', item.label ? `Open ${item.label}` : 'Open project image')
+        button.setAttribute('aria-label', item.label ? `Open ${item.label}` : 'Open document image')
 
         const col = index % columns
         const row = Math.floor(index / columns)
@@ -108,10 +108,9 @@ function localVideoAdapter() {
       const video = rasteriser?.videoNodes?.[entry?.videoIndex]
       if (!video) return null
 
-      // Video elements start with preload="none" so a long project does not
-      // fetch every MP4 during document construction. This adapter is mounted
-      // only while the corresponding block is visible, which makes it the
-      // correct boundary for decoding the first frame without starting playback.
+      // Video elements start with preload="none" so a long document does not
+      // fetch every MP4 during construction. This adapter is mounted only while
+      // the corresponding block is visible, which is the right first-frame boundary.
       if (video.preload === 'none' && video.readyState < 2) {
         video.preload = 'auto'
         try { video.load() } catch {}
@@ -121,7 +120,7 @@ function localVideoAdapter() {
       button.type = 'button'
       button.className = 'document-media-hotspot document-video-hotspot'
       button.style.inset = '0'
-      button.setAttribute('aria-label', 'Play or pause local project video')
+      button.setAttribute('aria-label', 'Play or pause local document video')
 
       const toggle = async () => {
         if (video.paused || video.ended) {
@@ -154,8 +153,6 @@ export function createDefaultIntegrationRegistry({ local3d, mediaViewer }) {
 
   registry.register('local-3d', {
     mount({ block, host, context }) {
-      // Local 3D is already labelled inside the raster source. The DOM layer is
-      // input-only so it must never add visible controls above the CRT picture.
       return local3d.mount(block, host, context)
     },
   })
