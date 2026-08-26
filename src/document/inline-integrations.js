@@ -12,9 +12,7 @@ import { SRC_H, SRC_W } from '../core.js'
  * - wheel always belongs to the document while the shield is active;
  * - YouTube stays shielded permanently and is controlled through postMessage;
  * - integrations that require direct pointer input can still opt into a short
- *   active state, restored to scroll mode when the pointer leaves;
- * - direct overlays (for example media inspection hotspots) receive pointer
- *   input immediately without an activation click.
+ *   active state, restored to scroll mode when the pointer leaves.
  * ========================================================================== */
 export class InlineIntegrationController {
   constructor({ tube, rasteriser, registry }) {
@@ -143,8 +141,8 @@ export class InlineIntegrationController {
   }
 
   _isInline(entry, descriptor) {
-    if (!entry || !descriptor || descriptor.provider === 'video') return false
-    return descriptor.inline === true || entry.type === 'embed' || entry.type === 'model3d'
+    if (!entry || !descriptor) return false
+    return descriptor.inline === true || entry.type === 'embed' || entry.type === 'model3d' || entry.type === 'video'
   }
 
   _visibleAmount(entry) {
