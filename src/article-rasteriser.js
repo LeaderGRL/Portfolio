@@ -220,7 +220,7 @@ export class ArticleRasteriser {
     let bestVisible = 0
     for (const entry of this.layout) {
       const handler = this.blockRegistry?.get(entry.type)
-      const interactive = entry.type === 'video' || entry.type === 'embed' || Boolean(handler?.getInteraction)
+      const interactive = entry.type === 'image' || entry.type === 'video' || entry.type === 'embed' || Boolean(handler?.getInteraction)
       if (!interactive) continue
       const top = entry.y - this.scroll
       const bottom = top + entry.height
@@ -235,6 +235,22 @@ export class ArticleRasteriser {
 
   getInteraction(entry) {
     if (!entry) return null
+    if (entry.type === 'image') {
+      // Plain ::image blocks predate the rich media registry. Route them into
+      // the same CRT inspector as ::media so articles and projects share the
+      // exact same interaction contract instead of having two media systems.
+      return {
+        provider: 'media-single',
+        block: {
+          ...entry.block,
+          label: entry.block.label || entry.block.alt || '',
+          provider: 'media-single',
+        },
+        entry,
+        inline: true,
+        direct: true,
+      }
+    }
     if (entry.type === 'video') {
       return {
         provider: 'video',
