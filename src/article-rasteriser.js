@@ -164,7 +164,7 @@ export class ArticleRasteriser {
           this._loadImage(block.src)
           break
         case 'video':
-          push({ type: 'video', block, videoIndex: videoIndex++, height: 220 })
+          push({ type: 'video', block, videoIndex: videoIndex++, height: Number(block.height) || 236 })
           break
         case 'embed':
           push({ type: 'embed', block, height: 150 })
@@ -235,7 +235,15 @@ export class ArticleRasteriser {
 
   getInteraction(entry) {
     if (!entry) return null
-    if (entry.type === 'video') return { provider: 'video', block: entry.block, entry }
+    if (entry.type === 'video') {
+      return {
+        provider: 'video',
+        block: entry.block,
+        entry,
+        inline: true,
+        direct: true,
+      }
+    }
     if (entry.type === 'embed') return { provider: entry.block.provider || 'iframe', block: entry.block, entry }
     const handler = this.blockRegistry?.get(entry.type)
     const descriptor = handler?.getInteraction?.(entry.block, entry, this._blockEnv())
@@ -253,7 +261,7 @@ export class ArticleRasteriser {
     const g = this.ctx
     const x = entry.x
     const maxW = entry.width
-    const maxH = entry.height - 24
+    const maxH = entry.height - 28
 
     if (source && (source.complete || source.readyState >= 2)) {
       const sw = source.videoWidth || source.naturalWidth || source.width || 1
@@ -264,17 +272,22 @@ export class ArticleRasteriser {
       const dx = x + (maxW - dw) * .5
       const dy = y + (maxH - dh) * .5
 
-      if (entry.type === 'video') {
-        g.fillStyle = '#010805'
-        g.fillRect(dx, dy, dw, dh)
-      }
-
       try { g.drawImage(source, dx, dy, dw, dh) } catch {}
 
       if (entry.type === 'video') {
         g.strokeStyle = COLORS.dim
         g.lineWidth = 1
         g.strokeRect(dx + .5, dy + .5, Math.max(0, dw - 1), Math.max(0, dh - 1))
+        const playing = !source.paused && !source.ended
+        this._drawLines(
+          [playing ? 'PAUSE' : 'PLAY'],
+          dx + 8,
+          dy + dh - 9,
+          7,
+          9,
+          playing ? COLORS.core : COLORS.amber,
+          700,
+        )
       }
       return
     }
@@ -367,8 +380,8 @@ export class ArticleRasteriser {
         }
         case 'note': {
           g.fillStyle = 'rgba(255,179,71,.07)'; g.fillRect(x, y, entry.width, entry.height - 8)
-          g.fillStyle = COLORS.amber; g.fillRect(x, y, 2, entry.height - 8)
-          this._drawLines(entry.lines, x + 12, y + 16, 9, 15, COLORS.bright, 500)
+          g.strokeStyle = 'rgba(255,179,71,.42)'; g.strokeRect(x + .5, y + .5, entry.width - 1, entry.height - 9)
+          this._drawLines(entry.lines, x + 11, y + 16, 10, 15, COLORS.amber, 600)
           break
         }
       }
