@@ -44,7 +44,7 @@ LEARN | UNLOCK NEW STORY INFORMATION
 ADAPT | CHANGE ROUTES, DISTRACT THE CREATURE AND SURVIVE
 ::
 
-The loop deliberately creates return trips. Finding a file is only the beginning; extracting useful information requires the player to expose themselves again while the AI continues to create pressure.
+The important part is the return trip. Finding information is only the beginning; extracting it forces the player back through spaces that may no longer be safe. Progress therefore creates exposure instead of simply rewarding exploration from a menu.
 
 ::video{src="/media/Leak/Leak - Hiding system demo V1.mp4" alt="LEAK hiding system demonstration"}
 
@@ -65,27 +65,25 @@ INFORMATION GAP | CREATURE MUST STILL SEARCH AND CAN LOSE THE PLAYER
 
 The Director has privileged knowledge of the run and can periodically influence where the creature should apply pressure. Its job is not to teleport an omniscient enemy onto the player; it evaluates the situation using Utility AI and nudges the experience toward useful levels of tension.
 
-::facts{columns=2 label="DIRECTOR RESPONSIBILITIES"}
-KNOWLEDGE | GLOBAL PLAYER / RUN INFORMATION
-DECISION MODEL | UTILITY AI
-GOAL | MANAGE PACING AND PRESSURE
-OUTPUT | SUGGEST AREAS / RESPONSES TO THE CREATURE
-CONSTRAINT | DOES NOT REPLACE LOCAL SEARCH
-HORROR VALUE | ESCALATE WITHOUT MAKING FAILURE FEEL SCRIPTED
-::
+Its responsibilities are deliberately narrow:
+
+- observe global player and run information;
+- score possible responses through Utility AI;
+- influence pacing and suggest useful areas of pressure;
+- preserve the creature's need to search locally.
+
+That separation is what keeps escalation from feeling like the game is cheating. The Director may understand the dramatic state of the run, but the creature still needs evidence before it can act with confidence.
 
 ### CREATURE AI
 
-The Creature AI is the embodied threat. It uses its own sensors and Behavior Tree to investigate, search and pursue. The distinction matters because the player can meaningfully hide, change route or create misleading evidence instead of fighting against perfect information.
+The Creature AI is the embodied threat. Its Behavior Tree coordinates investigation, search and pursuit using information obtained from its own perception rather than inheriting the Director's complete knowledge.
 
-::system{columns=2 label="CREATURE COUNTERPLAY"}
-HEARING | RUNNING AND THROWN OBJECTS CREATE INFORMATION
-SIGHT | LOCAL VISUAL PERCEPTION CAN CONFIRM THE PLAYER
-SEARCH | INVESTIGATE LAST-KNOWN OR SUGGESTED AREAS
-DISTRACTION | THROWN OBJECTS CAN PULL ATTENTION ELSEWHERE
-ESCAPE | BREAK CONTACT AND FORCE THE CREATURE TO SEARCH AGAIN
-UNCERTAINTY | PLAYER CAN NEVER ASSUME THE CREATURE KNOWS EVERYTHING
-::
+Running creates louder evidence. Thrown objects can pull attention away from the player. Breaking line of sight can force a search around the last useful information instead of producing an automatic pursuit through walls.
+
+- **hearing** reacts to movement and deliberate distractions;
+- **sight** confirms the player only when local perception allows it;
+- **search** explores last-known or suggested areas;
+- **escape** matters because the creature can genuinely lose certainty.
 
 ::note
 HORROR RULE — THE DIRECTOR MAY KNOW MORE THAN THE CREATURE. THE CREATURE STILL HAS TO EARN LOCAL KNOWLEDGE THROUGH PERCEPTION.
@@ -93,30 +91,28 @@ HORROR RULE — THE DIRECTOR MAY KNOW MORE THAN THE CREATURE. THE CREATURE STILL
 
 ## PLAYER PRESSURE SYSTEMS
 
-Movement creates a continuous trade-off. Walking is safer but slower; running spends stamina and generates more noise. Objects can be collected and thrown to create distractions, turning environmental interaction into a way to manipulate the creature's information.
+Movement creates a continuous trade-off. Walking is safer but slower; running spends stamina and produces more noise. Environmental objects can be collected and thrown, turning ordinary interaction into a way to manipulate what the creature believes about the player's position.
 
-::system{columns=2 label="PLAYER SYSTEMS"}
-MOVEMENT | WALK QUIETLY OR RUN WITH STAMINA / NOISE CONSEQUENCES
-DISTRACTION | PICK UP AND THROW OBJECTS TO CREATE SOUND
-INTERACTION | SHARED WORLD INTERACTION CONTRACT FOR THE TEAM
-INVENTORY | INVISIBLE STORAGE FOR AMMO, SD CARDS, STACKABLE AND UNIQUE ITEMS
-FLASHLIGHT | WEAPON-MOUNTED LIGHT FOR DARK NAVIGATION
-BODY CAM | FISHEYE VIEW, CAMERA SWAY AND WEAPON SWAY
-::
+Several supporting systems reinforce that same pressure without needing a conventional HUD-heavy presentation:
+
+- a shared world-interaction contract used across gameplay objects;
+- invisible inventory storage for ammunition, SD cards, stackable items and unique objects;
+- a weapon-mounted flashlight for navigation through dark spaces;
+- fisheye body-cam presentation with camera and weapon sway.
 
 ::video{src="/media/Leak/Leak _ Character demo V1.mp4" alt="LEAK character and player-system demonstration"}
 
-The flashlight was also explored as a possible danger indicator: its behavior could become less stable as the creature gets closer, communicating threat without adding a conventional HUD meter.
+The flashlight was also explored as a danger indicator. Instead of adding another meter to the screen, its behavior could become less stable as the creature gets closer, making the environment itself communicate pressure.
 
 ## BODY CAM
 
 The camera direction aims for the physical imperfection of body-camera footage rather than a clean game camera. A wide fisheye-like lens, eye/chest positioning, walking sway and weapon sway were used to make movement feel embodied and slightly unstable.
 
-The important design constraint is that the visual effect must reinforce vulnerability and spatial uncertainty. The body-cam look is useful only if interaction, navigation and threat readability still work underneath it.
+The visual effect only works if it supports the game underneath it. Interaction, navigation and threat readability still need to remain understandable, so the body-cam treatment is constrained by gameplay rather than treated as a post-process showcase.
 
 ## DECRYPTION PUZZLE
 
-The encrypted-file mechanic was designed as a diegetic computer interaction. One explored direction was to let the player adjust an audio frequency/effect in real time until a damaged or encrypted recording becomes understandable.
+The encrypted-file mechanic was designed as a diegetic computer interaction. One explored direction was to let the player adjust an audio frequency or effect in real time until a damaged recording becomes understandable.
 
 ::pipeline{label="DECRYPTION FLOW"}
 RECOVER DATA | FIND AN ENCRYPTED FILE OR SD CARD
@@ -130,27 +126,17 @@ This became a technical challenge because the interaction combined diegetic Unre
 
 ## ENVIRONMENT PRODUCTION
 
-The manor was chosen because it could feel prestigious, enormous, abandoned and claustrophobic at the same time. Scope and available production time influenced the floor plan, and some environment work began before the detailed game design was fully formalized. That exposed a production lesson: spaces created for abandoned mechanics later had to be revised rather than treated as sunk design constraints.
+The manor was chosen because it could feel prestigious, enormous, abandoned and claustrophobic at the same time. Scope and available production time influenced the floor plan, and some environment work began before the detailed game design was fully formalized.
 
-::facts{columns=2 label="MANOR PRODUCTION"}
-LOCATION | ISOLATED FRENCH MANOR
-MOOD | MAJESTIC + ABANDONED + HOSTILE
-PLANNING | FLOOR PLAN SCALED TO TIME AND TEAM CAPACITY
-ITERATION | EARLY ENVIRONMENT WORK WAS REVISED WITH GAME DESIGN
-PRODUCED AREAS | GROUND FLOOR, KITCHEN, BATHROOM, BEDROOM
-SPECIAL SPACE | INTERROGATION ROOM
-::
+That exposed a production lesson early: spaces built around abandoned mechanics eventually had to be revised. The ground floor, kitchen, bathroom, bedroom and interrogation room were therefore not just art-production tasks; their usefulness depended on how the final systems asked the player to move through them.
+
+The result changed the way we treated environment scope. A room had to justify itself through navigation, pressure, information or interaction rather than existing because it had already been produced.
 
 ## CHARACTER ART / SKULL
 
-The Skull study demonstrates a different optimization problem from the AI/gameplay systems. Separate polygon budgets were prepared for cinematic and game use rather than treating the highest-detail asset as the universal target.
+The Skull study demonstrates a different optimization problem from the AI and gameplay work. Separate budgets were prepared for the asset's actual use instead of treating the highest-detail version as the universal target.
 
-::facts{columns=2 label="SKULL OPTIMIZATION"}
-CINEMATIC | ~150K POLYGONS
-GAME | ~60K POLYGONS
-TEXTURES | 6 TEXTURE SHEETS
-STRATEGY | QUALITY SCALED BY ACTUAL USAGE
-::
+The cinematic version was around **150K polygons**, while the game version targeted roughly **60K**, with six texture sheets supporting the final material work. The interesting decision was not simply reducing polygons; it was deciding where that detail still mattered once the asset moved from close-up presentation to real-time use.
 
 ::embed{provider=youtube id=Myl4n_aTp5g label="SKULL OPTIMIZATION" title="LEAK Skull optimization"}
 
@@ -158,9 +144,9 @@ STRATEGY | QUALITY SCALED BY ACTUAL USAGE
 
 ## DESIGN / TEAM PROCESS
 
-The project was split between development and Game Art responsibilities. On the development side, work was organized in approximately ten-day sprints: progress, blockers, delays and next tasks were reviewed as a team rather than allowing implementation to drift independently from the game design.
+The project was split between development and Game Art responsibilities. On the development side, work was organized in approximately ten-day sprints. Progress, blockers, delays and next tasks were reviewed as a team rather than allowing implementation to drift independently from the game design.
 
-Game-design decisions were centralized in shared documents and Miro. That formalization mattered because parts of the environment had already demonstrated the cost of building production content before mechanics and constraints were aligned.
+Game-design decisions were centralized in shared documents and Miro. That formalization mattered because the environment had already demonstrated the cost of producing content before mechanics and constraints were aligned.
 
 ::embed{provider=miro src="https://miro.com/app/live-embed/uXjVNbgQeC8=/?moveToViewport=-43102,-63386,183701,88262&embedId=970581881101" label="GAME DESIGN BOARD" title="LEAK game design Miro board" height=230}
 
