@@ -5,7 +5,7 @@ status: UNITY · ARCADE · IOT
 year: 2023
 stack: [Unity, C#, Arduino, IoT, Hardware]
 theme: synthwave
-link: https://www.youtube.com/watch?v=gchRNrRPOwI
+link: /media/penw/D%C3%A9monstration%20Project%20Echo%20_%20Neon%20Wave.mp4
 ---
 
 ::facts{columns=2 label="PROJECT SNAPSHOT"}
@@ -25,7 +25,7 @@ Project Echo: Neon Wave was designed as a complete arcade experience rather than
 
 The core loop asks the player to destroy notes in rhythm while handling long notes, directional movement and rotary-controlled sliders. Camera motion and visual feedback reinforce the musical structure instead of existing only as decoration.
 
-::embed{provider=youtube id=gchRNrRPOwI label="GAMEPLAY DEMO" title="Project Echo: Neon Wave gameplay"}
+::video{src="/media/penw/Démonstration Project Echo _ Neon Wave.mp4" alt="Project Echo: Neon Wave gameplay demo"}
 
 ::gallery{columns=2}
 /media/penw/level-select.webp | Dynamic level selection and scoreboard
@@ -82,7 +82,7 @@ SYSTEM DESIGN — SOFTWARE, HARDWARE AND GAMEPLAY WERE ITERATED AS ONE INPUT LOO
 
 A dedicated web level editor was created to import music, inspect its audio structure and place notes against the timeline. This tooling became important because content iteration speed directly affected the quality of the rhythm design.
 
-::media{src=/media/penw/level-editor.webp label="JAVASCRIPT LEVEL EDITOR / WAVEFORM + NOTE AUTHORING" fit=contain height=286}
+::media{src=/media/penw/level-editor.webp label="JAVASCRIPT LEVEL EDITOR / WAVEFORM + NOTE AUTHORING" fit=contain height=286 background=off}
 
 ::facts{columns=2 label="AUTHORING TOOL"}
 INPUT | IMPORT A MUSIC TRACK
