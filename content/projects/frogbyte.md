@@ -81,10 +81,9 @@ field.
 Frogbyte therefore treats every unsafe operation as a small contract. Local
 `SAFETY` comments explain the assumptions, workspace lints reject undocumented
 unsafe blocks, and the storage code keeps explicit invariants for alignment,
-initialization, capacity and zero-sized types. That approach follows the same
-principle emphasized by Rust's unsafe documentation: unsafe code is where the
-compiler stops proving part of the story, so the programmer has to make that
-story reviewable. citeturn901502search0turn901502search2
+initialization, capacity and zero-sized types. Unsafe code is where the compiler
+stops proving part of the story, so the programmer has to make that story
+reviewable.
 
 ## ARCHETYPES: PUT THE BYTES NEXT TO THE BYTES THEY TRAVEL WITH
 
@@ -101,13 +100,11 @@ V0,V1,V2
 Row `1` means `E1`, `P1` and `V1` belong together. Removing a row uses
 swap-remove across every column so that alignment survives the operation.
 
-This layout is not exotic. Archetype ECS designs deliberately group entities
-with the same component set and keep component data contiguous because linear
-iteration is exactly the kind of memory access modern CPUs are good at. The
-Flecs ECS articles describe the same core motivation: arrays are predictable,
-cache-friendly and suitable for vectorization; type erasure is what lets a
-runtime ECS build those columns without knowing every component type in
-advance. citeturn143403search2
+This layout is not exotic. Archetype ECS designs group entities with the same
+component set and keep component data contiguous because linear iteration is
+exactly the kind of memory access modern CPUs are good at. Type erasure is what
+lets a runtime ECS build those columns without knowing every component type in
+advance.
 
 The interesting part is not drawing three neat columns. The interesting part is
 keeping them neat after insertion, removal, destruction and eventually
@@ -152,9 +149,8 @@ The workflow is intentionally boring:
 That last step matters. Data-oriented design is not "replace every struct with
 SoA and collect 10% performance". Access patterns decide which layouts are
 useful, and fragmented archetypes can become their own performance problem when
-a design creates too many tiny tables. Modern ECS implementations spend a lot
-of effort managing exactly those trade-offs rather than assuming an archetype
-is automatically fast because it contains arrays. citeturn143403search4turn143403search24
+a design creates too many tiny tables. Archetypes are a tool, not a coupon for
+free cache locality.
 
 ## THE INFRASTRUCTURE IS NOT THE BORING PART
 
