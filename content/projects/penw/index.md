@@ -82,9 +82,7 @@ SYSTEM DESIGN — SOFTWARE, HARDWARE AND GAMEPLAY WERE ITERATED AS ONE INPUT LOO
 
 A dedicated web level editor was created to import music, inspect its audio structure and place notes against the timeline. This tooling became important because content iteration speed directly affected the quality of the rhythm design.
 
-::gallery{columns=1 fit=contain}
-/media/penw/level-editor.webp | JavaScript level editor — waveform inspection and note authoring
-::
+::media{src=/media/penw/level-editor.webp label="JAVASCRIPT LEVEL EDITOR / WAVEFORM + NOTE AUTHORING" fit=contain height=286}
 
 ::facts{columns=2 label="AUTHORING TOOL"}
 INPUT | IMPORT A MUSIC TRACK
@@ -97,32 +95,30 @@ The editor evolved alongside the game instead of being treated as a disposable i
 
 ## VISUAL DIRECTION
 
-The project went through multiple synthwave background iterations, menu experiments and character concepts before converging on its final identity. Echo, the mascot, was explored through clothing, hair, face, weapon and even an abandoned 3D figurine attempt.
+The visual identity was iterated against the constraints of an arcade screen: note readability, motion, contrast and the amount of background noise all mattered more than how impressive a still image looked in isolation.
 
-::gallery{columns=2}
-/media/penw/logo-design.webp | Project Echo logo and synthwave identity
-/media/penw/background-prototype.webp | 3D gameplay background prototype — rejected for excessive visual noise
+::media{src=/media/penw/background-prototype.webp label="3D GAMEPLAY BACKGROUND PROTOTYPE / REJECTED FOR EXCESSIVE VISUAL NOISE" fit=cover height=260}
+
+The rejected 3D background above was useful precisely because it exposed the wrong trade-off. It looked richer as a standalone scene, but competed too strongly with notes and timing information during actual play.
+
+::media{src=/media/penw/logo-design.webp label="PROJECT ECHO / SYNTHWAVE IDENTITY" fit=contain height=220}
+
+Echo, the project mascot, went through multiple visual experiments as the identity matured. The character work was exploratory rather than a separate production pipeline: it helped establish the tone of the machine and its surrounding presentation.
+
+::gallery{columns=2 fit=contain}
 /media/penw/echo-concept.webp | Echo character concept exploration
 /media/penw/echo-3d.webp | Abandoned 3D mascot experiment
 ::
 
-The important lesson was not simply producing more assets, but learning to compare iterations against the actual constraints of an arcade screen: motion readability, contrast, note visibility and the amount of visual noise behind gameplay.
-
 ## DEVELOPMENT TIMELINE
 
 ::timeline
-2021-10 | Project starts and first gameplay prototypes
-2021-11 | Note destruction and early rhythm loop
-2021-12 | Menu and level selection experiments
-2022-01 | Echo mascot exploration
-2022-03 | Level editor and camera systems
-2022-04 | Long notes and 3D mascot experiment
-2022-05 | New control-panel design
-2022-11 | Hardware testing and cabinet work
-2022-12 | Level-editor redesign
-2023-01 | Background and visual asset iterations
-2023-02 | Buttons, particles and control integration
-2023-04 | Final cabinet integration and presentation
+2021 Q4 | Core rhythm prototype and first playable note systems
+2022 Q1 | Menu, mascot direction, camera systems and early authoring tools
+2022 Q2 | Long notes, control-panel redesign and physical-input planning
+2022 Q4 | Cabinet hardware tests and major level-editor iteration
+2023 Q1 | Background, UI, particles and control-integration polish
+2023 Q2 | Final cabinet integration and project presentation
 ::
 
 ## WHAT THIS PROJECT TAUGHT ME
