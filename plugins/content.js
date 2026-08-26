@@ -276,7 +276,7 @@ function readCollection(dir) {
     const path = join(dir, entry)
     const stat = statSync(path)
     if (stat.isFile() && extname(entry) === '.md') {
-      documents.push(readDocument(path, basename(entry, '.md'))
+      documents.push(readDocument(path, basename(entry, '.md')))
       continue
     }
     if (stat.isDirectory()) {
