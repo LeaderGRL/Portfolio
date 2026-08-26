@@ -29,6 +29,22 @@ function galleryItems(block) {
     .filter(item => item.src)
 }
 
+function mediaSingleAdapter(viewer) {
+  return {
+    mount({ block, host }) {
+      if (!block.src) return null
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'document-media-hotspot'
+      button.setAttribute('aria-label', block.label ? `Open ${block.label}` : 'Open project image')
+      button.style.inset = '0'
+      button.addEventListener('click', () => viewer.open([{ src: block.src, label: block.label || '' }], 0))
+      host.append(button)
+      return () => button.remove()
+    },
+  }
+}
+
 function mediaGalleryAdapter(viewer) {
   return {
     mount({ block, host }) {
@@ -94,6 +110,7 @@ export function createDefaultIntegrationRegistry({ local3d, mediaViewer }) {
     },
   })
 
+  registry.register('media-single', mediaSingleAdapter(mediaViewer))
   registry.register('media-gallery', mediaGalleryAdapter(mediaViewer))
   registry.register('media-compare', mediaCompareAdapter(mediaViewer))
   registry.register('iframe', iframeAdapter(block => block.src))
