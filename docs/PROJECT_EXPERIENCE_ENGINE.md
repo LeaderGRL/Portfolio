@@ -2,503 +2,220 @@
 
 ## Goal
 
-Build one maintainable content engine capable of presenting very different portfolio projects — PENW, LEAK, Frogbyte, Crossatro and future work — without project-specific JavaScript or CSS.
+Build one maintainable content engine capable of presenting very different portfolio projects — PENW, LEAK and future work — without project-specific JavaScript or CSS.
 
-A new project should normally require only:
-
-1. one Markdown document;
-2. its assets;
-3. optional use of already-registered generic blocks.
-
-If adding LEAK after PENW requires `leak.js`, the architecture has failed.
-
----
+A project should normally require only Markdown, assets and already-registered generic blocks. If adding a project requires `src/<project>.js`, the architecture should be reconsidered.
 
 ## Core invariant
 
-The JG-1500 has one physical CRT post-process for every local pixel source:
+The JG-1500 has one physical CRT compositor for every local pixel source:
 
 ```text
 terminal canvas ───────┐
-article raster ────────┤
-project raster ────────┼─> DisplayPipeline
-local video frame ─────┤        |
-local Three.js canvas ─┘        v
-                              CRT
-                               |
-                               v
-                     photographic glass
+document raster ───────┤
+local image/video ─────┼─> DisplayPipeline -> FRAG_CRT -> photographic glass
+local Three.js canvas ─┘
 ```
 
-The important distinction is **local pixels vs. cross-origin pixels**, not articles vs. projects.
+The relevant boundary is **local pixels vs cross-origin pixels**. Local text, images, video frames and Three.js canvases can be sampled by WebGL. YouTube, Sketchfab, Miro and other cross-origin iframes cannot; they are mounted inline below the photographic glass and receive compositor-level CRT optics.
 
-Local text, images, video frames and Three.js canvases can be sampled by WebGL and therefore receive the real `FRAG_CRT` pipeline.
-
-Cross-origin iframes such as YouTube, Sketchfab and Miro cannot legally/safely be sampled into WebGL. They are mounted inline above the raster picture and below the photographic glass, with compositor-level CRT optics applied to make the transition visually coherent.
-
----
-
-## Design principles
-
-### 1. Projects are data, never implementations
-
-Forbidden:
-
-```js
-if (project.id === 'penw') { ... }
-if (project.id === 'leak') { ... }
-```
-
-Preferred:
-
-```md
-::facts{columns=2}
-ENGINE | UNITY
-ROLE | GAMEPLAY + SYSTEMS
-::
-
-::system{columns=2}
-AI DIRECTOR | GLOBAL PACING
-CREATURE AI | LOCAL DECISIONS
-::
-
-::pipeline
-INPUT | ROTARY ENCODER
-GAME STATE | UNITY
-FEEDBACK | SLIDER + CAMERA
-::
-
-::model3d{src=assets/cabinet.glb}
-```
-
-The current validation is deliberate: PENW and LEAK are both real rich project documents and neither has a runtime module.
-
-### 2. Blocks own capabilities, not projects
-
-The shared `BlockRegistry` currently provides the project/document vocabulary:
+## Runtime layers
 
 ```text
-text
-├── heading
-├── prose
-├── list
-├── code
-├── figure
-└── note
-
-media
-├── image
-└── video
-
-composition
-├── hero
-├── facts
-├── system
-├── pipeline
-├── gallery
-├── compare
-└── timeline
-
-integration
-├── model3d
-└── embed
+Markdown / content plugin
+        |
+        v
+shared document schema
+        |
+        v
+BlockRegistry -------------------- IntegrationRegistry
+ |                                      |
+ | text / media / composition           | video / iframe / 3D adapters
+ v                                      v
+ArticleRasteriser                 InlineIntegrationController
+        |                                 |
+        +------------ physical CRT -------+
 ```
 
-A reusable block may provide:
+Projects are data. Runtime modules must not branch on PENW or LEAK ids.
 
-- measurement/layout metadata;
-- preload behavior;
-- raster paint behavior;
-- interaction metadata;
-- disposal behavior;
-- semantic mirror footprint.
+## Shared blocks
 
-If a future project needs a capability that another project could plausibly reuse, add a block. Do not branch on the project id.
-
-### 3. Visual grammar must reflect information structure
-
-Do not turn every technical idea into a flowchart.
-
-`pipeline` is for relationships where order, causality or data flow is genuinely meaningful. `system` is for responsibilities, states and subsystems that coexist without implying a sequence.
-
-A useful rule:
+The authoring vocabulary includes:
 
 ```text
-Can the rows be reordered without changing the meaning?
-
-YES -> system / facts / prose / comparison
-NO  -> pipeline may be appropriate
+text       heading, prose, list, code, figure, note
+media      image, video, media
+layout     hero, facts, system, pipeline, gallery, compare, timeline
+external   model3d, embed
 ```
 
-Arrows are semantic marks, not decoration. Repeated generic cards, nodes and arrows make unrelated projects look artificially similar and reduce the credibility of the technical presentation.
+`system` represents responsibilities or states that coexist. `pipeline` is reserved for an actual ordered process. Arrows are semantic, not decorative.
 
-### 4. Integrations are adapters
+`media` is the large editorial image block. It supports `fit=cover|contain`, configurable height/gap, and `background=on|off`. `gallery`, `compare` and `media` share the same CRT image inspector.
 
-Provider-specific behavior lives in `IntegrationRegistry`, not project documents or the rasteriser.
+## Interaction architecture
+
+There is no second generic modal interaction system.
+
+Local video, image inspection, local 3D and provider iframes are all owned by the inline/document layers:
+
+- local video uses a transparent play/pause hotspot over the rasterised frame;
+- image inspection temporarily owns `article-source`, remaining inside the physical CRT;
+- local 3D keeps a detached Three.js render canvas and a transparent DOM input proxy;
+- cross-origin providers mount inline only while their corresponding block is visible.
+
+This removes an unnecessary competing visual state from the CRT pipeline.
+
+## Local video lifecycle
+
+User-started local video uses `preload="none"`. Playback is explicit and obeys the physical machine:
 
 ```text
-IntegrationRegistry
-├── iframe
-├── YouTube
-├── Sketchfab
-├── Miro
-├── Google
-└── local-3d
+click / keyboard  -> play / pause
+VOLUME             -> media volume
+POWER OFF          -> pause
+project switch     -> pause
+browser hidden     -> pause
+return / power on  -> remain paused until user action
 ```
 
-The document only declares intent:
+Autoplay loops are a special case: they must be muted and may opt into eager loading.
 
-```md
-::embed{provider=youtube id=VIDEO_ID}
-::embed{provider=sketchfab uid=MODEL_UID}
-::embed{provider=miro src="..."}
-```
+## Media loading policy
 
-### 5. Local 3D is preferred over remote 3D
+The engine avoids eagerly constructing a complete rich project in memory:
 
-When a redistributable local `.glb` is available, use `::model3d`.
+- large `media`, `gallery` and `compare` images request their asset on first visible paint;
+- local user-started video uses `preload="none"`;
+- remote iframes use `loading="lazy"` and are only mounted for visible blocks;
+- local 3D animation ticks only while the model block intersects the CRT viewport;
+- image decode results are cached in the document rasteriser;
+- Three.js resources are disposed deterministically on runtime teardown.
 
-`Local3DManager` currently:
+Asset optimization still matters. Lazy loading is not a substitute for appropriately sized WebP, MP4/WebM and GLB files.
 
-- loads glTF/GLB with Three.js `GLTFLoader`;
-- renders to a reusable transparent canvas;
-- derives camera distance from the model bounding sphere and camera FOV;
-- derives zoom limits from model scale;
-- provides key/fill/rim lighting;
-- provides a generic transparent contact shadow;
-- uses OrbitControls for input;
-- keeps the visible 3D pixels in the document raster -> real CRT path;
-- disposes geometries, materials and textures when the document runtime is destroyed.
+## Local 3D
 
-Use Sketchfab when the local model is unavailable, the public hosted model is itself useful, or Sketchfab-specific features matter.
+`Local3DManager` uses Three.js `GLTFLoader` and `OrbitControls`. The model is auto-framed from its bounds and rendered to a detached canvas so every visible model pixel travels through the real CRT shader.
 
-### 6. Content, composition and display are separate
-
-Content says what exists:
-
-```md
-::image{src=assets/cabinet.webp}
-```
-
-A block option says how that content is composed:
-
-```md
-::gallery{columns=2}
-...
-::
-```
-
-The physical display decides how the result is presented:
+The DOM owns only input:
 
 ```text
-normal JG-1500
-fullscreen JG-1500
-same document source
-same CRT
+drag          rotate
+wheel         scroll document
+Ctrl+wheel    zoom
+double click  reset camera
 ```
 
-Blocks must not create their own fullscreen architecture.
+The runtime disposes geometry, material, texture and renderer GPU resources when destroyed. Offscreen scenes do not tick their animation loop.
 
-### 7. Long-form navigation is automatic
+## Cross-origin integrations
 
-Projects and articles should not require authors to maintain a separate table of contents.
-
-`DocumentProgressOverlay` derives chapters from Markdown headings and paints the navigation directly into the document raster:
-
-- vertical progress rail;
-- chapter markers;
-- active chapter counter;
-- active chapter label.
-
-Because it is painted into the source canvas, this UI receives the real CRT shader too.
-
-### 8. Graceful degradation is mandatory
-
-Failure of one optional visual capability must not make the document disappear.
-
-Examples:
+Remote provider pixels cannot be copied into the CRT WebGL texture because of the browser cross-origin boundary. Their presentation is therefore:
 
 ```text
-WebGL CRT unavailable   -> direct document source canvas
-iframe displacement API -> neutral displacement map
-local 3D load fails     -> readable 3D unavailable state
-remote provider hidden  -> surrounding document remains scrollable
+iframe -> inline integration surface -> CSS/SVG CRT optics -> glass
 ```
 
-The document engine should degrade one capability at a time.
+The `IntegrationRegistry` currently supports generic iframe, YouTube, Sketchfab, Miro, Google, local video and local 3D adapters.
 
----
+YouTube remains scroll-first: a shield owns click/keyboard playback commands while ordinary wheel input continues to move the document. Sketchfab disables its own scroll-wheel zoom.
 
-## Authoring model
+## Semantic mirror and long documents
 
-Recommended project structure:
+`article-source` is visual-only. `article-reader` mirrors the document semantics and scroll footprint while remaining visually hidden behind the raster picture in CRT mode. `DocumentProgressOverlay` derives chapter progress from Markdown headings and paints it directly into the document framebuffer.
 
-```text
-content/projects/
-└── my-project/
-    ├── index.md
-    └── assets/
-        ├── hero.webp
-        ├── gameplay.mp4
-        ├── screenshot.webp
-        └── model.glb
-```
+The semantic mirror must account for the same measured heights as the raster blocks or scroll positions diverge.
 
-Legacy flat files such as `content/projects/frogbyte.md` remain supported during migration.
-
-The content plugin resolves project-relative assets at build time. Authors should never add generated URLs to runtime JavaScript.
-
-The detailed authoring reference lives in `docs/ADDING_PROJECTS.md`.
-
----
-
-## Shared project primitives
-
-### Facts
-
-Compact project/system information without creating another prose section.
-
-```md
-::facts{columns=2 label="PROJECT SNAPSHOT"}
-ENGINE | UNITY
-ROLE | PROJECT LEAD + GAMEPLAY
-PLATFORM | CUSTOM ARCADE CABINET
-PERIOD | 2021 — 2023
-::
-```
-
-### System
-
-Non-linear editorial breakdown for architecture, responsibilities and states.
-
-```md
-::system{columns=2 label="AI SYSTEM"}
-DIRECTOR AI | GLOBAL PACING + PRESSURE
-CREATURE AI | LOCAL PERCEPTION + DECISIONS
-PERCEPTION | SIGHT + HEARING + RECENT EVIDENCE
-SEARCH STATE | INVESTIGATES WITHOUT PERFECT KNOWLEDGE
-::
-```
-
-The renderer deliberately uses no arrows.
-
-### Pipeline
-
-Connected flow for actual ordered processes.
-
-```md
-::pipeline{label="INPUT LOOP"}
-PHYSICAL INPUT | ROTARY ENCODER
-INPUT BRIDGE | HARDWARE SIGNAL
-GAME STATE | UNITY INPUT SYSTEM
-PLAYER FEEDBACK | SLIDER + CAMERA
-::
-```
-
-PENW hardware/input and level-authoring workflows are good examples because the order is part of the system. LEAK's survival loop is also sequential. LEAK's Adaptive AI architecture is **not** a pipeline and therefore uses `system`.
-
-### Gallery / compare / timeline
-
-These blocks make visual iteration and chronology data-driven rather than project-specific layouts.
-
-```md
-::gallery{columns=2}
-assets/a.webp | Prototype
-assets/b.webp | Final
-::
-
-::compare{before=assets/a.webp after=assets/b.webp}
-
-::timeline
-2025-01 | Prototype
-2025-04 | Production
-::
-```
-
----
-
-## Cross-origin integration policy
-
-### Why they do not use the real shader
-
-The WebGL renderer cannot read arbitrary pixels from a cross-origin iframe. This is a browser security boundary, not a missing rendering trick.
-
-Therefore:
-
-```text
-local asset / canvas
-      -> real CRT shader
-
-cross-origin iframe
-      -> native inline compositor surface
-      -> SVG/CSS CRT optics
-      -> photographic glass
-```
-
-### Inline behavior
-
-Remote integrations are mounted only while their corresponding document block is visible and are removed when it leaves the visible document region.
-
-They are not hidden behind a generic `OPEN INTEGRATION` modal.
-
-### YouTube
-
-YouTube is intentionally **scroll-first**:
-
-- a persistent transparent shield remains above the iframe;
-- wheel always scrolls the document;
-- click/keyboard toggles play/pause via the YouTube iframe `postMessage` API;
-- raw iframe pointer input remains disabled;
-- `enablejsapi=1` and `playsinline=1` are enabled.
-
-This prevents playback from trapping the page scroll.
-
-### Sketchfab
-
-Sketchfab disables viewer wheel zoom by default (`scrollwheel=0`) so the document owns the wheel. Direct pointer manipulation can be temporarily activated by the inline interaction layer.
-
-### CRT optics for native iframes
-
-The compositor applies a lightweight approximation:
-
-- SVG displacement map / `feDisplacementMap`;
-- scanline overlay;
-- RGB mask;
-- vignette;
-- subtle bloom/softening;
-- photographic CRT glass remains above it.
-
-If Canvas2D APIs needed to generate the displacement texture are unavailable, a neutral map is used and only displacement is dropped.
-
----
-
-## Current real validation projects
+## Validation projects
 
 ### PENW / Project Echo: Neon Wave
 
-PENW proves that the engine can represent:
+PENW currently proves:
 
-- arcade/game metadata with `facts`;
-- software + hardware as one project;
-- physical input flow with `pipeline`;
-- level-authoring flow with the same `pipeline` block;
-- YouTube gameplay inline;
-- Sketchfab cabinet inline;
-- long timeline;
-- future local cabinet GLB without changing runtime architecture.
+- local MP4 video through the real CRT path;
+- physical volume control and playback lifecycle;
+- local textured GLB through Three.js;
+- hardware/input pipeline;
+- level editor and full-width media;
+- galleries, compare, configurable media backgrounds and CRT inspection;
+- long-form timeline and chapter progress.
 
-There is **no PENW-specific runtime code**.
+There is no PENW-specific runtime code.
 
 ### LEAK
 
-LEAK intentionally stresses a different shape of project:
+LEAK stresses a very different project structure:
 
-- horror/gameplay metadata;
-- survival loop with `pipeline` because it is ordered;
-- Director AI + Creature AI architecture with arrow-free `system`;
-- body-cam/player systems as `facts`;
-- optimization facts;
-- multiple YouTube videos;
-- Sketchfab model;
-- Miro game-design board;
-- development timeline.
+- ordered survival/information loop;
+- Director Utility AI + Creature Behavior Tree represented as non-linear systems;
+- movement/noise/distraction counterplay;
+- inventory, flashlight and body-cam systems;
+- diegetic audio decryption workflow;
+- environment-production decisions;
+- Skull optimization study;
+- YouTube, Sketchfab and Miro fallbacks;
+- development timeline and team process.
 
-There is **no Leak-specific runtime code**.
+There is **no Leak-specific runtime code**. Until curated LEAK binary assets are versioned, the page intentionally uses existing external providers rather than inventing local paths.
 
-This is the current anti-overfit proof for the engine.
+## Graceful degradation
 
----
+Optional capabilities fail independently:
 
-## Performance rules
+```text
+WebGL CRT unavailable -> direct source canvas
+local image missing    -> loading/unavailable state, document remains readable
+local 3D load fails    -> explicit unavailable state
+remote iframe absent   -> surrounding document still scrolls
+CRT effects OFF        -> direct document/media source without glass optics
+```
 
-1. Keep the document raster source at a controlled internal resolution.
-2. Only visible remote integrations should remain mounted.
-3. Local 3D should reuse one renderer/canvas per model source.
-4. Pause or avoid expensive animation when rich blocks are offscreen where practical.
-5. Cache decoded static image resources inside the document runtime.
-6. Dispose Three.js geometries, materials and textures deterministically.
-7. Do not create a per-project dependency graph.
-8. Prefer optimized portfolio assets over loading presentation-export originals at runtime.
+## Testing contract
 
----
+Static/DOM smoke tests lock the architecture around:
 
-## Accessibility / interaction rules
+- one physical CRT output and one document framebuffer;
+- absence of the old modal interaction layer;
+- shared schema/block/provider registration;
+- media inspector layering;
+- configurable/lazy editorial media;
+- local video play/pause, volume and lifecycle;
+- lazy remote iframes;
+- Three.js disposal and offscreen animation gating;
+- PENW and LEAK both using the same engine.
 
-- The raster source canvas is visual only.
-- The hidden semantic document owns reading order and scroll range.
-- Inline integration shields have keyboard-accessible activation behavior.
-- YouTube remains scrollable while playing.
-- Power OFF hides/tears down native interaction surfaces.
-- No interaction may depend on an invisible control whose position does not match the visible raster.
-- If a provider requires unusual behavior, solve it in a provider adapter, not a project page.
+The GitHub CI runs build plus the complete smoke suite on each pushed commit.
 
----
+## Browser validation
 
-## Asset strategy
+A passing build is necessary but not sufficient. Before merge, manually exercise at least:
 
-Each rich project has an `assets/README.md` migration manifest while old presentation exports are being curated.
+1. PENW desktop with CRT ON and OFF;
+2. image inspection and return to the same scroll position;
+3. local video play/pause, VOLUME and POWER OFF;
+4. local 3D rotate/scroll/zoom/reset;
+5. browser-tab background pause;
+6. LEAK remote video, Skull viewer and Miro scrolling;
+7. one mobile viewport for PENW and LEAK;
+8. a long scroll from top to bottom looking for semantic/raster drift.
 
-Rules:
+## Acceptance status
 
-- use descriptive filenames;
-- prefer WebP for static screenshots/photos;
-- preserve GIF only when animation is informative;
-- prefer local MP4/WebM over YouTube when the original file is available;
-- prefer local GLB over Sketchfab when redistribution is appropriate;
-- optimize before committing;
-- never solve an asset problem with project-specific runtime code.
+- [x] Projects require Markdown/data rather than project runtime modules.
+- [x] PENW and LEAK share one schema and CRT document path.
+- [x] Local image/video/3D pixels remain eligible for the real CRT shader.
+- [x] Cross-origin integrations are inline and visibility-gated.
+- [x] Image inspection remains inside the CRT.
+- [x] Local video follows physical volume and power state.
+- [x] Background browser tabs cannot leave local project video playing.
+- [x] Large editorial media and external iframes have lazy-loading boundaries.
+- [x] Three.js teardown disposes GPU resources.
+- [x] Legacy generic interaction modal has been removed.
+- [x] PENW has local MP4 and local GLB reference-quality paths.
+- [x] LEAK can express its AI/gameplay/design structure without project-specific code.
+- [ ] Curated local LEAK images/video/GLB are still to be versioned if/when those source assets are prepared.
+- [ ] Final visual browser QA must still be performed on desktop and mobile before taking the PR out of Draft.
 
----
-
-## Research notes
-
-### Three.js
-
-`GLTFLoader` is the official Three.js addon for glTF 2.0 and supports modern glTF extensions. Local GLB is therefore a good canonical format for interactive project assets.
-
-Reference: https://threejs.org/docs/pages/GLTFLoader.html
-
-### Sketchfab
-
-The Sketchfab Viewer supports hosted 3D interaction and remains useful when the hosted model is the canonical artifact or a local redistributable model is unavailable.
-
-References:
-- https://sketchfab.com/developers/viewer
-- https://sketchfab.com/developers/viewer/initialization
-- https://sketchfab.com/developers/viewer/functions
-
----
-
-## Acceptance criteria before merging
-
-- [x] Basic project folder requires only Markdown + assets.
-- [x] Runtime modules do not branch on PENW or LEAK ids.
-- [x] Articles and projects share the same parsed block contract and CRT document path.
-- [x] Unknown directives fail at build time.
-- [x] Local images/video frames can remain under the real CRT shader.
-- [x] Inline remote integrations preserve document scrolling.
-- [x] YouTube playback does not capture document wheel scrolling.
-- [x] Local Three.js architecture keeps 3D pixels in the real CRT path.
-- [x] WebGL document fallback exists.
-- [x] Power OFF hides native integration surfaces.
-- [x] PENW can be authored with no PENW-specific runtime code.
-- [x] LEAK can be authored with no Leak-specific runtime code.
-- [x] Non-linear technical architecture can be represented without decorative arrows.
-- [x] npm lockfile includes the Three.js dependency for `npm ci`.
-- [x] Smoke tests cover schema, integrations, 3D contract and both reference projects.
-- [ ] Curated PENW binary assets are committed and referenced by the document.
-- [ ] Curated LEAK binary assets are committed and referenced by the document.
-- [ ] A real local GLB has been validated visually in-browser through `model3d`.
-- [ ] Fullscreen document UX has been visually validated.
-
----
-
-## Next implementation order
-
-1. Validate current PENW + LEAK composition in the browser.
-2. Migrate curated static media using the descriptive asset manifests.
-3. Validate one real local GLB through `model3d`.
-4. Add gallery/compare sections once those curated assets are versioned.
-5. Tune project visual themes only through generic tokens/options.
-6. Validate responsive/mobile project reading.
-7. Validate fullscreen using the same document and CRT pipeline.
+See `docs/ADDING_PROJECTS.md` for the authoring reference.

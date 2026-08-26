@@ -163,13 +163,16 @@ function renderBlock(block) {
       const video = make('video')
       video.src = block.src
       video.controls = false
-      video.preload = 'metadata'
+      // Local project video is user-initiated. Avoid fetching metadata/media for
+      // every project video during document construction; play() triggers load.
+      video.preload = 'none'
       video.playsInline = true
       video.volume = panelMediaVolume()
       if (block.loop) {
         video.loop = true
         video.autoplay = true
         video.muted = true
+        video.preload = 'auto'
       }
       frame.append(video)
       figure.append(frame)

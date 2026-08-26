@@ -1,4 +1,3 @@
-import { ArticleInteractionController } from './article-interaction.js'
 import { syncArticleReader } from './article-reader.js'
 import { ArticleRasteriser } from './article-rasteriser.js'
 import { DisplayPipeline } from './display-pipeline.js'
@@ -31,7 +30,6 @@ export function attachArticleCRT(app) {
     },
   })
 
-  let interaction = null
   let inlineIntegrations = null
   let documentRaster = null
   const progressOverlay = new DocumentProgressOverlay()
@@ -40,10 +38,8 @@ export function attachArticleCRT(app) {
     crtCanvas: documentCanvas,
     onChange: ({ open } = {}) => {
       app.dirty = true
-      if (open) {
-        interaction?.close?.(false)
-        inlineIntegrations?.clear?.()
-      } else {
+      if (open) inlineIntegrations?.clear?.()
+      else {
         // The viewer temporarily owns article-source. When it closes, force the
         // document rasteriser to repaint the exact same scroll position before
         // the next CRT upload.
@@ -62,12 +58,6 @@ export function attachArticleCRT(app) {
     app.dirty = true
   }, { blockRegistry })
 
-  interaction = new ArticleInteractionController({
-    tube,
-    reader,
-    rasteriser: documentRaster,
-    integrations,
-  })
   inlineIntegrations = new InlineIntegrationController({
     tube,
     rasteriser: documentRaster,
@@ -96,7 +86,6 @@ export function attachArticleCRT(app) {
 
     const itemChanged = documentRaster.setItem(documentItem)
     if (itemChanged) {
-      if (interaction.isOpen) interaction.close(false)
       mediaViewer.close()
       inlineIntegrations.clear()
     }
@@ -114,7 +103,6 @@ export function attachArticleCRT(app) {
     tube.dataset.displayMode = mediaViewer.isOpen ? 'media' : documentItem ? 'article' : 'terminal'
     tube.classList.toggle('has-dom-surface', Boolean(documentItem) && !mediaViewer.isOpen)
     tube.classList.toggle('is-reading', Boolean(documentItem) && !mediaViewer.isOpen)
-    if (!documentItem && interaction.isOpen) interaction.close(false)
     if (!documentItem) mediaViewer.close()
   }
 
@@ -157,14 +145,12 @@ export function attachArticleCRT(app) {
     if (!isDocument()) return
 
     if (mediaViewer.isOpen) {
-      if (interaction.isOpen) interaction.close(false)
       inlineIntegrations.clear()
       return
     }
 
     if (hasVisibleLocal3D()) local3d.tick(time)
 
-    interaction.sync()
     inlineIntegrations.sync()
     if (documentRaster.videoNodes.some(video => !video.paused && !video.ended && video.readyState >= 2)) {
       app.dirty = true
@@ -173,7 +159,6 @@ export function attachArticleCRT(app) {
   raf = requestAnimationFrame(mediaFrame)
 
   syncSource()
-  interaction.sync()
   inlineIntegrations.sync()
 
   const bridge = {
@@ -185,7 +170,6 @@ export function attachArticleCRT(app) {
     local3d,
     mediaViewer,
     progressOverlay,
-    interaction,
     pipeline,
     syncSource,
     enterFullscreen: () => pipeline.enterFullscreen(document.getElementById('screen')),
@@ -194,7 +178,6 @@ export function attachArticleCRT(app) {
       cancelAnimationFrame(raf)
       app.back = originalBack
       inlineIntegrations.destroy()
-      interaction.destroy()
       mediaViewer.destroy()
       local3d.dispose()
       syncArticleReader(null)

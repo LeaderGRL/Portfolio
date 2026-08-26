@@ -7,6 +7,7 @@ function iframeAdapter(resolveSrc) {
       iframe.className = 'article-interaction__embed'
       iframe.src = resolveSrc(block)
       iframe.title = block.title || block.label || 'Interactive integration'
+      iframe.loading = 'lazy'
       iframe.referrerPolicy = 'strict-origin-when-cross-origin'
       iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-presentation')
       iframe.setAttribute('allow', 'autoplay; clipboard-read; clipboard-write; fullscreen; gamepad')

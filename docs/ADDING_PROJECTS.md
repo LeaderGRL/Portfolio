@@ -1,66 +1,19 @@
 # Adding a rich project
 
-The project engine is designed so a new portfolio project should require content and assets, not runtime JavaScript.
+The project engine is designed so a new portfolio project should require content and assets, not runtime JavaScript or project-specific CSS.
 
-## Recommended project structure
-
-Keep the authored document in `content/projects/<slug>/`. Small document-local images can live beside it, but large or streamed media should live under `public/media/<slug>/` so Vite serves them as files instead of embedding them into the JavaScript bundle.
+## Recommended structure
 
 ```text
-content/
-└── projects/
-    └── my-project/
-        └── index.md
-
-public/
-└── media/
-    └── my-project/
-        ├── hero.webp
-        ├── gameplay.mp4
-        ├── screenshot-01.webp
-        └── model.glb
+content/projects/my-project/index.md
+public/media/my-project/
+├── hero.webp
+├── gameplay.mp4
+├── screenshot-01.webp
+└── model.glb
 ```
 
-Legacy one-file projects such as `content/projects/frogbyte.md` remain supported.
-
-### Which asset folder should I use?
-
-Use `content/projects/<slug>/assets/` for small images that are genuinely part of the document source and that benefit from build-time inlining.
-
-Use `public/media/<slug>/` for:
-
-- `.glb` / `.gltf` models;
-- videos;
-- large GIFs;
-- large image galleries;
-- assets you want the browser to load lazily or stream independently from the application bundle.
-
-For rich projects, `public/media/<slug>/` should be the default for substantial media.
-
-## Versioning 3D models
-
-A GLB is a normal project asset. If it is a few hundred kilobytes or a few megabytes, commit it with regular Git; Git LFS is unnecessary at that scale.
-
-Recommended workflow:
-
-```bash
-node tools/install-project-model.mjs C:/path/to/model.glb my-project model.glb
-
-git add public/media/my-project/model.glb
-git add content/projects/my-project/index.md
-git commit -m "feat: add my-project 3D model"
-git push
-```
-
-The installer validates the GLB header/version and copies it to the canonical public-media directory. It is optional convenience tooling; after the copy, the model is simply a tracked Git file.
-
-Then reference it from Markdown:
-
-```md
-::model3d{src=/media/my-project/model.glb label="EXPLORE THE MODEL" autospin=0.08}
-```
-
-For ordinary portfolio-sized GLBs, this is all that is required. Consider Git LFS only if individual binary assets become genuinely large (for example tens or hundreds of megabytes) or change frequently enough to bloat repository history.
+Use `content/projects/<slug>/assets/` only for small document-local images that benefit from build-time inlining. Use `public/media/<slug>/` for streamed or substantial assets: video, GLB, large GIFs and large image collections.
 
 ## Minimal project
 
@@ -73,7 +26,7 @@ year: 2026
 stack: [Unity, C#]
 ---
 
-::facts{columns=2}
+::facts{columns=2 label="PROJECT SNAPSHOT"}
 TYPE | GAME / TOOL / SYSTEM
 ENGINE | UNITY
 ROLE | GAMEPLAY + SYSTEMS
@@ -82,33 +35,25 @@ YEAR | 2026
 
 ## THE PROJECT
 
-Explain the problem, your role and the interesting engineering decisions.
+Explain the problem, your contribution and the interesting engineering decisions.
 ```
 
-No JavaScript registration is needed for a project. If you are about to create `src/my-project.js`, stop and ask whether the missing behavior should be a reusable document block instead.
+If you are about to create `src/my-project.js`, stop and ask whether the missing behavior belongs in a reusable block or provider adapter.
 
 ## Blocks
-
-### Hero
-
-```md
-::hero{media=/media/my-project/hero.webp eyebrow="ARCADE SYSTEM" title="PROJECT TITLE" subtitle="Short pitch"}
-```
-
-Use a hero only when it has useful visual media. Do not create an empty hero simply to reserve space.
 
 ### Project facts
 
 ```md
 ::facts{columns=2 label="PROJECT SNAPSHOT"}
-GENRE | RHYTHM GAME
 ENGINE | UNITY
-PLATFORM | CUSTOM ARCADE CABINET
-ROLE | GAMEPLAY + SYSTEMS
+ROLE | PROJECT LEAD + GAMEPLAY
+PLATFORM | CUSTOM HARDWARE
+PERIOD | 2021 — 2023
 ::
 ```
 
-`facts` is a compact visual summary. Use `1`, `2` or `3` columns depending on the amount of information. The left side of each row is the fact name; the right side is the value.
+Use `facts` for compact metadata and measured facts.
 
 ### System overview
 
@@ -121,7 +66,7 @@ SEARCH STATE | INVESTIGATES WITHOUT PERFECT INFORMATION
 ::
 ```
 
-Use `system` for architecture, responsibilities, state groups and subsystems that coexist rather than happen in a strict order. It intentionally renders as an editorial grid with **no arrows**. Prefer this for AI architecture, gameplay subsystems, service boundaries and technical breakdowns.
+Use `system` when items coexist. Avoid decorative flowcharts: arrows imply causality or sequence.
 
 ### Sequential pipeline
 
@@ -134,7 +79,15 @@ PLAYER FEEDBACK | SLIDER + CAMERA RESPONSE
 ::
 ```
 
-Use `pipeline` only when the ordering is meaningful: input chains, rendering passes, network flows, authoring workflows or an actual gameplay loop. Do not use it just to make a technical section look more visual. If the rows could be rearranged without changing the meaning, `system`, `facts`, prose or a table-like block is usually a better choice.
+Use `pipeline` only when ordering is meaningful. If rows can be rearranged without changing the meaning, use `system`, `facts` or prose instead.
+
+### Hero
+
+```md
+::hero{media=/media/my-project/hero.webp eyebrow="SYSTEM" title="PROJECT TITLE" subtitle="Short pitch"}
+```
+
+Only use a hero when there is useful visual media.
 
 ### Image
 
@@ -142,25 +95,104 @@ Use `pipeline` only when the ordering is meaningful: input chains, rendering pas
 ::image{src=/media/my-project/screenshot.webp alt="Gameplay screenshot"}
 ```
 
-Small local PNG, JPEG, WebP and GIF assets placed next to `index.md` are resolved relative to the document and inlined by the build. Prefer `/media/<slug>/...` for substantial project media.
+### Full-width media
+
+`media` is the preferred editorial block for a large screenshot, plan, waveform or key visual. It is clickable and opens in the CRT media inspector.
+
+```md
+::media{src=/media/my-project/editor.webp label="LEVEL EDITOR" fit=contain height=286}
+```
+
+Options:
+
+- `fit=cover` fills the media well and may crop;
+- `fit=contain` preserves the whole image;
+- `height=150..340` controls the visual height;
+- `gap=12..48` controls breathing room after the block;
+- `background=on` is the default near-black media well;
+- `background=off` removes that well for imagery that should sit directly on the document background.
+
+Use `background=off` deliberately; technical plans and narrow images are usually easier to read with the dark well enabled.
 
 ### Gallery
 
 ```md
-::gallery{columns=2}
-/media/my-project/shot-01.webp | Gameplay
-/media/my-project/shot-02.webp | Level editor
-/media/my-project/shot-03.webp | Final environment
+::gallery{columns=2 fit=contain}
+/media/my-project/shot-01.webp | Prototype
+/media/my-project/shot-02.webp | Final result
 ::
 ```
 
-Use `1`, `2` or `3` columns. The first pipe-separated field is an asset path; the rest is its caption.
+Gallery cells are also inspectable inside the CRT. `background=off` is available but the dark well is the default.
 
 ### Before / after
 
 ```md
-::compare{before=/media/my-project/old.webp after=/media/my-project/final.webp beforeLabel="PROTOTYPE" afterLabel="FINAL"}
+::compare{before=/media/my-project/old.webp after=/media/my-project/final.webp beforeLabel="PROTOTYPE" afterLabel="FINAL" fit=contain}
 ```
+
+### Local video
+
+Prefer local video when you own the source because its frames are copied into `article-source` and therefore receive the real CRT shader.
+
+```md
+::video{src="/media/my-project/gameplay.mp4" alt="Gameplay demo"}
+```
+
+Interaction contract:
+
+```text
+click / Enter / Space   play or pause
+physical VOLUME         controls video volume
+POWER OFF               pauses video
+project/document switch pauses video
+browser tab hidden      pauses video
+return to page           does not auto-resume
+```
+
+User-started local videos use `preload="none"`; the browser begins loading when playback is explicitly requested. Autoplay loop media is the exception and may request eager loading while remaining muted.
+
+### YouTube
+
+```md
+::embed{provider=youtube id=VIDEO_ID label="GAMEPLAY" title="Gameplay demo"}
+```
+
+Use YouTube when the original local file is unavailable or the hosted player is itself useful. The iframe is mounted only while its document block is visible. Its shield keeps wheel scrolling attached to the document while click/keyboard controls playback through the iframe API.
+
+### Local 3D model
+
+```md
+::model3d{src=/media/my-project/model.glb label="EXPLORE THE MODEL" autospin=0.08}
+```
+
+The GLB is rendered by Three.js to a detached canvas, then copied into the document framebuffer. Only a transparent input proxy exists in the DOM, so the model pixels remain inside the real CRT post-process.
+
+```text
+drag             rotate
+wheel            scroll document
+Ctrl + wheel     zoom / unzoom
+double click     reset camera
+```
+
+The runtime pauses model animation while its block is offscreen and deterministically disposes geometries, materials, textures and the renderer when the document runtime is destroyed.
+
+### Sketchfab
+
+```md
+::embed{provider=sketchfab uid=MODEL_UID label="MODEL" title="3D model"}
+```
+
+Use this fallback when a redistributable local GLB is unavailable or Sketchfab-specific features matter. Sketchfab wheel zoom is disabled so the surrounding document remains scrollable.
+
+### Miro / generic embeds
+
+```md
+::embed{provider=miro src="https://miro.com/app/live-embed/..." label="DESIGN BOARD" title="Design board"}
+::embed{provider=iframe src="https://example.com/embed" label="INTERACTIVE TOOL" title="Interactive tool"}
+```
+
+Cross-origin pixels cannot be sampled by the WebGL CRT, so external iframes are mounted below the photographic glass with compositor-level CRT optics. They are lazy and visibility-gated rather than hidden behind a second modal architecture.
 
 ### Timeline
 
@@ -172,72 +204,35 @@ Use `1`, `2` or `3` columns. The first pipe-separated field is an asset path; th
 ::
 ```
 
-### Local 3D model
-
-```md
-::model3d{src=/media/my-project/model.glb label="EXPLORE THE MODEL" autospin=0.08}
-```
-
-Prefer this when the GLB belongs to the project and can be hosted with the portfolio. The model is rendered by Three.js into a detached local canvas and therefore remains inside the real CRT post-process even while the user rotates it.
-
-Current interaction contract:
-
-```text
-drag             rotate
-wheel            scroll document
-Ctrl + wheel     zoom / unzoom
-double click     reset camera
-```
-
-The model renderer and its DOM input proxy are deliberately separate. Never mount the Three.js render canvas into the document; only the transparent input proxy belongs in the DOM.
-
-### YouTube
-
-```md
-::embed{provider=youtube id=VIDEO_ID label="GAMEPLAY" title="Gameplay demo"}
-```
-
-Use this when the original video file is not available. If you own a suitable local video, `::video` is visually better because its frames can stay in the real CRT raster pipeline.
-
-YouTube is mounted inline. Its input shield keeps the document wheel available while playback is controlled through the YouTube iframe API.
-
-### Sketchfab
-
-```md
-::embed{provider=sketchfab uid=MODEL_UID label="ARCADE CABINET 3D" title="3D model"}
-```
-
-Use Sketchfab when its hosted viewer, annotations or canonical public model are useful. Prefer `::model3d` for local GLB files when possible. Sketchfab disables its own wheel zoom by default so the surrounding document remains scrollable.
-
-### Generic external integration
-
-```md
-::embed{provider=iframe src="https://example.com/embed" label="INTERACTIVE TOOL" title="Interactive tool"}
-```
-
-Miro and Google integrations use the same contract with `provider=miro` or `provider=google`.
-
-Third-party iframes are mounted directly in the document rather than behind an `OPEN INTEGRATION` modal. Because cross-origin iframe pixels cannot be sampled by the WebGL CRT shader, the engine applies compositor-level CRT optics while the photographic glass remains above them.
-
 ### Note
 
 ```md
 ::note
-A short callout or engineering takeaway.
+A short engineering takeaway.
 ::
 ```
 
+## Media performance policy
+
+Rich documents can become expensive quickly. Follow these rules:
+
+1. Put substantial binary media under `public/media/<slug>/` so Vite serves it independently from the JS bundle.
+2. Large `media`, `gallery` and `compare` images are loaded on their first visible CRT paint rather than during full-document layout.
+3. Local user-started videos use `preload="none"` and never continue playing after POWER OFF, document replacement or browser backgrounding.
+4. Cross-origin iframes use browser lazy loading and are mounted only while their block is visible.
+5. Three.js animation only ticks while the model block is visible; runtime teardown disposes GPU resources explicitly.
+6. Keep exported screenshots/WebP and GLB sizes appropriate for portfolio presentation; runtime lazy loading is not a substitute for asset optimization.
+
 ## Content rules
 
-1. Start from the exhaustive project report, but curate the portfolio version. A project page is an experience, not an archive dump.
-2. Prefer local raster/video/3D media when practical because local pixels can pass through the real CRT shader.
-3. External integrations should be inline when their provider allows it. Keep document scrolling predictable and use provider adapters for unusual interaction behavior.
-4. Do not add project-specific CSS or JavaScript. Add a reusable block, layout option or theme token if a genuinely new capability is needed.
-5. Keep filenames descriptive. Prefer `control-panel.webp` over exported UUID filenames.
-6. A rich project should still explain your contribution, engineering decisions and lessons learned. Visual spectacle supports the story; it does not replace it.
-7. Avoid decorative flowcharts. Arrows imply causality or sequence; use them only when that relationship is actually part of the system.
-8. Keep binary asset ownership explicit: if a project page references `/media/<slug>/foo.glb`, that file should be committed with the project unless it is intentionally provided by an external CDN/provider.
+1. Curate from the exhaustive source material; do not dump an archive into the CRT.
+2. Explain your contribution, decisions and trade-offs. Visuals support the engineering story.
+3. Prefer local raster/video/3D when practical because those pixels can use the real CRT shader.
+4. Keep filenames descriptive and asset ownership explicit.
+5. Never add project-specific rendering/loading code. If behavior is reusable, implement it as a shared block or provider adapter.
+6. Keep input predictable: ordinary wheel input must continue to scroll the project.
+7. Validate both CRT ON and CRT OFF because they use different presentation paths.
 
 ## Validation rule
 
-PENW and Leak are deliberately different reference projects. Any engine change made for one should be tested mentally against the other. If a capability only makes sense when checking `project.id`, it does not belong in the generic engine.
+PENW and LEAK deliberately stress different shapes of project. A new engine capability should make sense for both without checking a project id. If a feature only works when the runtime knows that it is rendering PENW or LEAK, the abstraction is wrong.

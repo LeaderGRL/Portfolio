@@ -1,7 +1,9 @@
 import { drawContainedImage, drawCoverImage, parsePipeRows } from './default-blocks.js'
 
 function imageFrom(env, src) {
-  return src ? env.images.get(src) : null
+  if (!src) return null
+  if (!env.images.has(src)) env.loadImage(src)
+  return env.images.get(src) || null
 }
 
 function drawByFit(g, image, x, y, width, height, fit) {
@@ -40,9 +42,9 @@ export function enhanceMediaBlocks(registry) {
       const gap = mediaGap(block)
       return { height: visualHeight + gap, meta: { visualHeight, gap } }
     },
-    preload(block, env) {
-      if (block.src) env.loadImage(block.src)
-    },
+    // Large editorial media is loaded on first visible paint rather than while
+    // laying out the complete document. This keeps deep project pages cheap.
+    preload() {},
     paint(g, block, layout, env) {
       const visualHeight = layout.meta?.visualHeight || clampHeight(block.height)
       const hasLabel = Boolean(block.label)
@@ -50,9 +52,6 @@ export function enhanceMediaBlocks(registry) {
       const mediaH = Math.max(1, visualHeight - footerH)
       const panel = hasPanelBackground(block)
 
-      // Keep the original near-black media well used before configurable
-      // backgrounds were introduced. It is intentionally darker than the
-      // general document panel token so technical drawings remain isolated.
       paintPanel(g, layout.x, layout.y, layout.width, visualHeight, panel, '#020d07')
 
       const painted = drawByFit(
@@ -106,6 +105,7 @@ export function enhanceMediaBlocks(registry) {
   const galleryBase = registry.require('gallery')
   registry.register('gallery', {
     ...galleryBase,
+    preload() {},
     paint(g, block, layout, env) {
       const items = layout.meta?.items || parsePipeRows(block.body)
       const columns = layout.meta?.columns || 2
@@ -155,6 +155,7 @@ export function enhanceMediaBlocks(registry) {
   const compareBase = registry.require('compare')
   registry.register('compare', {
     ...compareBase,
+    preload() {},
     paint(g, block, layout, env) {
       const gap = 8
       const half = (layout.width - gap) / 2
