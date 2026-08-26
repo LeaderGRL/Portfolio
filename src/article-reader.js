@@ -53,6 +53,11 @@ function countRows(block) {
   return String(block.body || '').split('\n').filter(line => line.trim()).length
 }
 
+function clampMediaHeight(value) {
+  const height = Number(value) || 246
+  return Math.max(150, Math.min(340, height))
+}
+
 function renderBlock(block) {
   switch (block.type) {
     case 'heading':
@@ -112,6 +117,8 @@ function renderBlock(block) {
     }
     case 'hero':
       return richSpacer(block, Number(block.height) || 242, block.title || block.eyebrow || 'Project hero')
+    case 'media':
+      return richSpacer(block, clampMediaHeight(block.height), block.label || 'Project media')
     case 'facts': {
       const count = countRows(block)
       const cols = Math.max(1, Math.min(3, Number(block.columns) || 2))
