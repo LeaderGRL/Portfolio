@@ -148,6 +148,7 @@ There is no PENW-specific runtime code.
 
 LEAK stresses a very different project structure:
 
+- three local MP4 sequences through the same real CRT video path as PENW;
 - ordered survival/information loop;
 - Director Utility AI + Creature Behavior Tree represented as non-linear systems;
 - movement/noise/distraction counterplay;
@@ -155,10 +156,10 @@ LEAK stresses a very different project structure:
 - diegetic audio decryption workflow;
 - environment-production decisions;
 - Skull optimization study;
-- YouTube, Sketchfab and Miro fallbacks;
+- Sketchfab, YouTube and Miro fallbacks where local equivalents are not yet curated;
 - development timeline and team process.
 
-There is **no Leak-specific runtime code**. Until curated LEAK binary assets are versioned, the page intentionally uses existing external providers rather than inventing local paths.
+There is **no Leak-specific runtime code**. `Leak.mp4`, the hiding-system demo and the character demo are local. A fourth ambiguously named `Leak (1).mp4` is intentionally not referenced until its role is verified rather than guessed.
 
 ## Graceful degradation
 
@@ -194,10 +195,10 @@ A passing build is necessary but not sufficient. Before merge, manually exercise
 
 1. PENW desktop with CRT ON and OFF;
 2. image inspection and return to the same scroll position;
-3. local video play/pause, VOLUME and POWER OFF;
-4. local 3D rotate/scroll/zoom/reset;
+3. PENW local video play/pause, VOLUME and POWER OFF;
+4. PENW local 3D rotate/scroll/zoom/reset;
 5. browser-tab background pause;
-6. LEAK remote video, Skull viewer and Miro scrolling;
+6. LEAK main/hiding/character local videos, Skull viewer and Miro scrolling;
 7. one mobile viewport for PENW and LEAK;
 8. a long scroll from top to bottom looking for semantic/raster drift.
 
@@ -214,8 +215,9 @@ A passing build is necessary but not sufficient. Before merge, manually exercise
 - [x] Three.js teardown disposes GPU resources.
 - [x] Legacy generic interaction modal has been removed.
 - [x] PENW has local MP4 and local GLB reference-quality paths.
+- [x] LEAK has local main/hiding/character MP4s and reuses the same video lifecycle.
 - [x] LEAK can express its AI/gameplay/design structure without project-specific code.
-- [ ] Curated local LEAK images/video/GLB are still to be versioned if/when those source assets are prepared.
+- [ ] Curated local LEAK static images and a redistributable Skull GLB remain optional asset-quality upgrades.
 - [ ] Final visual browser QA must still be performed on desktop and mobile before taking the PR out of Draft.
 
 See `docs/ADDING_PROJECTS.md` for the authoring reference.
