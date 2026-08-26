@@ -1,26 +1,17 @@
 /**
  * virtual:content — compiles content/ into a single bundle at build time.
  *
- * WHY A PLUGIN AND NOT A RUNTIME FETCH
- * The screen is a 480x360 canvas rasteriser, not a DOM. There is nothing for
- * a Markdown-to-HTML renderer to render into, and nothing for MDX's component
- * substitution to substitute. What the terminal needs is a list of typed
- * blocks it can lay out into cells. So the parse happens once, here, and ships
- * as data; the runtime never sees Markdown.
- *
- * FORMAT
- * Front matter between --- fences, then a body of blocks separated by blank
- * lines. Supported blocks include prose, headings, fenced code, lists, typed
- * directives and legacy raw <iframe> embeds. Raw iframes are normalized into
- * the same `embed` block shape as ::embed so the runtime stays HTML-agnostic.
+ * The runtime consumes typed document blocks rather than Markdown/HTML. The
+ * block vocabulary is shared with the browser through src/document/schema.js,
+ * so authoring validation and rendering cannot silently drift apart.
  */
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
-import { join, extname, basename, resolve } from 'node:path'
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
+import { join, extname, basename, resolve, dirname } from 'node:path'
+import { DIRECTIVE_TYPES, getBlockDefinition } from '../src/document/schema.js'
 
 const VIRTUAL = 'virtual:content'
 const RESOLVED = '\0' + VIRTUAL
-
-const KNOWN_DIRECTIVES = new Set(['image', 'video', 'figure', 'note', 'embed'])
+const KNOWN_DIRECTIVES = new Set(DIRECTIVE_TYPES)
 
 function parseFrontMatter(raw) {
   if (!raw.startsWith('---')) return [{}, raw]
@@ -42,15 +33,14 @@ function parseFrontMatter(raw) {
   return [meta, body]
 }
 
-/** ::name{a=1 b="two words"} -> { name, attrs } */
 function parseDirectiveHead(line) {
   const m = /^::([a-z][\w-]*)\s*(?:\{(.*)\})?\s*$/.exec(line.trim())
   if (!m) return null
   const attrs = {}
   const spec = m[2] || ''
-  const re = /([\w-]+)(?:=(?:"([^"]*)"|(\S+)))?/g
+  const re = /([\w-]+)(?:=(?:"([^"]*)"|'([^']*)'|(\S+)))?/g
   let a
-  while ((a = re.exec(spec))) attrs[a[1]] = a[2] ?? a[3] ?? true
+  while ((a = re.exec(spec))) attrs[a[1]] = a[2] ?? a[3] ?? a[4] ?? true
   return { name: m[1], attrs }
 }
 
@@ -64,14 +54,8 @@ function parseHtmlAttributes(source) {
   return attrs
 }
 
-/**
- * Normalize legacy raw HTML iframes into a typed embed block. We deliberately
- * support iframe only rather than arbitrary HTML: authored content remains
- * declarative and the runtime never has to parse or trust random markup.
- */
 function parseRawIframe(lines, start) {
   if (!/^\s*<iframe\b/i.test(lines[start] || '')) return null
-
   const html = []
   let i = start
   while (i < lines.length) {
@@ -79,16 +63,15 @@ function parseRawIframe(lines, start) {
     if (/<\/iframe\s*>/i.test(lines[i])) break
     i++
   }
-
   const markup = html.join('\n')
   const open = /<iframe\b([^>]*)>/i.exec(markup)
   if (!open) return null
   const attrs = parseHtmlAttributes(open[1])
   if (!attrs.src) return null
-
   return {
     block: {
       type: 'embed',
+      provider: 'iframe',
       src: attrs.src,
       title: attrs.title || attrs['aria-label'] || 'Interactive integration',
       width: attrs.width,
@@ -112,7 +95,6 @@ function parseBody(body, file) {
 
   while (i < lines.length) {
     const line = lines[i]
-
     if (!line.trim()) { flushPara(); i++; continue }
 
     if (line.startsWith('```')) {
@@ -136,7 +118,7 @@ function parseBody(body, file) {
       continue
     }
 
-    const heading = /^(#{1,6})\s+(.+)$/.exec(line)
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line.trim())
     if (heading) {
       flushPara()
       blocks.push({ type: 'heading', level: heading[1].length, text: heading[2].trim() })
@@ -170,8 +152,9 @@ function parseBody(body, file) {
       if (!KNOWN_DIRECTIVES.has(head.name)) {
         throw new Error(
           `${file}: unknown directive "::${head.name}". ` +
-          `Add a renderer and register it in plugins/content.js.`)
+          `Register it in src/document/schema.js before using it in content.`)
       }
+
       const hasBody = i + 1 < lines.length && lines[i + 1].trim() !== ''
       const inner = []
       i++
@@ -190,39 +173,125 @@ function parseBody(body, file) {
   return blocks
 }
 
+/* Defensive normalization for imported/converted Markdown. If a conversion
+ * tool has escaped a heading into a standalone prose block, restore its typed
+ * representation so the CRT renderer never prints literal ## markers. */
+function normalizeBlocks(blocks) {
+  return blocks.map(block => {
+    if (block.type !== 'prose') return block
+    const heading = /^(#{1,6})\s+(.+)$/.exec(String(block.text || '').trim())
+    if (!heading) return block
+    return { type: 'heading', level: heading[1].length, text: heading[2].trim() }
+  })
+}
+
 const MEDIA_DIR = 'content/media'
-const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-               '.webp': 'image/webp', '.gif': 'image/gif' }
+const INLINE_MIME = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.glb': 'model/gltf-binary',
+  '.json': 'application/json',
+}
+const isExternal = value => /^(?:data:|blob:|https?:|\/)/i.test(String(value || ''))
+
+function findLocalAsset(value, file) {
+  if (!value || isExternal(value)) return null
+  const candidates = [
+    resolve(dirname(file), value),
+    resolve(MEDIA_DIR, value),
+  ]
+  return candidates.find(existsSync) || null
+}
+
+function inlineLocalAsset(value, file) {
+  if (!value || isExternal(value)) return value
+  const path = findLocalAsset(value, file)
+  if (!path) throw new Error(`${file}: media not found: ${value}`)
+  const mime = INLINE_MIME[extname(path).toLowerCase()]
+  if (!mime) return value
+  return `data:${mime};base64,${readFileSync(path).toString('base64')}`
+}
+
+function resolveGalleryBody(body, file) {
+  return String(body || '')
+    .split('\n')
+    .map(line => {
+      if (!line.trim()) return line
+      const [rawSrc, ...rest] = line.split('|')
+      const src = rawSrc.trim()
+      const resolved = src && !isExternal(src) ? inlineLocalAsset(src, file) : src
+      return [resolved, ...rest].join(' | ')
+    })
+    .join('\n')
+}
 
 function resolveMedia(blocks, file) {
-  for (const b of blocks) {
-    if (b.type === 'image') {
-      const path = join(MEDIA_DIR, b.src)
-      if (!existsSync(path)) throw new Error(`${file}: image not found: ${path}`)
-      const mime = MIME[extname(b.src).toLowerCase()]
-      if (!mime) throw new Error(`${file}: unsupported image type: ${b.src}`)
-      b.src = `data:${mime};base64,${readFileSync(path).toString('base64')}`
-    } else if (b.type === 'video') {
-      b.src = b.src.startsWith('/') ? b.src : `/media/${b.src}`
+  for (const block of blocks) {
+    const definition = getBlockDefinition(block.type)
+    for (const field of definition?.assetFields || []) {
+      const value = block[field]
+      if (!value || isExternal(value)) continue
+
+      const path = findLocalAsset(value, file)
+      const ext = extname(path || value).toLowerCase()
+      if (INLINE_MIME[ext]) {
+        block[field] = inlineLocalAsset(value, file)
+        continue
+      }
+
+      if (block.type === 'video' && field === 'src') {
+        block[field] = `/media/${basename(value)}`
+      }
     }
+
+    if (block.type === 'gallery') block.body = resolveGalleryBody(block.body, file)
   }
   return blocks
 }
 
+function readDocument(path, id) {
+  const [meta, body] = parseFrontMatter(readFileSync(path, 'utf8'))
+  return {
+    id,
+    ...meta,
+    blocks: resolveMedia(normalizeBlocks(parseBody(body, path)), path),
+  }
+}
+
 function readCollection(dir) {
   if (!existsSync(dir)) return []
-  return readdirSync(dir)
-    .filter(f => extname(f) === '.md')
-    .sort()
-    .map(f => {
-      const path = join(dir, f)
-      const [meta, body] = parseFrontMatter(readFileSync(path, 'utf8'))
-      return { id: basename(f, '.md'), ...meta, blocks: resolveMedia(parseBody(body, path), path) }
-    })
+  const documents = []
+  for (const entry of readdirSync(dir).sort()) {
+    const path = join(dir, entry)
+    const stat = statSync(path)
+    if (stat.isFile() && extname(entry) === '.md') {
+      documents.push(readDocument(path, basename(entry, '.md')))
+      continue
+    }
+    if (stat.isDirectory()) {
+      const index = join(path, 'index.md')
+      if (existsSync(index)) documents.push(readDocument(index, entry))
+    }
+  }
+  return documents
+}
+
+function collectWatchFiles(root) {
+  const files = []
+  const walk = path => {
+    if (!existsSync(path)) return
+    const stat = statSync(path)
+    if (stat.isFile()) { files.push(resolve(path)); return }
+    for (const entry of readdirSync(path)) walk(join(path, entry))
+  }
+  walk(root)
+  return files
 }
 
 export default function contentPlugin(root = 'content') {
-  let watched = []
   return {
     name: 'jg1500-content',
     resolveId(id) { return id === VIRTUAL ? RESOLVED : null },
@@ -235,14 +304,7 @@ export default function contentPlugin(root = 'content') {
         projects: readCollection(join(root, 'projects')),
         articles: readCollection(join(root, 'articles')),
       }
-      watched = []
-      for (const d of ['pages', 'projects', 'articles']) {
-        const dir = join(root, d)
-        if (!existsSync(dir)) continue
-        for (const f of readdirSync(dir)) watched.push(resolve(dir, f))
-      }
-      watched.push(resolve(root, 'site.json'))
-      watched.forEach(f => this.addWatchFile(f))
+      collectWatchFiles(root).forEach(f => this.addWatchFile(f))
       return `export default ${JSON.stringify(bundle)}`
     },
     handleHotUpdate({ file, server }) {

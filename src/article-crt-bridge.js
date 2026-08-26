@@ -1,64 +1,114 @@
-import { ArticleInteractionController } from './article-interaction.js'
+import { syncArticleReader } from './article-reader.js'
 import { ArticleRasteriser } from './article-rasteriser.js'
 import { DisplayPipeline } from './display-pipeline.js'
+import { createDefaultBlockRegistry } from './document/default-blocks.js'
+import { createDefaultIntegrationRegistry } from './document/default-integrations.js'
+import { InlineIntegrationController } from './document/inline-integrations.js'
+import { Local3DManager } from './document/local-3d.js'
+import { enhanceMediaBlocks } from './document/media-blocks.js'
+import { MediaViewer } from './document/media-viewer.js'
+import { DocumentProgressOverlay } from './document/progress-overlay.js'
 
 /* ========================================================================== *
- * ArticleCRTBridge
- *
- * Adapts the existing App without creating a second tube. App still owns the
- * animation loop, power state and CRT instance. This bridge switches between
- * the terminal and article 480x360 pixel sources and coordinates the explicit
- * native interaction surface used by video controls and external embeds.
+ * Document CRT bridge
  * ========================================================================== */
 export function attachArticleCRT(app) {
   if (!app || app.__articleCRTBridge) return app?.__articleCRTBridge || null
 
   const tube = document.getElementById('tube')
   const reader = document.getElementById('article-reader')
-  const articleCanvas = document.getElementById('article-source')
-  if (!tube || !reader || !articleCanvas || !app.crt || !app.raster) return null
+  const documentCanvas = document.getElementById('article-source')
+  if (!tube || !reader || !documentCanvas || !app.crt || !app.raster) return null
 
   const terminalCanvas = app.raster.canvas
   const terminalPaint = app.raster.paint.bind(app.raster)
+  const previousDisplayPipeline = app.displayPipeline
   const pipeline = new DisplayPipeline({
     crt: app.crt,
     sources: {
       terminal: terminalCanvas,
-      article: articleCanvas,
+      document: documentCanvas,
     },
   })
 
-  let interaction = null
-  const articleRaster = new ArticleRasteriser(articleCanvas, reader, () => {
-    app.dirty = true
-    interaction?.sync()
-  })
-  interaction = new ArticleInteractionController({ tube, reader, rasteriser: articleRaster })
-
-  const isArticle = () => app.state?.route === 'articles' && Boolean(app.state?.item)
-
-  const syncSource = () => {
-    const article = isArticle() ? app.state.item : null
-    const itemChanged = articleRaster.setItem(article)
-    if (itemChanged && interaction.isOpen) interaction.close(false)
-
-    const nextId = article ? 'article' : 'terminal'
-    if (pipeline.setSource(nextId)) {
+  let inlineIntegrations = null
+  let documentRaster = null
+  const progressOverlay = new DocumentProgressOverlay()
+  const mediaViewer = new MediaViewer({
+    tube,
+    crtCanvas: documentCanvas,
+    onChange: ({ open } = {}) => {
       app.dirty = true
-      app.state.static = Math.max(app.state.static || 0, 0.7)
-    }
+      if (open) inlineIntegrations?.clear?.()
+      else documentRaster?.markDirty?.()
+    },
+  })
+  const local3d = new Local3DManager(() => {
+    app.dirty = true
+    documentRaster?.markDirty?.()
+  })
+  const blockRegistry = enhanceMediaBlocks(createDefaultBlockRegistry({ local3d }))
+  const integrations = createDefaultIntegrationRegistry({ local3d, mediaViewer })
 
-    tube.dataset.displayMode = nextId
-    tube.classList.toggle('has-dom-surface', Boolean(article))
-    if (!article && interaction.isOpen) interaction.close(false)
-    interaction.sync()
+  documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
+    app.dirty = true
+  }, { blockRegistry })
+
+  inlineIntegrations = new InlineIntegrationController({
+    tube,
+    rasteriser: documentRaster,
+    registry: integrations,
+  })
+
+  const isDocument = () => (
+    (app.state?.route === 'articles' || app.state?.route === 'projects') &&
+    Boolean(app.state?.item)
+  )
+
+  const visibleLocal3DBlocks = () => {
+    if (mediaViewer.isOpen) return []
+    const visible = []
+    for (const entry of documentRaster.layout || []) {
+      if (entry.type !== 'model3d') continue
+      const top = entry.y - documentRaster.scroll
+      const bottom = top + entry.height
+      if (bottom > 1 && top < documentCanvas.height - 1) visible.push(entry.block)
+    }
+    return visible
   }
 
-  // App calls this whenever its source image is dirty. In article mode the
-  // same call now paints the authored article into the CRT source canvas.
+  const syncSource = () => {
+    const documentItem = isDocument() ? app.state.item : null
+    syncArticleReader(documentItem)
+
+    const itemChanged = documentRaster.setItem(documentItem)
+    if (itemChanged) {
+      mediaViewer.close()
+      inlineIntegrations.clear()
+    }
+
+    const nextId = documentItem ? 'document' : 'terminal'
+    if (pipeline.setSource(nextId)) {
+      app.dirty = true
+      app.state.static = mediaViewer.isOpen
+        ? 0
+        : Math.max(app.state.static || 0, 0.7)
+    }
+
+    tube.dataset.displayMode = mediaViewer.isOpen ? 'media' : documentItem ? 'article' : 'terminal'
+    tube.classList.toggle('has-dom-surface', Boolean(documentItem) && !mediaViewer.isOpen)
+    tube.classList.toggle('is-reading', Boolean(documentItem) && !mediaViewer.isOpen)
+    if (!documentItem) mediaViewer.close()
+  }
+
   app.raster.paint = (term, reveal, cursorOn) => {
     syncSource()
-    if (isArticle()) return articleRaster.paint(true)
+    if (mediaViewer.isOpen) return true
+    if (isDocument()) {
+      const painted = documentRaster.paint(true)
+      progressOverlay.paint(documentRaster)
+      return painted
+    }
     return terminalPaint(term, reveal, cursorOn)
   }
 
@@ -69,37 +119,66 @@ export function attachArticleCRT(app) {
     return result
   }
 
-  // Native video needs fresh source pixels while playing. Static articles do
-  // not force a continuous source upload. The interaction affordance is also
-  // synced here so smooth DOM scrolling updates it without waiting for a route
-  // render.
+  const originalBack = app.back.bind(app)
+  app.back = (...args) => {
+    if (mediaViewer.isOpen) {
+      mediaViewer.close()
+      syncSource()
+      app.dirty = true
+      return
+    }
+    return originalBack(...args)
+  }
+
   let raf = 0
-  const mediaFrame = () => {
+  const mediaFrame = time => {
     raf = requestAnimationFrame(mediaFrame)
-    if (!isArticle()) return
-    interaction.sync()
-    if (articleRaster.videoNodes.some(video => !video.paused && !video.ended && video.readyState >= 2)) {
+    if (!isDocument()) return
+
+    if (mediaViewer.isOpen) {
+      inlineIntegrations.clear()
+      return
+    }
+
+    for (const block of visibleLocal3DBlocks()) local3d.tick(block, time)
+
+    inlineIntegrations.sync()
+    if (documentRaster.videoNodes.some(video => !video.paused && !video.ended && video.readyState >= 2)) {
       app.dirty = true
     }
   }
   raf = requestAnimationFrame(mediaFrame)
 
   syncSource()
+  inlineIntegrations.sync()
 
   const bridge = {
-    articleRaster,
-    interaction,
+    documentRaster,
+    articleRaster: documentRaster,
+    blockRegistry,
+    integrations,
+    inlineIntegrations,
+    local3d,
+    mediaViewer,
+    progressOverlay,
     pipeline,
     syncSource,
     enterFullscreen: () => pipeline.enterFullscreen(document.getElementById('screen')),
     exitFullscreen: () => pipeline.exitFullscreen(),
     destroy() {
       cancelAnimationFrame(raf)
-      interaction.destroy()
+      app.back = originalBack
+      app.render = originalRender
+      inlineIntegrations.destroy()
+      mediaViewer.destroy()
+      local3d.dispose()
+      syncArticleReader(null)
       app.raster.paint = terminalPaint
       pipeline.setSource('terminal')
+      if (previousDisplayPipeline === undefined) delete app.displayPipeline
+      else app.displayPipeline = previousDisplayPipeline
       tube.dataset.displayMode = 'terminal'
-      tube.classList.remove('has-dom-surface')
+      tube.classList.remove('has-dom-surface', 'is-reading', 'is-media-inspecting')
       delete app.__articleCRTBridge
     },
   }
