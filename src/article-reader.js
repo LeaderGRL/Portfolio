@@ -12,7 +12,7 @@ const make = (tag, className, text) => {
   return node
 }
 
-const INLINE_TOKEN = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*\*?|_[^_\n]+_)/g
+const INLINE_TOKEN = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_)/g
 
 function appendInline(node, value = '') {
   let cursor = 0
