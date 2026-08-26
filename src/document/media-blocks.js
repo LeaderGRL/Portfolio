@@ -22,6 +22,17 @@ function mediaGap(block) {
   return 24
 }
 
+function hasPanelBackground(block) {
+  const value = String(block?.background ?? 'on').toLowerCase()
+  return !['off', 'false', 'none', 'transparent', '0'].includes(value)
+}
+
+function paintPanel(g, x, y, width, height, env, enabled = true) {
+  if (!enabled) return
+  g.fillStyle = env.colors.panel
+  g.fillRect(x, y, width, height)
+}
+
 export function enhanceMediaBlocks(registry) {
   registry.register('media', {
     measure(_ctx, block) {
@@ -37,9 +48,10 @@ export function enhanceMediaBlocks(registry) {
       const hasLabel = Boolean(block.label)
       const footerH = hasLabel ? 23 : 0
       const mediaH = Math.max(1, visualHeight - footerH)
+      const panel = hasPanelBackground(block)
 
-      // Do not paint a card/background behind project imagery. With contain,
-      // unused space now reveals the document surface instead of a black box.
+      paintPanel(g, layout.x, layout.y, layout.width, visualHeight, env, panel)
+
       const painted = drawByFit(
         g,
         imageFrom(env, block.src),
@@ -63,7 +75,10 @@ export function enhanceMediaBlocks(registry) {
       }
 
       if (hasLabel) {
-        // Caption belongs to the document, not to an artificial image card.
+        if (panel) {
+          g.fillStyle = 'rgba(1,10,5,.86)'
+          g.fillRect(layout.x, layout.y + mediaH, layout.width, footerH)
+        }
         env.drawLines(
           env.wrap(block.label, layout.width - 14, 7, 600).slice(0, 2),
           layout.x + 7,
@@ -95,6 +110,7 @@ export function enhanceMediaBlocks(registry) {
       const cellW = (layout.width - gap * (columns - 1)) / columns
       const cellH = 136
       const fit = block.fit || 'cover'
+      const panel = hasPanelBackground(block)
 
       items.forEach((item, index) => {
         const col = index % columns
@@ -102,9 +118,24 @@ export function enhanceMediaBlocks(registry) {
         const x = layout.x + col * (cellW + gap)
         const y = layout.y + row * 146
         const mediaH = cellH - 23
+
+        paintPanel(g, x, y, cellW, cellH, env, panel)
         drawByFit(g, imageFrom(env, item.value), x, y, cellW, mediaH, fit)
+
         if (item.label) {
-          env.drawLines(env.wrap(item.label, cellW - 10, 7, 600).slice(0, 2), x + 6, y + cellH - 11, 7, 9, env.colors.mid, 600)
+          if (panel) {
+            g.fillStyle = 'rgba(1,10,5,.86)'
+            g.fillRect(x, y + mediaH, cellW, 23)
+          }
+          env.drawLines(
+            env.wrap(item.label, cellW - 10, 7, 600).slice(0, 2),
+            x + 6,
+            y + cellH - 11,
+            7,
+            9,
+            env.colors.mid,
+            600,
+          )
         }
       })
     },
@@ -126,6 +157,7 @@ export function enhanceMediaBlocks(registry) {
       const half = (layout.width - gap) / 2
       const mediaH = layout.height - 34
       const fit = block.fit || 'cover'
+      const panel = hasPanelBackground(block)
       const entries = [
         [block.before, block.beforeLabel || 'BEFORE'],
         [block.after, block.afterLabel || 'AFTER'],
@@ -133,8 +165,21 @@ export function enhanceMediaBlocks(registry) {
 
       entries.forEach(([src, label], index) => {
         const x = layout.x + index * (half + gap)
+        paintPanel(g, x, layout.y, half, mediaH, env, panel)
         drawByFit(g, imageFrom(env, src), x, layout.y, half, mediaH, fit)
-        env.drawLines([String(label).toUpperCase()], x + 7, layout.y + mediaH - 7, 7, 9, index ? env.colors.core : env.colors.dim, 700)
+        if (panel) {
+          g.fillStyle = 'rgba(1,9,5,.78)'
+          g.fillRect(x, layout.y + mediaH - 20, half, 20)
+        }
+        env.drawLines(
+          [String(label).toUpperCase()],
+          x + 7,
+          layout.y + mediaH - 7,
+          7,
+          9,
+          index ? env.colors.core : env.colors.dim,
+          700,
+        )
       })
     },
     getInteraction(block) {
