@@ -99,6 +99,16 @@
   background:rgba(107,243,154,.045);
 }
 
+/* Media inspection owns the visible CRT picture. The document surface is a
+   semantic/interaction mirror with a higher stacking layer than #gl; if it is
+   left visible when displayMode changes from article to media, it covers the
+   actual CRT image with the project DOM. */
+.tube[data-display-mode="media"] .display-surface{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+
 @media (max-width:720px){
   .document-media-viewer{ padding:10px; }
   .document-media-viewer__stage{
