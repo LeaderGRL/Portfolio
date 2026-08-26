@@ -16,21 +16,30 @@ function clampHeight(value, fallback = 246) {
   return Math.max(150, Math.min(340, height))
 }
 
+function mediaGap(block) {
+  const value = Number(block.gap)
+  if (Number.isFinite(value)) return Math.max(12, Math.min(48, value))
+  return 24
+}
+
 export function enhanceMediaBlocks(registry) {
   registry.register('media', {
     measure(_ctx, block) {
-      return { height: clampHeight(block.height) }
+      const visualHeight = clampHeight(block.height)
+      const gap = mediaGap(block)
+      return { height: visualHeight + gap, meta: { visualHeight, gap } }
     },
     preload(block, env) {
       if (block.src) env.loadImage(block.src)
     },
     paint(g, block, layout, env) {
+      const visualHeight = layout.meta?.visualHeight || clampHeight(block.height)
       const hasLabel = Boolean(block.label)
       const footerH = hasLabel ? 23 : 0
-      const mediaH = layout.height - footerH
+      const mediaH = Math.max(1, visualHeight - footerH)
 
-      g.fillStyle = '#020d07'
-      g.fillRect(layout.x, layout.y, layout.width, layout.height)
+      // Do not paint a card/background behind project imagery. With contain,
+      // unused space now reveals the document surface instead of a black box.
       const painted = drawByFit(
         g,
         imageFrom(env, block.src),
@@ -54,12 +63,11 @@ export function enhanceMediaBlocks(registry) {
       }
 
       if (hasLabel) {
-        g.fillStyle = 'rgba(1,10,5,.86)'
-        g.fillRect(layout.x, layout.y + mediaH, layout.width, footerH)
+        // Caption belongs to the document, not to an artificial image card.
         env.drawLines(
           env.wrap(block.label, layout.width - 14, 7, 600).slice(0, 2),
           layout.x + 7,
-          layout.y + layout.height - 9,
+          layout.y + visualHeight - 9,
           7,
           9,
           env.colors.mid,
@@ -94,12 +102,8 @@ export function enhanceMediaBlocks(registry) {
         const x = layout.x + col * (cellW + gap)
         const y = layout.y + row * 146
         const mediaH = cellH - 23
-        g.fillStyle = '#020d07'
-        g.fillRect(x, y, cellW, cellH)
         drawByFit(g, imageFrom(env, item.value), x, y, cellW, mediaH, fit)
         if (item.label) {
-          g.fillStyle = 'rgba(1,10,5,.86)'
-          g.fillRect(x, y + mediaH, cellW, 23)
           env.drawLines(env.wrap(item.label, cellW - 10, 7, 600).slice(0, 2), x + 6, y + cellH - 11, 7, 9, env.colors.mid, 600)
         }
       })
@@ -129,11 +133,7 @@ export function enhanceMediaBlocks(registry) {
 
       entries.forEach(([src, label], index) => {
         const x = layout.x + index * (half + gap)
-        g.fillStyle = '#020c06'
-        g.fillRect(x, layout.y, half, mediaH)
         drawByFit(g, imageFrom(env, src), x, layout.y, half, mediaH, fit)
-        g.fillStyle = 'rgba(1,9,5,.78)'
-        g.fillRect(x, layout.y + mediaH - 20, half, 20)
         env.drawLines([String(label).toUpperCase()], x + 7, layout.y + mediaH - 7, 7, 9, index ? env.colors.core : env.colors.dim, 700)
       })
     },
