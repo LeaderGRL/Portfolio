@@ -279,6 +279,25 @@ export class ArticleRasteriser {
         g.lineWidth = 1
         g.strokeRect(dx + .5, dy + .5, Math.max(0, dw - 1), Math.max(0, dh - 1))
         const playing = !source.paused && !source.ended
+
+        if (!playing) {
+          const buttonW = 68
+          const buttonH = 30
+          const bx = dx + (dw - buttonW) * .5
+          const by = dy + (dh - buttonH) * .5
+          g.fillStyle = 'rgba(1,8,4,.82)'
+          g.fillRect(bx, by, buttonW, buttonH)
+          g.strokeStyle = COLORS.mid
+          g.strokeRect(bx + .5, by + .5, buttonW - 1, buttonH - 1)
+          this._font(10, 700)
+          g.fillStyle = COLORS.amber
+          g.textAlign = 'center'
+          g.textBaseline = 'middle'
+          g.fillText('▶ PLAY', bx + buttonW * .5, by + buttonH * .5 + .5)
+          g.textAlign = 'left'
+          g.textBaseline = 'alphabetic'
+        }
+
         this._drawLines(
           [playing ? 'PAUSE' : 'PLAY'],
           dx + 8,
