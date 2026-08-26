@@ -11,7 +11,72 @@ function drawByFit(g, image, x, y, width, height, fit) {
   return drawCoverImage(g, image, x, y, width, height)
 }
 
+function clampHeight(value, fallback = 246) {
+  const height = Number(value) || fallback
+  return Math.max(150, Math.min(340, height))
+}
+
 export function enhanceMediaBlocks(registry) {
+  registry.register('media', {
+    measure(_ctx, block) {
+      return { height: clampHeight(block.height) }
+    },
+    preload(block, env) {
+      if (block.src) env.loadImage(block.src)
+    },
+    paint(g, block, layout, env) {
+      const hasLabel = Boolean(block.label)
+      const footerH = hasLabel ? 23 : 0
+      const mediaH = layout.height - footerH
+
+      g.fillStyle = '#020d07'
+      g.fillRect(layout.x, layout.y, layout.width, layout.height)
+      const painted = drawByFit(
+        g,
+        imageFrom(env, block.src),
+        layout.x,
+        layout.y,
+        layout.width,
+        mediaH,
+        block.fit || 'cover',
+      )
+
+      if (!painted) {
+        env.drawLines(
+          ['LOADING PROJECT MEDIA...'],
+          layout.x + 14,
+          layout.y + mediaH * 0.5,
+          9,
+          12,
+          env.colors.mid,
+          700,
+        )
+      }
+
+      if (hasLabel) {
+        g.fillStyle = 'rgba(1,10,5,.86)'
+        g.fillRect(layout.x, layout.y + mediaH, layout.width, footerH)
+        env.drawLines(
+          env.wrap(block.label, layout.width - 14, 7, 600).slice(0, 2),
+          layout.x + 7,
+          layout.y + layout.height - 9,
+          7,
+          9,
+          env.colors.mid,
+          600,
+        )
+      }
+    },
+    getInteraction(block) {
+      return {
+        provider: 'media-single',
+        block: { ...block, provider: 'media-single' },
+        inline: true,
+        direct: true,
+      }
+    },
+  })
+
   const galleryBase = registry.require('gallery')
   registry.register('gallery', {
     ...galleryBase,
