@@ -187,7 +187,11 @@ export class App {
 
   _fit() {
     const machine = document.getElementById("machine");
-    const compact = innerWidth < 980 || innerWidth / innerHeight < 1.05;
+
+    // The 941x1672 chassis is an authored portrait composition. Selecting it
+    // merely because a phone is narrow collapses it to unreadable scale in
+    // landscape; landscape viewports use the horizontal desktop composition.
+    const compact = innerWidth / innerHeight < 1.05;
     machine.classList.toggle("is-compact", compact);
     document.body.classList.toggle("is-compact-stage", compact);
 
@@ -421,25 +425,43 @@ export class App {
   }
 
   frame(ms) {
+    const st = this.state;
     const t = ms / 1000;
-    this.state.time = t;
-    this.state.clock = new Date().toLocaleTimeString([], { hour12:false });
-    const up = Math.max(0, Math.floor(t - this.bootAt));
-    this.state.uptime = `${String(Math.floor(up/3600)).padStart(2,"0")}:${String(Math.floor(up/60)%60).padStart(2,"0")}:${String(up%60).padStart(2,"0")}`;
+    const dt = Math.min(0.05, t - (this._last || t));
+    this._last = t;
+    st.time = t;
 
-    this.state.power = lerp(this.state.power, this.state.powerTarget, 0.12);
-    this.state.crt = lerp(this.state.crt, this.state.crtTarget, 0.13);
-    this.state.degauss *= 0.91;
-    this.state.static *= 0.86;
-    this.state.warm = lerp(this.state.warm, 1, 0.018);
+    st.power = lerp(st.power, st.powerTarget, 1 - Math.pow(0.001, dt * 1.6));
+    st.crt = lerp(st.crt, st.crtTarget, 1 - Math.pow(0.001, dt * 3));
+    st.degauss = Math.max(0, st.degauss - dt * 0.9);
+    st.static = Math.max(0, st.static - dt * 4.5);
+    st.warm = Math.min(1, st.warm + dt * 0.55);
+
+    const d = new Date();
+    const pad = n => String(n).padStart(2, "0");
+    const clock = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    const up = Math.max(0, Math.floor(t - this.bootAt));
+    const uptime = `${pad(Math.floor(up / 3600))}:${pad(Math.floor(up / 60) % 60)}:${pad(up % 60)}`;
+    if (clock !== st.clock) {
+      st.clock = clock;
+      st.uptime = uptime;
+      if (!this.booting && st.route === "home" && !st.item) this.render();
+    }
 
     if (this.reveal < this.revealTarget) {
-      const speed = this.booting ? 60 : 190;
-      this.reveal = Math.min(this.revealTarget, this.reveal + speed / 60);
-      const iv = this.booting ? 5 : 3;
-      if (Math.floor(this.reveal / iv) > Math.floor(this.lastBlip / iv)) foley.blip(0.18);
-      this.lastBlip = this.reveal;
-      this.dirty = true;
+      const speed = REDUCED ? 100000 : (this.booting ? 360 : 900);
+      const before = Math.floor(this.reveal);
+      this.reveal = Math.min(this.revealTarget, this.reveal + speed * dt);
+      if (Math.floor(this.reveal) !== before) {
+        this.dirty = true;
+        if (!REDUCED && t - this.lastBlip > 0.028) { foley.blip(0.18); this.lastBlip = t; }
+      }
+    }
+
+    const blink = Math.floor(t * 2) % 2 === 0;
+    if (blink !== this._blink) {
+      this._blink = blink;
+      if (!this.documentRuntime?.isDocument?.()) this.dirty = true;
     }
 
     this.tilt?.frame?.();
@@ -448,13 +470,19 @@ export class App {
     const sourceDirty = this.dirty;
     if (sourceDirty) {
       const handled = this.documentRuntime?.paint?.(Math.floor(this.reveal)) || false;
-      if (!handled) this.raster.paint(this.term, Math.floor(this.reveal));
+      if (!handled) {
+        this.raster.paint(
+          this.term,
+          Math.floor(this.reveal),
+          blink && this.reveal >= this.revealTarget,
+        );
+      }
     }
 
-    // CRT owns the visible WebGL canvas and must composite every frame for
+    // CRT owns the visible WebGL canvas and composites every frame for
     // persistence, scanlines, degauss/static and power-collapse animation.
-    // `sourceDirty` only controls whether the source texture is re-uploaded.
-    if (this.crt.ok) this.crt.render(this.state, sourceDirty);
+    // `sourceDirty` only controls whether the active source texture is uploaded.
+    if (this.crt.ok) this.crt.render(st, sourceDirty);
     this.dirty = false;
 
     requestAnimationFrame(n => this.frame(n));
