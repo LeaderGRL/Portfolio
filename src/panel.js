@@ -86,23 +86,27 @@ export function makeKey(label, cls, icon = '') {
   return b;
 }
 
-/* Parallax only. The key light is baked into every sprite at a fixed angle,
- * so nothing here may move a highlight — the tilt is the one thing that can
- * respond to the pointer without putting the panel's lighting out of
- * agreement with the parts sitting on it. */
+/* Parallax only. App owns the only persistent RAF and calls frame() here. The
+ * key light is baked into every sprite at a fixed angle, so nothing here may
+ * move a highlight — tilt only changes the panel's subtle spatial response. */
 export function bindTilt() {
-  if (REDUCED) return;
+  if (REDUCED) return null;
   const root = document.documentElement.style;
   let tx = 0, ty = 0, cx = 0, cy = 0;
-  addEventListener("pointermove", e => {
+  const onPointerMove = e => {
     tx = clamp((e.clientX / innerWidth) * 2 - 1, -1, 1);
     ty = clamp((e.clientY / innerHeight) * 2 - 1, -1, 1);
-  });
-  const tick = () => {
-    cx = lerp(cx, tx, 0.06); cy = lerp(cy, ty, 0.06);
-    root.setProperty("--px", cx.toFixed(3));
-    root.setProperty("--py", cy.toFixed(3));
-    requestAnimationFrame(tick);
   };
-  tick();
+  addEventListener("pointermove", onPointerMove);
+
+  return {
+    frame() {
+      cx = lerp(cx, tx, 0.06); cy = lerp(cy, ty, 0.06);
+      root.setProperty("--px", cx.toFixed(3));
+      root.setProperty("--py", cy.toFixed(3));
+    },
+    destroy() {
+      removeEventListener("pointermove", onPointerMove);
+    },
+  };
 }
