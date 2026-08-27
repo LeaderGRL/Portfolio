@@ -46,6 +46,16 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium firefox webkit
 
+      - name: Audit repository assets
+        run: npm run audit:assets
+
+      - name: Upload asset audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: asset-audit
+          path: asset-audit.json
+          retention-days: 14
+
       - name: Generate assets
         run: npm run assets
 
