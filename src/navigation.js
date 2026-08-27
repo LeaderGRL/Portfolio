@@ -9,6 +9,7 @@
 const SIMPLE_ROUTES = new Set(['home', 'about', 'resume', 'projects', 'articles', 'contact'])
 const BASE_TITLE = 'Jordan Grilly — Systems / Performance / Architecture'
 const BASE_DESCRIPTION = 'Portfolio of Jordan Grilly, systems and performance engineer.'
+const HISTORY_MARKER = 'jg1500-navigation-v1'
 
 function normalizePath(pathname = '/') {
   const path = String(pathname || '/').replace(/\/{2,}/g, '/').replace(/\/$/, '')
@@ -19,7 +20,22 @@ function decodeSegment(value = '') {
   try { return decodeURIComponent(value) } catch { return value }
 }
 
-export function resolveNavigation(content, pathname = globalThis.location?.pathname || '/') {
+function collectionCursor(pool, route, navigationState) {
+  if (
+    navigationState?.marker !== HISTORY_MARKER ||
+    navigationState?.route !== route ||
+    navigationState?.item
+  ) return 0
+
+  const cursor = Number.isInteger(navigationState.cursor) ? navigationState.cursor : 0
+  return Math.max(0, Math.min(cursor, Math.max(0, pool.length - 1)))
+}
+
+export function resolveNavigation(
+  content,
+  pathname = globalThis.location?.pathname || '/',
+  navigationState = globalThis.history?.state,
+) {
   const path = normalizePath(pathname)
   if (path === '/') return { route: 'home', item: null, cursor: 0, valid: true }
 
@@ -34,7 +50,14 @@ export function resolveNavigation(content, pathname = globalThis.location?.pathn
   }
 
   const pool = route === 'projects' ? content.projects : content.articles
-  if (segments.length === 1) return { route, item: null, cursor: 0, valid: true }
+  if (segments.length === 1) {
+    return {
+      route,
+      item: null,
+      cursor: collectionCursor(pool, route, navigationState),
+      valid: true,
+    }
+  }
 
   const id = segments[1]
   const cursor = pool.findIndex(item => item.id === id)
@@ -105,11 +128,28 @@ export function syncNavigationMetadata(state) {
   ensureCanonical().href = absoluteUrl
 }
 
-export function syncNavigationHistory(state, mode = 'push') {
+export function syncNavigationHistory(state, mode = 'push', extraState = {}) {
   if (typeof history === 'undefined' || typeof location === 'undefined') return
-  const path = pathForState(state)
-  if (normalizePath(location.pathname) === normalizePath(path)) return
 
-  const method = mode === 'replace' ? 'replaceState' : 'pushState'
-  history[method]({ route: state?.route || 'home', item: state?.item?.id || null }, '', path)
+  const path = pathForState(state)
+  const samePath = normalizePath(location.pathname) === normalizePath(path)
+  const currentState = history.state?.marker === HISTORY_MARKER ? history.state : null
+  const inheritedParent = mode === 'replace' ? currentState?.parentPath ?? null : null
+  const parentPath = Object.prototype.hasOwnProperty.call(extraState, 'parentPath')
+    ? extraState.parentPath
+    : inheritedParent
+
+  const payload = {
+    marker: HISTORY_MARKER,
+    route: state?.route || 'home',
+    item: state?.item?.id || null,
+    cursor: Number.isInteger(state?.cursor) ? state.cursor : 0,
+    parentPath: parentPath || null,
+  }
+
+  // A push to the URL already displayed must never create a duplicate browser
+  // entry. Replacing still matters because collection cursor state can change
+  // without changing the route itself.
+  const method = mode === 'replace' || samePath ? 'replaceState' : 'pushState'
+  history[method](payload, '', path)
 }
