@@ -16,17 +16,33 @@ async function boot(page, path = '/') {
 async function compactGeometry(page) {
   return page.evaluate(() => {
     const machine = document.getElementById('machine').getBoundingClientRect()
-    const bodyStyle = getComputedStyle(document.body)
-    const stageStyle = getComputedStyle(document.getElementById('stage'))
+    const rootStyle = getComputedStyle(document.documentElement)
+    const bodyBefore = getComputedStyle(document.body, '::before')
+    const bodyAfter = getComputedStyle(document.body, '::after')
+    const stage = document.getElementById('stage')
+    const stageBefore = getComputedStyle(stage, '::before')
+    const stageAfter = getComputedStyle(stage, '::after')
     return {
       scrollWidth: document.documentElement.scrollWidth,
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
       machine,
-      bodyBackground: bodyStyle.backgroundImage,
-      stageBackground: stageStyle.backgroundImage,
+      gapX: Number.parseFloat(rootStyle.getPropertyValue('--compact-gap-x')) || 0,
+      gapY: Number.parseFloat(rootStyle.getPropertyValue('--compact-gap-y')) || 0,
+      fillTop: rootStyle.getPropertyValue('--compact-fill-top'),
+      fillBottom: rootStyle.getPropertyValue('--compact-fill-bottom'),
+      fillLeft: rootStyle.getPropertyValue('--compact-fill-left'),
+      fillRight: rootStyle.getPropertyValue('--compact-fill-right'),
+      topApplied: bodyBefore.backgroundImage,
+      bottomApplied: bodyAfter.backgroundImage,
+      leftApplied: stageBefore.backgroundImage,
+      rightApplied: stageAfter.backgroundImage,
     }
   })
+}
+
+function isEmbeddedWebp(value) {
+  return /url\(["']?data:image\/webp/i.test(String(value || ''))
 }
 
 function expectContainedCompactGeometry(dimensions) {
@@ -35,7 +51,20 @@ function expectContainedCompactGeometry(dimensions) {
   expect(dimensions.machine.right).toBeLessThanOrEqual(dimensions.innerWidth + 1)
   expect(dimensions.machine.top).toBeGreaterThanOrEqual(-1)
   expect(dimensions.machine.bottom).toBeLessThanOrEqual(dimensions.innerHeight + 1)
-  expect(`${dimensions.bodyBackground} ${dimensions.stageBackground}`).toContain('gradient')
+
+  expect(isEmbeddedWebp(dimensions.fillTop)).toBe(true)
+  expect(isEmbeddedWebp(dimensions.fillBottom)).toBe(true)
+  expect(isEmbeddedWebp(dimensions.fillLeft)).toBe(true)
+  expect(isEmbeddedWebp(dimensions.fillRight)).toBe(true)
+
+  if (dimensions.gapY > 1) {
+    expect(isEmbeddedWebp(dimensions.topApplied)).toBe(true)
+    expect(isEmbeddedWebp(dimensions.bottomApplied)).toBe(true)
+  }
+  if (dimensions.gapX > 1) {
+    expect(isEmbeddedWebp(dimensions.leftApplied)).toBe(true)
+    expect(isEmbeddedWebp(dimensions.rightApplied)).toBe(true)
+  }
 }
 
 test('panel navigation keeps terminal arrows active after clicking PROJECTS', async ({ page }, testInfo) => {
@@ -103,14 +132,14 @@ test('deep project links render without uncaught page errors', async ({ page }) 
   expect(errors).toEqual([])
 })
 
-test('mobile compact geometry is contained over full-viewport chassis material', async ({ page }, testInfo) => {
+test('mobile compact geometry is contained over photographed chassis material', async ({ page }, testInfo) => {
   test.skip(!isMobileProject(testInfo), 'Mobile-only layout assertion')
   await boot(page)
   await expect(page.locator('#machine')).toHaveClass(/is-compact/)
   expectContainedCompactGeometry(await compactGeometry(page))
 })
 
-test('tablet compact geometry is contained over full-viewport chassis material', async ({ page }, testInfo) => {
+test('tablet compact geometry is contained over photographed chassis material', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Tablet geometry only needs one browser engine')
   await page.setViewportSize({ width: 768, height: 1024 })
   await boot(page)
