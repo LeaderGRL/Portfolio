@@ -4,6 +4,7 @@ import AxeBuilder from '@axe-core/playwright'
 const projectsKey = page => page.getByRole('button', { name: 'PROJECTS' })
 const articlesKey = page => page.getByRole('button', { name: 'ARTICLES' })
 const isMobileProject = testInfo => testInfo.project.name.includes('mobile')
+const isChromiumDesktop = testInfo => testInfo.project.name === 'chromium'
 
 async function boot(page, path = '/') {
   await page.goto(path)
@@ -51,11 +52,6 @@ test('volume retains its own keyboard boundary', async ({ page }, testInfo) => {
 
 test('mobile can open a project directly by tapping a CRT listing row', async ({ page }, testInfo) => {
   test.skip(!isMobileProject(testInfo), 'Touch-only interaction scenario')
-
-  // The real CRT/document pipeline is intentionally heavier than the terminal
-  // list on emulated mobile hardware. Keep this interaction under its own
-  // budget so a successful tap is not reported as a failure while the rich
-  // semantic document surface is being mounted.
   test.setTimeout(60_000)
 
   await boot(page)
@@ -65,8 +61,6 @@ test('mobile can open a project directly by tapping a CRT listing row', async ({
   const tube = await page.locator('#tube').boundingBox()
   if (!tube) throw new Error('CRT tube has no touchable bounding box')
 
-  // The first listing entry starts at source row 3. Tap its cell center using
-  // the same 480x360 source mapping used by runtime-controls.js.
   const sourceY = 32 + 3 * 14 + 7
   await page.touchscreen.tap(tube.x + tube.width * 0.5, tube.y + tube.height * (sourceY / 360))
 
@@ -84,20 +78,77 @@ test('deep project links render without uncaught page errors', async ({ page }) 
   expect(errors).toEqual([])
 })
 
-test('compact viewport uses the mobile chassis without horizontal overflow', async ({ page }, testInfo) => {
+test('compact viewport keeps the machine contained and extends chassis material to the viewport', async ({ page }, testInfo) => {
   test.skip(!isMobileProject(testInfo), 'Mobile-only layout assertion')
   await boot(page)
   await expect(page.locator('#machine')).toHaveClass(/is-compact/)
-  const dimensions = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth }))
+
+  const dimensions = await page.evaluate(() => {
+    const machine = document.getElementById('machine').getBoundingClientRect()
+    const bodyStyle = getComputedStyle(document.body)
+    const stageStyle = getComputedStyle(document.getElementById('stage'))
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      machine,
+      bodyBackground: bodyStyle.backgroundImage,
+      stageBackground: stageStyle.backgroundImage,
+    }
+  })
+
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth + 1)
+  expect(dimensions.machine.left).toBeGreaterThanOrEqual(-1)
+  expect(dimensions.machine.right).toBeLessThanOrEqual(dimensions.innerWidth + 1)
+  expect(dimensions.machine.top).toBeGreaterThanOrEqual(-1)
+  expect(dimensions.machine.bottom).toBeLessThanOrEqual(dimensions.innerHeight + 1)
+  expect(`${dimensions.bodyBackground} ${dimensions.stageBackground}`).toContain('gradient')
 })
 
-test('critical accessibility violations are absent on core routes', async ({ page }) => {
-  await boot(page, '/contact')
-  const results = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    .disableRules(['color-contrast'])
-    .analyze()
-  const critical = results.violations.filter(v => v.impact === 'critical' || v.impact === 'serious')
-  expect(critical, critical.map(v => `${v.id}: ${v.help}`).join('\n')).toEqual([])
+test('semantic article focus has a visible CRT proxy', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'One real browser engine is sufficient for focus projection geometry')
+  await boot(page, '/projects/penw')
+
+  const source = page.locator('.article-reader a[href]').first()
+  await expect(source).toBeAttached()
+  await source.focus()
+
+  const proxy = page.locator('.semantic-focus-proxy')
+  await expect(proxy).toBeVisible()
+  const box = await proxy.boundingBox()
+  expect(box?.width || 0).toBeGreaterThanOrEqual(24)
+  expect(box?.height || 0).toBeGreaterThanOrEqual(24)
+})
+
+test('generic imported article image alternatives are contextualized', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Semantic content only needs one engine for this assertion')
+  await boot(page, '/articles/01-ecs-entity-management')
+  const alts = await page.locator('.article-reader img').evaluateAll(images => images.map(image => image.getAttribute('alt') || ''))
+  expect(alts.length).toBeGreaterThan(0)
+  expect(alts.some(alt => /^article illustration$/i.test(alt.trim()))).toBe(false)
+})
+
+test('serious accessibility violations are absent across representative routes', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Axe DOM rules are engine-independent; keep CI time bounded')
+  test.setTimeout(90_000)
+
+  const routes = [
+    '/',
+    '/about',
+    '/resume',
+    '/projects',
+    '/articles',
+    '/contact',
+    '/projects/penw',
+    '/articles/01-ecs-entity-management',
+  ]
+
+  for (const route of routes) {
+    await boot(page, route)
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+    const serious = results.violations.filter(v => v.impact === 'critical' || v.impact === 'serious')
+    expect(serious, `${route}\n${serious.map(v => `${v.id}: ${v.help}`).join('\n')}`).toEqual([])
+  }
 })
