@@ -1,5 +1,5 @@
 import { JSDOM } from 'jsdom'
-import { pathForState, resolveNavigation, syncNavigationMetadata } from '../src/navigation.js'
+import { pathForState, resolveNavigation, syncNavigationMetadata, syncNavigationHistory } from '../src/navigation.js'
 
 let failed = 0
 const check = (condition, label) => {
@@ -27,6 +27,14 @@ check(article.valid && article.item?.id === 'cpu-cache-optimization', 'article d
 const listing = resolveNavigation(content, '/projects')
 check(listing.valid && !listing.item, 'collection route resolves without a document')
 
+const restoredListing = resolveNavigation(content, '/projects', {
+  marker: 'jg1500-navigation-v1',
+  route: 'projects',
+  item: null,
+  cursor: 1,
+})
+check(restoredListing.cursor === 1, 'collection history restores selected cursor')
+
 const invalid = resolveNavigation(content, '/projects/does-not-exist')
 check(!invalid.valid && invalid.route === 'projects' && !invalid.item, 'invalid document falls back to collection')
 
@@ -34,11 +42,19 @@ check(pathForState({ route: 'home', item: null }) === '/', 'HOME serializes to r
 check(pathForState({ route: 'about', item: null }) === '/about', 'simple page serializes to route')
 check(pathForState({ route: 'projects', item: content.projects[0] }) === '/projects/frogbyte', 'project serializes to stable deep link')
 
-const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: 'https://portfolio.example/projects/frogbyte' })
+const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: 'https://portfolio.example/projects' })
 globalThis.document = dom.window.document
 globalThis.location = dom.window.location
-syncNavigationMetadata({ route: 'projects', item: content.projects[0] })
+globalThis.history = dom.window.history
 
+syncNavigationHistory({ route: 'projects', item: null, cursor: 1 }, 'replace')
+check(history.state?.cursor === 1, 'same-path replace persists collection cursor')
+
+syncNavigationHistory({ route: 'projects', item: content.projects[1], cursor: 1 }, 'push', { parentPath: '/projects' })
+check(location.pathname === '/projects/penw', 'detail push updates browser path')
+check(history.state?.parentPath === '/projects', 'detail history records its collection parent')
+
+syncNavigationMetadata({ route: 'projects', item: content.projects[0] })
 check(document.title === 'FROGBYTE — Jordan Grilly', 'document title follows active item')
 check(document.querySelector('meta[name="description"]')?.content === 'Rust engine', 'meta description follows active item')
 check(document.querySelector('meta[property="og:title"]')?.content === 'FROGBYTE — Jordan Grilly', 'Open Graph title follows active item')
