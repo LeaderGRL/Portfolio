@@ -20,7 +20,7 @@ jobs:
   build-and-test:
     name: Build and test
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -43,14 +43,31 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+
       - name: Generate assets
         run: npm run assets
 
       - name: Build production bundle
         run: npm run build
 
-      - name: Run tests
+      - name: Run runtime tests
         run: npm run test:runtime
+
+      - name: Run browser tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
   publish-image:
     name: Publish production image
