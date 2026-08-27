@@ -137,12 +137,14 @@ for (const [section, documents] of [
 
 // $request_uri always keeps the browser's original request, even when
 // try_files internally falls back to /index.html. Normalize it once into a
-// query-free stable path and drive every SEO map from that path.
+// query-free stable path and drive every SEO map from that path. Non-root routes
+// accept a trailing slash because the client router normalizes it as equivalent.
 function pathMap() {
   const lines = ['map $request_uri $seo_path {', '    default "/";']
   for (const route of routes.keys()) {
     const pattern = regexEscape(route)
-    lines.push(`    ~^${pattern}(?:\\?.*)?$ "${nginx(route)}";`)
+    const suffix = route === '/' ? '(?:\\?.*)?$' : '/?(?:\\?.*)?$'
+    lines.push(`    ~^${pattern}${suffix} "${nginx(route)}";`)
   }
   lines.push('}')
   return lines.join('\n')
@@ -158,14 +160,28 @@ function mapBlock(variable, field, fallback) {
   return lines.join('\n')
 }
 
+// The application container terminates plain HTTP behind Cloudflare Tunnel.
+// Canonical URLs must describe the public request, so prefer the trusted
+// forwarded protocol and only fall back to Nginx's local scheme when absent.
+function publicSchemeMap() {
+  return [
+    'map $http_x_forwarded_proto $seo_scheme {',
+    '    default $scheme;',
+    '    ~*^https(?:,|$) https;',
+    '    ~*^http(?:,|$) http;',
+    '}',
+  ].join('\n')
+}
+
 const maps = [
+  publicSchemeMap(),
   pathMap(),
   mapBlock('seo_title', 'title', BASE_TITLE),
   mapBlock('seo_description', 'description', BASE_DESCRIPTION),
   mapBlock('seo_type', 'type', 'website'),
 ].join('\n\n')
 
-const filters = `        set $seo_url "$scheme://$host$seo_path";\n\n` +
+const filters = `        set $seo_url "$seo_scheme://$host$seo_path";\n\n` +
 `        sub_filter_once off;\n` +
 `        sub_filter '<title>${BASE_TITLE}</title>' '<title>$seo_title</title>';\n` +
 `        sub_filter '<meta name="description" content="${BASE_DESCRIPTION}">' '<meta name="description" content="$seo_description">';\n` +
