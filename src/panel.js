@@ -86,17 +86,6 @@ export function makeKey(label, cls, icon = '') {
   return b;
 }
 
-export function bindMobileMenu() {
-  const menu = document.getElementById('mobile-menu')
-  if (!menu) return
-  menu.querySelector('.mobile-menu__icon').innerHTML = ICONS.bars
-  menu.addEventListener('click', () => {
-    const collapsed = document.getElementById('machine').classList.toggle('nav-collapsed')
-    menu.setAttribute('aria-expanded', String(!collapsed))
-    foley.ensure(); foley.clunk(collapsed ? 0.7 : 0.9)
-  })
-}
-
 /* Parallax only. The key light is baked into every sprite at a fixed angle,
  * so nothing here may move a highlight — the tilt is the one thing that can
  * respond to the pointer without putting the panel's lighting out of
