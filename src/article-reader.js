@@ -15,7 +15,8 @@ const make = (tag, className, text) => {
 }
 
 const INLINE_TOKEN = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_)/g
-const GENERIC_IMAGE_ALT = /^(?:article illustration|illustration|image)$/i
+const GENERIC_IMAGE_ALT = /^(?:article illustration|project illustration|illustration|image)$/i
+const VISUAL_BLOCK_TYPES = new Set(['image', 'media', 'hero'])
 
 function appendInline(node, value = '') {
   let cursor = 0
@@ -169,8 +170,16 @@ function renderBlock(block) {
 }
 
 function accessibleBlock(block, context) {
-  if (block.type !== 'image' || !GENERIC_IMAGE_ALT.test(String(block.alt || '').trim())) return block
-  return { ...block, alt: `${context || 'Technical article'} — technical illustration` }
+  if (!VISUAL_BLOCK_TYPES.has(block.type)) return block
+  const alt = String(block.alt || '').trim()
+  if (alt && !GENERIC_IMAGE_ALT.test(alt)) return block
+
+  const label = String(block.label || block.title || '').trim()
+  const meaningfulLabel = label && !GENERIC_IMAGE_ALT.test(label) ? label : ''
+  return {
+    ...block,
+    alt: meaningfulLabel || `${context || 'Technical article'} — technical illustration`,
+  }
 }
 
 let currentId = null
