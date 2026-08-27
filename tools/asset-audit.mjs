@@ -6,7 +6,7 @@ const ROOT = process.cwd()
 const TEXT_ROOTS = ['content', 'src', 'tools']
 const MEDIA_ROOT = path.join(ROOT, 'public', 'media')
 const SOURCE_ROOT = path.join(ROOT, 'assets', 'src')
-const REPORT_PATH = path.join(ROOT, 'asset-audit.json')
+const REPORT_PATH = path.join(ROOT, 'tmp', 'asset-audit.json')
 
 function walk(root) {
   if (!fs.existsSync(root)) return []
@@ -89,6 +89,7 @@ const report = {
   largest,
 }
 
+fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true })
 fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2) + '\n')
 
 const mib = value => (value / 1024 / 1024).toFixed(2)
