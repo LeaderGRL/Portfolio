@@ -22,6 +22,15 @@ export function footer(t, str) {
   t.center(t.rows - 2, str, "dim");
 }
 
+function ellipsize(value, width) {
+  const text = String(value || "");
+  const limit = Math.max(0, width | 0);
+  if (!limit) return "";
+  if (text.length <= limit) return text;
+  if (limit === 1) return "…";
+  return text.slice(0, limit - 1) + "…";
+}
+
 /* --------------------------------------------------------------------------
  * BLOCK RENDERER
  *
@@ -263,11 +272,17 @@ export function list(t, st, label, items) {
   items.forEach((it, i) => {
     const y = 3 + i * 2;
     const sel = i === cursor;
+    const rawTag = it.meta || (it.stack && it.stack[0]) || "";
+    const maxTagWidth = Math.max(10, Math.floor((t.cols - 8) * 0.38));
+    const tag = ellipsize(rawTag, maxTagWidth);
+    const tagX = tag ? t.cols - tag.length - 2 : t.cols - 2;
+    const labelWidth = Math.max(4, tagX - 6);
+    const subtitleWidth = Math.max(4, t.cols - 8);
+
     t.put(2, y, sel ? "\u25b6" : " ", "core");
-    t.put(4, y, it.label, sel ? "core" : "bright");
-    if (it.sub) t.put(6, y + 1, it.sub.toUpperCase(), "dim");
-    const tag = it.meta || (it.stack && it.stack[0]) || "";
-    if (tag) t.put(t.cols - tag.length - 2, y, tag, sel ? "amber" : "dim");
+    t.put(4, y, ellipsize(it.label, labelWidth), sel ? "core" : "bright");
+    if (it.sub) t.put(6, y + 1, ellipsize(it.sub.toUpperCase(), subtitleWidth), "dim");
+    if (tag) t.put(tagX, y, tag, sel ? "amber" : "dim");
     if (sel) {
       t.opAt(y, (g, py) => {
         g.fillStyle = "rgba(107,243,154,0.10)";
