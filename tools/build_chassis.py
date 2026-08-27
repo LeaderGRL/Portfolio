@@ -15,6 +15,13 @@ MOBILE_FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-mobile.png"
 EXPORT = ROOT / "assets" / "chassis"
 BUILD = ROOT / "assets" / "build"
 
+# The compact machine remains contain-fitted so no physical control can be
+# cropped. These strips extend only the blank photographed chassis material
+# beyond the authored 941x1672 render when the viewport has a different ratio.
+MOBILE_FILL_SAMPLE_DEPTH = 128
+MOBILE_FILL_EXTENT = 512
+
+
 def aperture_from_mask(mask):
     ys, xs = np.nonzero(np.asarray(mask, dtype=np.float32) > 127)
     width, height = mask.size
@@ -67,6 +74,61 @@ def publish_staged(source, destination):
         source.unlink()
 
 
+def reflected_indices(distance, depth):
+    """Map outward distance onto a mirrored source band without hard repeats."""
+    depth = max(2, int(depth))
+    period = 2 * (depth - 1)
+    phase = np.asarray(distance, dtype=np.int32) % period
+    return np.where(phase < depth, phase, period - phase)
+
+
+def compact_material_fills(image):
+    """Create edge-continuous material strips for arbitrary compact viewports.
+
+    Each strip's seam-facing row/column is exactly the corresponding outer row
+    or column of the supplied mobile chassis. Moving away from the seam walks
+    inward through a blank material band and mirrors it, preserving real grain
+    and lighting without synthesising another UI or stretching one pixel line.
+    """
+    rgb = np.asarray(image.convert("RGB"))
+    height, width = rgb.shape[:2]
+    depth = min(MOBILE_FILL_SAMPLE_DEPTH, max(2, width // 3), max(2, height // 3))
+    extent = MOBILE_FILL_EXTENT
+
+    # Top image is stored far-edge -> seam, so its last row matches source y=0.
+    top_distance = np.arange(extent - 1, -1, -1)
+    top = rgb[reflected_indices(top_distance, depth), :, :]
+
+    # Bottom image is stored seam -> far-edge, so its first row matches y=h-1.
+    bottom_distance = np.arange(extent)
+    bottom_rows = (height - 1) - reflected_indices(bottom_distance, depth)
+    bottom = rgb[bottom_rows, :, :]
+
+    # Left is far-edge -> seam; right is seam -> far-edge for the same reason.
+    left_distance = np.arange(extent - 1, -1, -1)
+    left = rgb[:, reflected_indices(left_distance, depth), :]
+    right_distance = np.arange(extent)
+    right_cols = (width - 1) - reflected_indices(right_distance, depth)
+    right = rgb[:, right_cols, :]
+
+    # A border-derived fallback colour covers sub-pixel gaps while images load.
+    border = np.concatenate([
+        rgb[:12].reshape(-1, 3),
+        rgb[-12:].reshape(-1, 3),
+        rgb[:, :12].reshape(-1, 3),
+        rgb[:, -12:].reshape(-1, 3),
+    ])
+    mean = np.rint(border.mean(axis=0)).astype(np.uint8)
+    material_color = "#" + "".join(f"{int(channel):02x}" for channel in mean)
+
+    return {
+        "top": Image.fromarray(top),
+        "bottom": Image.fromarray(bottom),
+        "left": Image.fromarray(left),
+        "right": Image.fromarray(right),
+    }, material_color
+
+
 def main():
     EXPORT.mkdir(parents=True, exist_ok=True)
     BUILD.mkdir(parents=True, exist_ok=True)
@@ -108,6 +170,10 @@ def main():
     save_webp_atomic(mobile, EXPORT / "chassis-mobile.webp")
     save_webp_atomic(mobile_frame, BUILD / "chassis-frame-mobile.webp")
 
+    fills, material_color = compact_material_fills(mobile)
+    for edge, fill in fills.items():
+        save_webp_atomic(fill, BUILD / f"mobile-fill-{edge}.webp")
+
     metadata_path = BUILD / "meta.json"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata["chassis"] = {
@@ -122,6 +188,9 @@ def main():
         "aperture": aperture_from_mask(mobile_hole),
         "source_size": [mobile.width, mobile.height],
         "frame_source": MOBILE_FRAME_SOURCE.name,
+        "material_color": material_color,
+        "fill_sample_depth": MOBILE_FILL_SAMPLE_DEPTH,
+        "fill_extent": MOBILE_FILL_EXTENT,
     }
     metadata_tmp = metadata_path.with_name(metadata_path.name + ".tmp")
     metadata_tmp.write_text(json.dumps(metadata, indent=1), encoding="utf-8")
@@ -131,6 +200,8 @@ def main():
     for path in sorted(EXPORT.glob("chassis-*.webp")):
         print(f"{path.name}: {path.stat().st_size / 1024:.1f} KB")
     for path in sorted(BUILD.glob("chassis-frame-*.webp")):
+        print(f"{path.name}: {path.stat().st_size / 1024:.1f} KB")
+    for path in sorted(BUILD.glob("mobile-fill-*.webp")):
         print(f"{path.name}: {path.stat().st_size / 1024:.1f} KB")
 
 
