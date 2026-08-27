@@ -186,7 +186,24 @@ export class App {
     const fit = compact
       ? Math.min(innerWidth / dw, innerHeight / dh)
       : Math.max(innerWidth / dw, innerHeight / dh);
-    document.documentElement.style.setProperty("--fit", fit.toFixed(4));
+    const root = document.documentElement.style;
+    root.setProperty("--fit", fit.toFixed(4));
+
+    if (compact) {
+      const renderedWidth = dw * fit;
+      const renderedHeight = dh * fit;
+      const gapX = Math.max(0, (innerWidth - renderedWidth) * 0.5);
+      const gapY = Math.max(0, (innerHeight - renderedHeight) * 0.5);
+      root.setProperty("--compact-render-w", `${renderedWidth}px`);
+      root.setProperty("--compact-render-h", `${renderedHeight}px`);
+      root.setProperty("--compact-gap-x", `${gapX}px`);
+      root.setProperty("--compact-gap-y", `${gapY}px`);
+    } else {
+      root.removeProperty("--compact-render-w");
+      root.removeProperty("--compact-render-h");
+      root.removeProperty("--compact-gap-x");
+      root.removeProperty("--compact-gap-y");
+    }
 
     if (this.crt.ok) {
       const tube = document.getElementById("tube");
@@ -319,9 +336,6 @@ export class App {
     const keepScroll = this.term.scroll;
     this.term.clear();
 
-    // Project/article details are owned by the document runtime. Do not also
-    // render their authored blocks into the hidden terminal buffer: doing so
-    // would instantiate a second set of local videos through pages.js/media.js.
     const documentItem = (st.route === 'articles' || st.route === 'projects') && st.item
       ? st.item
       : null;
@@ -375,69 +389,51 @@ export class App {
     ];
     lines.forEach((l, i) => t.put(4, 3 + i, l, i === 0 ? "bright" : "mid"));
     this.total = t.countGlyphs();
-    this.reveal = 0;
-    this.revealTarget = this.total;
-    this.dirty = true;
+    this.reveal = 0; this.revealTarget = this.total;
     this.booting = true;
-    this.state.warm = 0;
-    this.state.degauss = 1;
+    this.dirty = true;
+    foley.humOn(true);
+    foley.degauss(); this.state.degauss = 1;
     setTimeout(() => {
       this.booting = false;
       this._restoreNavigation();
-      const hint = document.getElementById("hint");
-      setTimeout(() => { hint.style.opacity = "0"; }, 6000);
-    }, REDUCED ? 400 : 2400);
+    }, REDUCED ? 80 : 1200);
   }
 
   frame(ms) {
-    requestAnimationFrame(t => this.frame(t));
-    const st = this.state;
     const t = ms / 1000;
-    const dt = Math.min(0.05, t - (this._last || t));
-    this._last = t;
-    st.time = t;
+    this.state.time = t;
+    this.state.clock = new Date().toLocaleTimeString([], { hour12:false });
+    const up = Math.max(0, Math.floor(t - this.bootAt));
+    this.state.uptime = `${String(Math.floor(up/3600)).padStart(2,"0")}:${String(Math.floor(up/60)%60).padStart(2,"0")}:${String(up%60).padStart(2,"0")}`;
+
+    this.state.power = lerp(this.state.power, this.state.powerTarget, 0.12);
+    this.state.crt = lerp(this.state.crt, this.state.crtTarget, 0.13);
+    this.state.degauss *= 0.91;
+    this.state.static *= 0.86;
+    this.state.warm = lerp(this.state.warm, 1, 0.018);
+
+    if (this.reveal < this.revealTarget) {
+      const speed = this.booting ? 60 : 190;
+      this.reveal = Math.min(this.revealTarget, this.reveal + speed / 60);
+      const iv = this.booting ? 5 : 3;
+      if (Math.floor(this.reveal / iv) > Math.floor(this.lastBlip / iv)) foley.blip(0.18);
+      this.lastBlip = this.reveal;
+      this.dirty = true;
+    }
 
     this.tilt?.frame?.();
     this.documentRuntime?.frame?.(ms);
 
-    st.power = lerp(st.power, st.powerTarget, 1 - Math.pow(0.001, dt * 1.6));
-    st.crt = lerp(st.crt, st.crtTarget, 1 - Math.pow(0.001, dt * 3));
-    st.degauss = Math.max(0, st.degauss - dt * 0.9);
-    st.static = Math.max(0, st.static - dt * 4.5);
-    st.warm = Math.min(1, st.warm + dt * 0.55);
-
-    const d = new Date();
-    const pad = n => String(n).padStart(2, "0");
-    const clock = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    const up = Math.max(0, Math.floor(t - this.bootAt));
-    const uptime = `${pad(Math.floor(up / 3600))}:${pad(Math.floor(up / 60) % 60)}:${pad(up % 60)}`;
-    if (clock !== st.clock) {
-      st.clock = clock; st.uptime = uptime;
-      if (!this.booting && st.route === "home" && !st.item) this.render();
-    }
-
-    if (this.reveal < this.revealTarget) {
-      const speed = REDUCED ? 100000 : 900;
-      const before = Math.floor(this.reveal);
-      this.reveal = Math.min(this.revealTarget, this.reveal + speed * dt);
-      if (Math.floor(this.reveal) !== before) {
-        this.dirty = true;
-        if (t - this.lastBlip > 0.028) { foley.blip(); this.lastBlip = t; }
-      }
-    }
-
-    const blink = Math.floor(t * 2) % 2 === 0;
-    if (blink !== this._blink) { this._blink = blink; this.dirty = true; }
-
     if (this.dirty) {
-      const handled = this.documentRuntime?.paint?.(this.term, Math.floor(this.reveal), blink && this.reveal >= this.revealTarget);
-      if (!handled) this.raster.paint(this.term, Math.floor(this.reveal), blink && this.reveal >= this.revealTarget);
+      const handled = this.documentRuntime?.paint?.(Math.floor(this.reveal)) || false;
+      if (!handled) this.raster.paint(this.term, Math.floor(this.reveal));
+      this.dirty = false;
     }
 
-    if (this.crt.ok) this.crt.render(st, this.dirty);
-    this.dirty = false;
+    this.crt.frame({ ...this.state, time:t });
+    requestAnimationFrame(n => this.frame(n));
   }
 }
 
-let instance = null;
-export const start = () => (instance ||= new App());
+export function start() { return new App(); }
