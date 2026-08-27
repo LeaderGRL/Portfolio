@@ -22,25 +22,29 @@ test('landscape phone keeps the complete nameplate in the safe area', async ({ p
   expect(nameplate.y + nameplate.height).toBeLessThanOrEqual(412)
 })
 
-test('article code regions are keyboard focusable and axe-clean', async ({ page }, testInfo) => {
+test('article code stays in the visible CRT document flow and is axe-clean', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Accessibility regression only needs one browser engine')
   await boot(page, '/articles/01-ecs-entity-management')
 
   const codeRegions = page.locator('.article-reader__code')
   await expect(codeRegions.first()).toBeAttached()
 
-  // Read every region in one browser round-trip. The ECS article intentionally
-  // contains many code samples, so issuing two Playwright assertions per block
-  // can spend the whole test timeout waiting on protocol/actionability work.
-  const regionSemantics = await codeRegions.evaluateAll(regions => regions.map(region => ({
+  const geometry = await codeRegions.evaluateAll(regions => regions.map(region => ({
     tabIndex: region.getAttribute('tabindex'),
-    ariaLabel: region.getAttribute('aria-label')?.trim() || '',
+    overflowX: getComputedStyle(region).overflowX,
+    overflowY: getComputedStyle(region).overflowY,
+    scrollWidth: region.scrollWidth,
+    clientWidth: region.clientWidth,
   })))
 
-  expect(regionSemantics.length).toBeGreaterThan(0)
-  for (const semantics of regionSemantics) {
-    expect(semantics.tabIndex).toBe('0')
-    expect(semantics.ariaLabel).not.toBe('')
+  expect(geometry.length).toBeGreaterThan(0)
+  for (const region of geometry) {
+    expect(region.tabIndex).toBeNull()
+    expect(region.overflowX).not.toBe('auto')
+    expect(region.overflowX).not.toBe('scroll')
+    expect(region.overflowY).not.toBe('auto')
+    expect(region.overflowY).not.toBe('scroll')
+    expect(region.scrollWidth).toBeLessThanOrEqual(region.clientWidth + 1)
   }
 
   const results = await new AxeBuilder({ page }).analyze()
