@@ -4,7 +4,8 @@ import { DisplayPipeline } from './display-pipeline.js'
 import { createDefaultBlockRegistry } from './document/default-blocks.js'
 import { createDefaultIntegrationRegistry } from './document/default-integrations.js'
 import { InlineIntegrationController } from './document/inline-integrations.js'
-import { Local3DManager } from './document/local-3d.js'
+import { SafeLocal3DManager } from './document/safe-local-3d.js'
+import { enhanceModel3DFallback } from './document/model3d-fallback.js'
 import { enhanceMediaBlocks } from './document/media-blocks.js'
 import { MediaViewer } from './document/media-viewer.js'
 import { DocumentProgressOverlay } from './document/progress-overlay.js'
@@ -43,11 +44,13 @@ export function attachArticleCRT(app) {
       else documentRaster?.markDirty?.()
     },
   })
-  const local3d = new Local3DManager(() => {
+  const local3d = new SafeLocal3DManager(() => {
     app.dirty = true
     documentRaster?.markDirty?.()
   })
-  const blockRegistry = enhanceMediaBlocks(createDefaultBlockRegistry({ local3d }))
+  const blockRegistry = enhanceMediaBlocks(
+    enhanceModel3DFallback(createDefaultBlockRegistry({ local3d }), local3d),
+  )
   const integrations = createDefaultIntegrationRegistry({ local3d, mediaViewer })
 
   documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
