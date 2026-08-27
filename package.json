@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "assets": "node tools/assets.mjs",
+    "audit:assets": "node tools/asset-audit.mjs",
     "test:runtime": "node tools/smoke.mjs && node tools/smoke.mjs --gl && node tools/interactions.mjs && node tools/display-smoke.mjs && node tools/document-schema-smoke.mjs && node tools/article-parser-smoke.mjs && node tools/home-article-regression.mjs && node tools/navigation-smoke.mjs",
     "test:e2e": "playwright test",
     "test": "npm run build && npm run test:runtime"
