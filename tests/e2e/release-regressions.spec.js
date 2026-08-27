@@ -28,10 +28,19 @@ test('article code regions are keyboard focusable and axe-clean', async ({ page 
 
   const codeRegions = page.locator('.article-reader__code')
   await expect(codeRegions.first()).toBeAttached()
-  expect(await codeRegions.count()).toBeGreaterThan(0)
-  for (const region of await codeRegions.all()) {
-    await expect(region).toHaveAttribute('tabindex', '0')
-    await expect(region).toHaveAttribute('aria-label', /.+/)
+
+  // Read every region in one browser round-trip. The ECS article intentionally
+  // contains many code samples, so issuing two Playwright assertions per block
+  // can spend the whole test timeout waiting on protocol/actionability work.
+  const regionSemantics = await codeRegions.evaluateAll(regions => regions.map(region => ({
+    tabIndex: region.getAttribute('tabindex'),
+    ariaLabel: region.getAttribute('aria-label')?.trim() || '',
+  })))
+
+  expect(regionSemantics.length).toBeGreaterThan(0)
+  for (const semantics of regionSemantics) {
+    expect(semantics.tabIndex).toBe('0')
+    expect(semantics.ariaLabel).not.toBe('')
   }
 
   const results = await new AxeBuilder({ page }).analyze()
