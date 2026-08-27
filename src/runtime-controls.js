@@ -2,12 +2,11 @@ import { CHAR_H, PAD_Y, SRC_H } from './core.js'
 import { CONTENT } from './content.js'
 
 /* ========================================================================== *
- * Runtime input and viewport guards
+ * Runtime coarse-pointer controls
  *
- * The terminal owns global keyboard navigation, while native controls and
- * document integrations own their local interactions. This module keeps those
- * two input domains from leaking into each other and adds coarse-pointer hit
- * testing without changing the visible industrial controls.
+ * App owns keyboard boundaries and viewport sizing. This module only augments
+ * coarse-pointer hit testing without changing the visible industrial sprites,
+ * and turns terminal listing rows into direct touch targets on compact layouts.
  * ========================================================================== */
 
 const INTERACTIVE_SELECTOR = [
@@ -33,45 +32,6 @@ const TAP_SLOP_PX = 12
 
 function closestInteractive(target) {
   return target instanceof Element ? target.closest(INTERACTIVE_SELECTOR) : null
-}
-
-function bindInteractiveKeyboardBoundary() {
-  const onKeyDown = event => {
-    // Target handlers run before this document-level bubble listener. Stopping
-    // propagation here preserves native/button/slider behaviour while keeping
-    // the App-level window shortcut handler out of the interaction.
-    if (closestInteractive(event.target)) event.stopPropagation()
-  }
-
-  document.addEventListener('keydown', onKeyDown)
-  return () => document.removeEventListener('keydown', onKeyDown)
-}
-
-function bindCompactViewportFit() {
-  const root = document.documentElement
-  const machine = document.getElementById('machine')
-  if (!machine) return () => {}
-
-  const apply = () => {
-    // App._fit() still owns desktop sizing. Compact mode must use contain,
-    // otherwise the 941x1672 chassis is cropped vertically on tablets.
-    if (!machine.classList.contains('is-compact')) return
-    const viewport = window.visualViewport
-    const width = viewport?.width || window.innerWidth
-    const height = viewport?.height || window.innerHeight
-    const fit = Math.min(width / 941, height / 1672)
-    root.style.setProperty('--fit', Math.max(0.01, fit).toFixed(4))
-  }
-
-  const onResize = () => requestAnimationFrame(apply)
-  window.addEventListener('resize', onResize)
-  window.visualViewport?.addEventListener('resize', onResize)
-  apply()
-
-  return () => {
-    window.removeEventListener('resize', onResize)
-    window.visualViewport?.removeEventListener('resize', onResize)
-  }
 }
 
 function expandedRect(rect, minimum = MIN_TARGET_PX) {
@@ -217,8 +177,6 @@ function bindScreenListingPointer(app) {
 
 export function installRuntimeControls(app) {
   const cleanups = [
-    bindInteractiveKeyboardBoundary(),
-    bindCompactViewportFit(),
     bindCompactTargetExpansion(),
     bindScreenListingPointer(app),
   ]
