@@ -3,9 +3,27 @@ import { articleReaderScroll, syncArticleReader } from './article-reader.js'
 import { CONTENT } from './content.js'
 import { COLS, REDUCED, ROWS, clamp, lerp, now } from './core.js'
 import { CRT } from './crt.js'
+import { syncNavigationHistory, syncNavigationMetadata, resolveNavigation } from './navigation.js'
 import { PAGES } from './pages.js'
-import { ROUTES, bindAssets, bindMobileMenu, bindTilt, makeKey } from './panel.js'
+import { ROUTES, bindAssets, bindTilt, makeKey } from './panel.js'
 import { Rasteriser, Terminal } from './terminal.js'
+
+const INTERACTIVE_KEY_TARGET = [
+  'button',
+  'a[href]',
+  'input',
+  'textarea',
+  'select',
+  'iframe',
+  'video',
+  'audio',
+  '[role="button"]',
+  '[role="switch"]',
+  '[role="slider"]',
+  '[role="link"]',
+  '[role="application"]',
+  '[contenteditable]:not([contenteditable="false"])',
+].join(',')
 
 /* ==========================================================================
  * 8. APP
@@ -39,10 +57,10 @@ export class App {
     this._bindControls();
     this._bindKeyboard();
     bindAssets();
-    bindMobileMenu();
     bindTilt();
     this._fit();
     addEventListener("resize", () => this._fit());
+    addEventListener("popstate", () => this._restoreNavigation());
 
     this.boot();
     requestAnimationFrame(t => this.frame(t));
@@ -128,7 +146,7 @@ export class App {
 
   _bindKeyboard() {
     addEventListener("keydown", e => {
-      if (e.target.tagName === "INPUT") return;
+      if (e.target instanceof Element && e.target.closest(INTERACTIVE_KEY_TARGET)) return;
       const k = e.key;
       const num = "12345".indexOf(k);
       if (num >= 0) { this.navKeys[ROUTES[num + 1].id].tap(); this.go(ROUTES[num + 1].id); return; }
@@ -165,7 +183,7 @@ export class App {
     const dw = compact ? 941 : 1920;
     const dh = compact ? 1672 : 1080;
     const fit = compact
-      ? Math.max(innerWidth / dw, innerHeight / dh)
+      ? Math.min(innerWidth / dw, innerHeight / dh)
       : Math.max(innerWidth / dw, innerHeight / dh);
     document.documentElement.style.setProperty("--fit", fit.toFixed(4));
 
@@ -176,7 +194,25 @@ export class App {
     }
   }
 
-  go(route) {
+  _commitNavigation(mode = "push") {
+    syncNavigationHistory(this.state, mode);
+    syncNavigationMetadata(this.state);
+  }
+
+  _restoreNavigation() {
+    if (this.booting) return;
+    const target = resolveNavigation(CONTENT);
+    this.state.route = target.route;
+    this.state.item = target.item;
+    this.state.cursor = target.cursor;
+    this.state.static = 0.8;
+    this.render(true);
+    this._syncKeys();
+    syncNavigationMetadata(this.state);
+    if (!target.valid) syncNavigationHistory(this.state, "replace");
+  }
+
+  go(route, { historyMode = "push" } = {}) {
     foley.ensure();
     if (this.state.route === route && !this.state.item) return;
     this.state.route = route;
@@ -186,6 +222,7 @@ export class App {
     foley.sweep();
     this.render(true);
     this._syncKeys();
+    this._commitNavigation(historyMode);
   }
 
   scrollBy(rows) {
@@ -215,6 +252,7 @@ export class App {
       const i = clamp(arr.indexOf(st.item) + d, 0, arr.length - 1);
       st.item = arr[i]; st.cursor = i;
       st.static = 0.6; foley.sweep(); this.render(true);
+      this._commitNavigation("replace");
       return;
     }
     if (st.route !== "projects" && st.route !== "articles") return;
@@ -232,6 +270,7 @@ export class App {
       st.item = arr[st.cursor];
       st.static = 1; foley.sweep();
       this.render(true);
+      this._commitNavigation("push");
     } else if (st.route === "home") {
       this.navKeys.projects.tap(); this.go("projects");
     }
@@ -239,8 +278,18 @@ export class App {
 
   back() {
     const st = this.state;
-    if (st.item) { st.item = null; st.static = 0.8; foley.sweep(); this.render(true); return; }
-    if (st.route !== "home") { this.navKeys.home.tap(); this.go("home"); }
+    if (st.item) {
+      st.item = null;
+      st.static = 0.8;
+      foley.sweep();
+      this.render(true);
+      this._commitNavigation("replace");
+      return;
+    }
+    if (st.route !== "home") {
+      this.navKeys.home.tap();
+      this.go("home", { historyMode: "replace" });
+    }
   }
 
   _syncKeys() {
@@ -264,7 +313,7 @@ export class App {
       if (documentItem.sub) this.term.put(4, 5, documentItem.sub.slice(0, this.term.cols - 8), "dim");
       this.term.put(4, 7, "DOCUMENT VIEW ACTIVE", "mid");
     } else {
-      const page = st.item ? PAGES.detail : (PAGES[st.route] || PAGES.home);
+      const page = PAGES[st.route] || PAGES.home;
       page(this.term, st);
     }
 
@@ -320,8 +369,7 @@ export class App {
     this.state.degauss = 1;
     setTimeout(() => {
       this.booting = false;
-      this.go("home");
-      this._syncKeys();
+      this._restoreNavigation();
       const hint = document.getElementById("hint");
       setTimeout(() => { hint.style.opacity = "0"; }, 6000);
     }, REDUCED ? 400 : 2400);
@@ -344,7 +392,7 @@ export class App {
     const d = new Date();
     const pad = n => String(n).padStart(2, "0");
     const clock = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    const up = Math.floor(t - (this.bootAt ? 0 : 0));
+    const up = Math.max(0, Math.floor(t - this.bootAt));
     const uptime = `${pad(Math.floor(up / 3600))}:${pad(Math.floor(up / 60) % 60)}:${pad(up % 60)}`;
     if (clock !== st.clock) {
       st.clock = clock; st.uptime = uptime;
