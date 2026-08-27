@@ -1,24 +1,74 @@
 /* Release-level visual and accessibility fixes that intentionally layer over
- * the authored chassis stylesheet. Keeping the functional compact machine at
- * its native aspect ratio prevents control cropping; this backdrop extends the
- * same panel material to the viewport so contain-fit never reads as letterbox.
+ * the authored chassis stylesheet.
+ *
+ * Compact geometry stays contain-fitted so no physical control can be cropped.
+ * The empty viewport axis is filled with reflected strips generated directly
+ * from the supplied mobile chassis photograph. The strip touching the machine
+ * shares its exact outer source row/column, so the extension preserves real
+ * grain and lighting instead of approximating the material with CSS gradients.
  */
-body.is-compact-stage,
-body.is-compact-stage #stage{
-  background:
-    radial-gradient(120% 75% at 18% 5%, rgba(255,244,226,.22), transparent 58%),
-    linear-gradient(180deg, #e2d0bd 0%, #d9c6af 45%, #cdb9a3 100%);
+body.is-compact-stage{
+  background:var(--compact-material,#d5c2ad);
 }
 
-body.is-compact-stage #stage::before{
+body.is-compact-stage #stage{
+  background:transparent;
+}
+
+body.is-compact-stage .machine.is-compact{
+  z-index:2;
+}
+
+/* Top and bottom extension. These are visible when width is the limiting axis,
+ * which is the usual phone case. A two-pixel overlap hides fractional transform
+ * rounding while the seam-facing edge remains sourced from the chassis itself. */
+body.is-compact-stage::before,
+body.is-compact-stage::after{
+  content:"";
+  position:fixed;
+  z-index:0;
+  left:var(--compact-gap-x,0px);
+  right:var(--compact-gap-x,0px);
+  height:calc(var(--compact-gap-y,0px) + 2px);
+  pointer-events:none;
+  background-repeat:no-repeat;
+  background-size:100% auto;
+}
+body.is-compact-stage::before{
+  top:0;
+  background-image:var(--compact-fill-top,none);
+  background-position:center bottom;
+}
+body.is-compact-stage::after{
+  bottom:0;
+  background-image:var(--compact-fill-bottom,none);
+  background-position:center top;
+}
+
+/* Left and right extension. These become visible when height is limiting, as on
+ * a portrait tablet. The source strips contain only blank chassis material and
+ * therefore cannot duplicate the CRT, nameplate or controls. */
+body.is-compact-stage #stage::before,
+body.is-compact-stage #stage::after{
   content:"";
   position:absolute;
-  inset:0;
+  z-index:1;
+  top:var(--compact-gap-y,0px);
+  bottom:var(--compact-gap-y,0px);
+  width:calc(var(--compact-gap-x,0px) + 2px);
   pointer-events:none;
-  background-image:var(--grain);
-  background-size:560px 560px;
-  opacity:.08;
-  mix-blend-mode:soft-light;
+  background-repeat:no-repeat;
+  background-size:auto 100%;
+}
+body.is-compact-stage #stage::before{
+  left:0;
+  background-image:var(--compact-fill-left,none);
+  background-position:right center;
+}
+body.is-compact-stage #stage::after{
+  right:0;
+  background-image:var(--compact-fill-right,none);
+  background-position:left center;
 }
 
 /* The semantic article mirror is transparent because visible pixels come from
@@ -29,8 +79,6 @@ body.is-compact-stage #stage::before{
   position:absolute;
   z-index:3;
   pointer-events:none;
-  min-width:24px;
-  min-height:24px;
   border:2px solid rgba(184,255,206,.95);
   border-radius:3px;
   background:rgba(32,255,111,.045);
