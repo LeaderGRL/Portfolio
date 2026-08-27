@@ -1,3 +1,5 @@
+import { renderRichSemanticBlock } from './document/semantic-blocks.js'
+
 /* Rich semantic document surface inside the physical CRT aperture.
  *
  * Visible pixels come from the raster/CRT pipeline. This DOM mirror owns
@@ -40,29 +42,6 @@ function appendInline(node, value = '') {
 }
 
 const makeRich = (tag, className, text) => appendInline(make(tag, className), text)
-
-function richSpacer(block, height, label) {
-  const section = make('section', 'article-reader__rich-spacer')
-  section.style.minHeight = `${height}px`
-  section.dataset.blockType = block.type
-  section.setAttribute('aria-label', label)
-  return section
-}
-
-function countRows(block) {
-  return String(block.body || '').split('\n').filter(line => line.trim()).length
-}
-
-function clampMediaHeight(value) {
-  const height = Number(value) || 246
-  return Math.max(150, Math.min(340, height))
-}
-
-function mediaGap(value) {
-  const gap = Number(value)
-  if (Number.isFinite(gap)) return Math.max(12, Math.min(48, gap))
-  return 24
-}
 
 let volumeObserver = null
 let observedVolumeControl = null
@@ -124,6 +103,9 @@ function bindMediaLifecycle() {
 }
 
 function renderBlock(block) {
+  const rich = renderRichSemanticBlock(block)
+  if (rich) return rich
+
   switch (block.type) {
     case 'heading':
       return makeRich(block.level >= 3 ? 'h3' : 'h2', `article-reader__heading article-reader__heading--${block.level || 2}`, block.text)
@@ -173,8 +155,6 @@ function renderBlock(block) {
       if (block.alt) figure.append(make('figcaption', '', block.alt))
       return figure
     }
-    case 'embed':
-      return richSpacer(block, Number(block.height) || 214, block.title || block.label || 'Interactive integration')
     case 'note':
       return make('aside', 'article-reader__note', block.body || '')
     case 'figure': {
@@ -182,37 +162,6 @@ function renderBlock(block) {
       pre.textContent = [block.cols, block.body].filter(Boolean).join('\n')
       return pre
     }
-    case 'hero':
-      return richSpacer(block, Number(block.height) || 242, block.title || block.eyebrow || 'Project hero')
-    case 'media':
-      return richSpacer(block, clampMediaHeight(block.height) + mediaGap(block.gap), block.label || 'Project media')
-    case 'facts': {
-      const count = countRows(block)
-      const cols = Math.max(1, Math.min(3, Number(block.columns) || 2))
-      return richSpacer(block, Math.max(72, Math.ceil(count / cols) * 58 + 14), block.label || 'Project facts')
-    }
-    case 'system': {
-      const count = countRows(block)
-      const cols = Math.max(1, Math.min(2, Number(block.columns) || 2))
-      return richSpacer(block, Math.max(98, Math.ceil(count / cols) * 78 + 20), block.label || 'System overview')
-    }
-    case 'pipeline': {
-      const count = countRows(block)
-      return richSpacer(block, Math.max(88, count * 42 + 18), block.label || 'System pipeline')
-    }
-    case 'gallery': {
-      const count = countRows(block)
-      const cols = Math.max(1, Math.min(3, Number(block.columns) || 2))
-      return richSpacer(block, Math.max(166, Math.ceil(count / cols) * 146 + 20), block.label || 'Project gallery')
-    }
-    case 'timeline': {
-      const count = countRows(block)
-      return richSpacer(block, Math.max(82, count * 34 + 22), block.label || 'Project timeline')
-    }
-    case 'compare':
-      return richSpacer(block, 224, block.label || 'Before and after comparison')
-    case 'model3d':
-      return richSpacer(block, 248, block.label || block.title || 'Interactive 3D model')
     default:
       return null
   }
@@ -250,6 +199,13 @@ export function syncArticleReader(item) {
   header.append(make('p', 'article-reader__eyebrow', 'DOCUMENT / LOCAL ARCHIVE'))
   header.append(make('h1', 'article-reader__title', item.label))
   if (item.sub) header.append(make('p', 'article-reader__sub', item.sub))
+  if (item.link) {
+    const source = make('a', 'article-reader__link', 'Open project source / primary link')
+    source.href = item.link
+    source.target = '_blank'
+    source.rel = 'noreferrer noopener'
+    header.append(source)
+  }
   reader.append(header)
 
   for (const block of item.blocks || []) {
