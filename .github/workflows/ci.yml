@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   pull_request:
   push:
+    branches:
+      - master
 
 permissions:
   contents: read
@@ -53,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: asset-audit
-          path: asset-audit.json
+          path: tmp/asset-audit.json
           retention-days: 14
 
       - name: Generate assets
