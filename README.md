@@ -1,12 +1,17 @@
 # JG-1500
 
-A skeuomorphic CRT terminal portfolio. The chassis is composited from 3D
-component renders; the screen is a live WebGL2 tube driven by a 480×360
-character raster.
+A skeuomorphic CRT portfolio built as one physical display with multiple pixel
+sources. Terminal screens and long-form project/article documents feed the same
+WebGL CRT pipeline, so text, code, images, video frames and local 3D renders all
+share the tube's curvature, persistence, scanlines and phosphor treatment.
 
-## Running it
+The surrounding chassis is composited from authored component renders. CSS owns
+layout, interaction and responsive behavior; material, moulding and lighting
+come from the source renders.
 
-Requires Node 18+ and Python 3 with `pillow numpy scipy`.
+## Development
+
+Requires Node 22+ and Python 3 with `pillow`, `numpy` and `scipy`.
 
 ```bash
 npm install
@@ -14,255 +19,224 @@ npm run assets
 npm run dev
 ```
 
-Then open http://localhost:5173. Editing anything in `content/` reloads the
-screen.
+`npm run assets` generates `assets/build/` from `assets/src/`. The generated
+folder is gitignored, so it must be created once after a fresh clone and again
+whenever the chassis source renders change.
 
-Do not paste `#` comments after these commands on Windows: `cmd` passes the
-`#` through and npm tries to install a package called `#`.
+On Windows the asset launcher tries `py -3`, then `python`, then `python3`.
+Avoid appending shell-style `# comments` to npm commands in `cmd.exe`.
 
-`npm run assets` generates `assets/build/`, which is gitignored. It is only
-needed again when a file in `assets/src/` changes. On Windows it looks for
-`py -3`, then `python`, then `python3` — `python3` alone resolves to a
-Microsoft Store stub that prints a help message and exits successfully,
-which makes the step look like it worked when it did nothing.
-
-`assets/build/` is gitignored, so a fresh clone has no sprites until
-`npm run assets` has been run once. After that it is only needed again when a
-file in `assets/src/` changes.
+## Production and tests
 
 ```bash
-npm run build      # dist/index.html — one self-contained file
-npm run preview    # serve that build
-npm test           # loads the build in jsdom and asserts on the DOM
+npm run build          # dist/index.html + dist/nginx.conf
+npm run preview        # preview the production Vite output
+npm run test:runtime   # jsdom/runtime/schema/navigation/SEO regression suite
+npm run test:e2e       # Playwright: Chromium, Firefox, WebKit and mobile
+npm run audit:assets   # writes tmp/asset-audit.json
+npm test               # production build + runtime suite
 ```
 
-`npm test` exists because the failures that reach production here are not
-syntax errors — they are ReferenceErrors on code paths nothing walks until a
-user does. It runs the built page in jsdom three times:
+GitHub Actions additionally installs the real Playwright browser engines, runs
+Axe accessibility checks, validates the generated Nginx configuration with
+`nginx -t`, and retains Playwright traces/screenshots/video when a browser test
+fails. Feature branches are tested through `pull_request`; production image
+publishing happens only after a successful push to `master`.
 
-| Pass | What it proves |
-|---|---|
-| `smoke.mjs` | boots once (six keys, not twelve), every sprite resolves, every custom property the stylesheet needs is published, and each of the six routes renders without throwing |
-| `smoke.mjs --gl` | with a WebGL2 context available the tube initialises and does **not** take the 2D fallback |
-| `interactions.mjs` | every control, keyboard shortcut, scroll path and the responsive breakpoint, asserting on uncaught errors |
+## Repository layout
 
-Each of those caught a real bug that had already shipped: a module booting
-twice, `crt.js` using a constant it never imported, `list()` reading fields the
-content adapter does not produce, and an unguarded `setPointerCapture`.
+```text
+content/
+  site.json                 identity, contact and machine metadata
+  pages/*.md                ABOUT / RESUME / CONTACT content
+  projects/*.md             project documents
+  projects/*/index.md       project documents with local media
+  articles/*.md             long-form articles
 
----
+src/
+  app.js                    navigation state, History API, boot, single RAF
+  navigation.js             URL serialization and runtime document metadata
+  terminal.js               terminal cell buffer and raster source
+  crt.js                    WebGL2 persistence/composite CRT
+  display-pipeline.js       selects terminal/document pixels for the same CRT
+  article-crt-bridge.js     explicit ArticleCRTRuntime adapter
+  article-rasteriser.js     long-form document -> CRT pixel source
+  article-reader.js         semantic/native long-form DOM mirror
+  document/                 typed rich-block renderers and integrations
+  panel.js                  physical controls and chassis behavior
+  runtime-controls.js       touch/hit-area behavior
+  semantic-focus.js         visible CRT proxy for semantic keyboard focus
+  style.css                 authored desktop/compact panel geometry
+  release-fixes.css         full-bleed compact material + focus presentation
 
-## Layout
-
-```
-content/            what the site says          ← you edit this
-  site.json           identity, contact, model plate
-  pages/*.md          about, resume, contact
-  projects/*.md       one file per project
-  articles/*.md       one file per article
-  media/              images, inlined at build
-
-src/                what the machine is
-  core.js             constants, geometry, wrap()
-  audio.js            synthesized panel foley — no audio files
-  type.js             glyph atlas + 5×7 bitmap headline font
-  terminal.js         cell buffer, scrolling document, rasteriser
-  media.js            image/video → phosphor dither
-  pages.js            one renderer per screen
-  crt.js              WebGL2: persistence pass + composite shader
-  panel.js            sprite-backed DOM controls
-  app.js              router, boot sequence, RAF loop
-  assets.js           generated sprite table
-  style.css           layout only; material comes from the sprites
-
-assets/src/         the component renders (source of truth)
-assets/build/       generated sprites — gitignored, rebuild with npm run assets
-tools/build_assets.py   the splitting pipeline
-plugins/content.js  Markdown → typed blocks, at build time
+assets/src/                 source chassis/component renders
+assets/build/               generated sprites, gitignored
+public/media/               runtime video/media files
+plugins/content.js          Markdown/front matter -> typed document bundle
+tools/                      asset, smoke, audit and SEO build tooling
 ```
 
----
+## Navigation
 
-## How a page works
+The portfolio uses real browser URLs and the History API:
 
-**Not routes in the web sense, and not MDX.** Both would be the wrong shape
-here, for the same reason: the screen is a canvas, not a DOM. There is no
-element for a router to swap and nothing for MDX's component substitution to
-substitute into. What exists is a 50×21 cell buffer and a rasteriser.
-
-So the model is: **content is data, and a page is a function that lays that
-data into cells.**
-
-```
-content/projects/frogbyte.md
-        │
-        │  plugins/content.js — parses once, at build time
-        ▼
-   typed blocks:  [{type:'prose',…}, {type:'image',…}, {type:'figure',…}]
-        │
-        │  src/pages.js — PAGES.detail walks the blocks
-        ▼
-   Terminal cell buffer (may be taller than the tube)
-        │
-        │  src/terminal.js — Rasteriser draws the visible window
-        ▼
-   480×360 canvas → WebGL texture → CRT shader → screen
+```text
+/
+/about
+/resume
+/projects
+/projects/:id
+/articles
+/articles/:id
+/contact
 ```
 
-Navigation is state, not URL: `app.js` holds `{route, cursor, item}` and calls
-`render()`. Adding hash routing (`#/projects/frogbyte`) is a small change in
-`app.js` and nothing else — the renderers do not know routes exist.
+`src/navigation.js` maps those URLs to the CRT runtime state and keeps browser
+Back/Forward working. Invalid document IDs fall back to their collection route.
+Keyboard navigation remains available on desktop (`1-5`, arrows, Enter,
+Escape/Backspace), while compact/coarse-pointer layouts can select project and
+article rows directly on the CRT.
 
----
+## Display architecture
 
-## Editing a project
+There is deliberately **one physical CRT**, not a DOM article with a fake CRT
+overlay.
 
-Create `content/projects/my-thing.md`. It appears in the list automatically,
-ordered by filename.
+```text
+terminal screens
+    -> Terminal/Rasteriser -----------\
+                                       -> DisplayPipeline -> CRT WebGL -> #gl
+long-form documents                    /
+    -> ArticleRasteriser -> article-source
+```
+
+`App` owns the persistent animation frame. `ArticleCRTRuntime` plugs into that
+scheduler through explicit `frame()`, `paint()` and `handleBack()` methods; it
+does not monkey-patch App methods and does not create a second perpetual RAF.
+
+### Long-form documents
+
+Projects and articles are parsed into typed blocks at build time. Their visible
+pixels are painted by `ArticleRasteriser` into `article-source`, then processed
+by the same CRT shader as terminal text.
+
+A synchronized `ArticleReader` DOM mirror exists for semantic structure,
+scrolling, links and native media behavior. That surface is visually transparent
+while document pixels are shown through the CRT. When keyboard focus enters a
+semantic control, `semantic-focus.js` projects a visible focus rectangle back
+onto the physical CRT.
+
+Local Three.js scenes render off-DOM and are sampled into the article raster.
+If WebGL creation fails, document rendering continues with an authored poster or
+static fallback. Cross-origin embeds cannot legally be copied into a canvas, so
+they are mounted inline below the photographic glass layers and receive a
+matching CRT optics treatment.
+
+## Editing a project or article
+
+Create a Markdown document under `content/projects/` or `content/articles/`.
+A project may also use a directory with an `index.md` when it owns local assets.
 
 ```markdown
 ---
-title: MY THING
-sub: One line under the headline
-status: SHIPPED
+title: MY SYSTEM
+sub: Performance-oriented runtime architecture
+status: RUST · SYSTEMS
 year: 2026
 stack: [Rust, WebGL]
-link: https://github.com/you/my-thing
+link: https://github.com/example/project
 ---
 
-Ordinary paragraphs. Wrapped to the tube's width at render time, so do not
-hard-wrap them yourself.
+Ordinary prose.
 
-## A SECTION
+## MEMORY LAYOUT
 
-- bullet
-- another bullet
+- Archetype storage
+- Cache-aware iteration
 
-::image{src=bench.png alt="What it shows" rows=10}
+::image{src=layout.webp alt="Archetype memory layout" rows=10}
 
-::video{src=demo.mp4 loop rows=12}
-
-::note
-A boxed aside.
-::
+::video{src=demo.mp4 rows=12}
 ```
 
-Front matter is `key: value`, with `[a, b, c]` for lists. Everything after the
-closing `---` is the body.
+Front matter is parsed by `plugins/content.js`; the document body becomes typed
+blocks registered in `src/document/schema.js`. Unknown directives are build
+errors instead of silently disappearing.
 
-### Blocks
+Rich directives include the ordinary prose/heading/list/code/image/video/note
+blocks plus project-specific blocks such as facts, systems, pipelines,
+galleries, timelines, comparisons, local 3D models and external embeds. Add a
+new directive to the shared document schema and provide its raster/semantic
+renderer rather than adding a legacy `PAGES.detail` case.
 
-| Block | Written as | Notes |
-|---|---|---|
-| paragraph | plain text | wrapped automatically |
-| heading | `## TEXT` | rule drawn underneath |
-| list | `- item` lines | |
-| image | `::image{src= alt= rows= gain=}` | `rows` = height in cells |
-| video | `::video{src= loop rows=}` | muted, autoplays |
-| figure | `::figure{cols=A,B,C}` + body + `::` | the column diagram |
-| note | `::note` + body + `::` | boxed aside |
+## Media
 
-A directive followed immediately by text takes a body and closes with `::`.
-A directive followed by a blank line is self-closing.
+Local images that participate in authored documents may be inlined by the
+content plugin. Large videos live in `public/media/` and are loaded as runtime
+files rather than being converted to base64. Media that is painted into the CRT
+uses the same phosphor-oriented rendering rules as the rest of the document.
 
-### Adding a new block type
+`npm run audit:assets` is non-destructive. It reports media/source totals,
+unreferenced candidates, exact duplicates and the largest files to
+`tmp/asset-audit.json`; a candidate should be verified before deletion because
+some source renders are consumed indirectly by the asset builders.
 
-Two edits, and existing content keeps parsing:
+## Responsive chassis
 
-1. add the name to `KNOWN_DIRECTIVES` in `plugins/content.js`
-2. add a `case` to `PAGES.detail` in `src/pages.js`
+Desktop uses the authored 1920×1080 chassis geometry. Compact layouts use the
+941×1672 portable geometry with a `contain` scale so controls such as POWER are
+never cropped. The functional machine therefore keeps its authored proportions,
+while the surrounding chassis material extends independently to the viewport so
+mobile and tablet screens do not expose a visually unrelated letterbox area.
 
-An unregistered directive is a build error, not a blank space on the screen.
+## SEO and deep links
 
----
+Runtime navigation updates `title`, description, Open Graph and canonical tags
+for normal SPA transitions. Social crawlers also need those values in the HTML
+response before JavaScript executes.
 
-## Images and video
+`npm run build` therefore generates `dist/nginx.conf` from the Markdown front
+matter. The production Nginx config maps each known URL to a title, description
+and Open Graph type, then substitutes those values into the initial HTML
+response. Canonical and `og:url` values are built from the incoming scheme,
+host and normalized `$uri`, so tracking query parameters are excluded.
 
-Both are dithered to the tube's four phosphor levels and go through the CRT
-shader with everything else — curvature, scanlines, bloom, the lot. A
-full-colour photograph pasted onto this screen would read as a photograph
-pasted onto this screen; quantising it to the same ramp the text uses is what
-makes it look like something the machine is displaying.
+The Docker production stage copies this generated configuration rather than the
+source template.
 
-The dither is an 8×8 Bayer matrix rather than error diffusion. Floyd–Steinberg
-gives a better still frame but boils on video, because a pixel sitting one
-level from a threshold flips as the error front moves. A Bayer matrix is a
-fixed function of position, so a pixel that does not change does not flicker.
+## Accessibility
 
-- **Images** live in `content/media/` and are inlined as data URIs. The built
-  page stays one file.
-- **Video** lives in `public/media/` and ships alongside `index.html`. This is
-  the one place the single-file promise bends: a clip worth showing is large
-  enough that base64 is a bad trade.
+The chassis controls expose native/ARIA semantics and minimum coarse-pointer hit
+areas. CONTACT destinations are real links. Long-form rich blocks have semantic
+DOM representations even though their visible pixels are rasterized through the
+CRT. Generic imported image descriptions are contextualized from their current
+article section for the semantic reader.
 
-`rows` sets the block height in character cells. `gain` (default 1.15) lifts
-exposure before quantising — most source images are far brighter than a tube
-ever gets.
+Playwright runs Axe across representative terminal, collection and long-form
+routes. Keyboard focus entering the transparent semantic document is mirrored by
+a visible CRT focus proxy.
 
----
+## CRT and fallback behavior
 
-## Scrolling
+`src/crt.js` implements the passthrough vertex stage, phosphor persistence and
+composite CRT shader. WebGL2 is preferred for the physical display. The main
+terminal has a 2D fallback, and local Three.js document blocks fail gracefully
+without taking down the article.
 
-A page writes into a document that may be taller than the tube. `Terminal`
-keeps the document and the window separate, so a renderer lays out everything
-it has and never asks how much fits.
+The composite shader is responsible for effects that depend on live pixels;
+photographic bezel/glass assets remain responsible for the physical surround,
+faceplate shading and highlights.
 
-Wheel, `↑ ↓`, `PageUp/PageDown`, `Home/End`. The scrollbar is drawn as cells in
-the right-hand column — a browser scrollbar floating over a CRT would give the
-whole thing away.
+## Deployment
 
----
+The Docker build:
 
-## The chassis
+1. installs Node/Python dependencies;
+2. regenerates chassis assets;
+3. builds the Vite bundle and route-aware Nginx config;
+4. runs runtime regressions against that exact output;
+5. copies only `dist/` plus the generated Nginx config into the production
+   Nginx image.
 
-The controls are not CSS. They are the component renders in `assets/src/`,
-split by `tools/build_assets.py` into the pieces that have to move
-independently:
-
-| Render | Split into | Why |
-|---|---|---|
-| bezel | kept whole | its transparent aperture masks the picture |
-| glass | shade map + gloss map | real optics over a live canvas |
-| key | frame + cap | the cap travels, the frame does not |
-| switch, slider | track + thumb | the thumb travels |
-| power | housing + paddle + lamp | the paddle pivots in 3D |
-
-The pipeline also writes `assets/build/meta.json`: aspect ratios, the bezel's
-aperture, the cap's footprint, the paddle's footprint. `panel.js` publishes
-those as CSS custom properties, so the stylesheet sizes every box from the
-artwork's own proportions. Replace a render with a different version and the
-layout follows it — there are no hand-typed dimensions to fall out of date.
-
-CSS does layout, hit targets, state transitions and travel. It does not do
-material. A gradient is a function of one axis; these are compound-curved
-mouldings lit from a single source, and every attempt to approximate them in
-CSS read as an approximation of a photograph rather than as an object.
-
----
-
-## Shaders
-
-`src/crt.js` carries three: a passthrough vertex shader, a phosphor
-persistence pass (ping-pong FBO), and the composite.
-
-The composite is deliberately small. It does not draw the tube's silhouette,
-its specular, its Fresnel rim or its surround — the bezel's alpha channel and
-the glass maps do all of that. What remains is only what has to be recomputed
-every frame from live content: barrel geometry, beam, scanlines, aperture
-grille, bloom, and the collapse to a line and a dot at power-off.
-
-They are worth compiling before shipping — a broken shader gives a black
-screen, not an error:
-
-```
-glslangValidator src/shaders/*.frag
-```
-
----
-
-## Known limits
-
-- WebGL2 required; there is a 2D fallback path but it is plain.
-- Video is not inlined (see above).
-- Content is compiled at build time. A CMS would need the plugin replaced with
-  a fetch and the parser moved to the runtime.
+Nginx retains SPA fallback behavior for deep links, so opening a project or
+article URL directly loads the portfolio and restores the correct runtime state.
