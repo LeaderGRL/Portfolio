@@ -62,6 +62,18 @@ setTimeout(()=>{
       s.dispatchEvent(new w.MouseEvent('pointerup',{bubbles:true,clientX:140}))})
   step('digit shortcuts 1-5',    ()=>{for(const n of '12345') key(n)})
   step('arrow navigation',       ()=>{key('3');key('ArrowDown');key('ArrowDown');key('ArrowUp')})
+  step('panel click keeps arrows live', ()=>{
+      const projects=[...d.querySelectorAll('#nav-keys .key')].find(el=>el.getAttribute('aria-label')==='PROJECTS')
+      if(!projects) throw new Error('projects panel key missing')
+      projects.focus()
+      click(projects)
+      if(d.activeElement===projects) throw new Error('projects key kept DOM focus after activation')
+      if(w.location.pathname!=='/projects') throw new Error('projects route did not open from panel click')
+      key('ArrowDown')
+      key('Enter')
+      if(w.location.pathname==='/projects') throw new Error('ArrowDown was ignored after panel click')
+      key('Escape')
+    })
   step('interactive key boundary', ()=>{
       key('3')
       if(w.location.pathname!=='/projects') throw new Error('projects route did not open')
