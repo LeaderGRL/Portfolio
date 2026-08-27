@@ -4,10 +4,8 @@
  * uncaught error.
  *
  * smoke.mjs proves the page boots and every route renders. This proves the
- * controls do not throw once someone actually uses them — the volume drag
- * calling an unguarded setPointerCapture would never have shown up otherwise.
- *
- *   npm run build && node tools/interactions.mjs
+ * controls do not throw once someone actually uses them and guards the mobile
+ * fit/keyboard-boundary regressions found during the production audit.
  */
 import { JSDOM } from 'jsdom'
 import fs from 'node:fs'
@@ -44,9 +42,12 @@ try{ w.eval(html.match(/<script type="module">([\s\S]*?)<\/script>/)[1]) }catch(
 setTimeout(()=>{
   const d=w.document
   const step=(name,fn)=>{ const b=errors.length; try{fn()}catch(e){errors.push(e.message)}
-    console.log('  '+name.padEnd(26), errors.length>b ? 'THREW '+errors[b].slice(0,80) : 'ok') }
+    console.log('  '+name.padEnd(32), errors.length>b ? 'THREW '+errors[b].slice(0,80) : 'ok') }
   const click=el=>el&&el.dispatchEvent(new w.MouseEvent('click',{bubbles:true}))
-  const key=k=>w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:k,bubbles:true}))
+  const key=k=>w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:k,bubbles:true,cancelable:true}))
+  const targetKey=(el,k)=>el.dispatchEvent(new w.KeyboardEvent('keydown',{key:k,bubbles:true,cancelable:true}))
+  const fit=()=>Number(d.documentElement.style.getPropertyValue('--fit'))
+  const near=(actual,expected,epsilon=0.0002)=>Math.abs(actual-expected)<=epsilon
 
   step('CRT effects switch off', ()=>click(d.getElementById('crt-switch')))
   step('CRT effects switch on',  ()=>click(d.getElementById('crt-switch')))
@@ -60,23 +61,47 @@ setTimeout(()=>{
       s.dispatchEvent(new w.MouseEvent('pointerdown',{bubbles:true,clientX:100}))
       s.dispatchEvent(new w.MouseEvent('pointerup',{bubbles:true,clientX:140}))})
   step('digit shortcuts 1-5',    ()=>{for(const n of '12345') key(n)})
-  step('arrow navigation',       ()=>{key('ArrowDown');key('ArrowDown');key('ArrowUp')})
+  step('arrow navigation',       ()=>{key('3');key('ArrowDown');key('ArrowDown');key('ArrowUp')})
+  step('interactive key boundary', ()=>{
+      key('3')
+      if(w.location.pathname!=='/projects') throw new Error('projects route did not open')
+      const slider=d.getElementById('volume')
+      const before=slider.getAttribute('aria-valuenow')
+      targetKey(slider,'ArrowDown')
+      const after=slider.getAttribute('aria-valuenow')
+      if(before===after) throw new Error('volume did not handle its own ArrowDown')
+      if(w.location.pathname!=='/projects') throw new Error('slider ArrowDown leaked into terminal navigation')
+      targetKey(slider,'Enter')
+      if(w.location.pathname!=='/projects') throw new Error('slider Enter leaked into terminal open action')
+    })
   step('enter then escape',      ()=>{key('Enter');key('Escape')})
   step('scroll keys on detail',  ()=>{key('Enter');key('PageDown');key('End');key('Home');key('Escape')})
   step('wheel on tube',          ()=>{key('Enter')
       d.getElementById('tube').dispatchEvent(new w.WheelEvent('wheel',{deltaY:120,bubbles:true,cancelable:true}))})
-  step('resize to compact',      ()=>{Object.defineProperty(w,'innerWidth',{value:420,configurable:true})
-      Object.defineProperty(w,'innerHeight',{value:900,configurable:true}); w.dispatchEvent(new w.Event('resize'))})
+  step('phone compact contain fit', ()=>{
+      Object.defineProperty(w,'innerWidth',{value:420,configurable:true})
+      Object.defineProperty(w,'innerHeight',{value:900,configurable:true})
+      w.dispatchEvent(new w.Event('resize'))
+      const expected=Math.min(420/941,900/1672)
+      if(!near(fit(),expected)) throw new Error('phone compact fit is not contain: '+fit())
+    })
+  step('tablet compact contain fit', ()=>{
+      Object.defineProperty(w,'innerWidth',{value:768,configurable:true})
+      Object.defineProperty(w,'innerHeight',{value:1024,configurable:true})
+      w.dispatchEvent(new w.Event('resize'))
+      const expected=Math.min(768/941,1024/1672)
+      if(!near(fit(),expected)) throw new Error('tablet compact fit crops the chassis: '+fit())
+    })
   step('resize back',            ()=>{Object.defineProperty(w,'innerWidth',{value:1440,configurable:true})
-      w.dispatchEvent(new w.Event('resize'))})
+      Object.defineProperty(w,'innerHeight',{value:900,configurable:true}); w.dispatchEvent(new w.Event('resize'))})
   step('desktop cover fit',      ()=>{Object.defineProperty(w,'innerWidth',{value:1848,configurable:true})
       Object.defineProperty(w,'innerHeight',{value:928,configurable:true}); w.dispatchEvent(new w.Event('resize'))
-      const fit=Number(d.documentElement.style.getPropertyValue('--fit'))
-      if(Math.abs(fit-0.9625)>0.0001) throw new Error('desktop fit is not full-bleed cover: '+fit)})
+      if(!near(fit(),0.9625,0.0001)) throw new Error('desktop fit is not full-bleed cover: '+fit())})
   step('P toggles power',        ()=>{key('p');key('p')})
   step('C toggles crt',          ()=>{key('c');key('c')})
 
-  console.log('\n  compact class :', d.getElementById('machine').className)
+  console.log('\n  machine class :', d.getElementById('machine').className)
+  console.log('  pathname      :', w.location.pathname)
   console.log('  live region   :', d.getElementById('live').textContent.replace(/\s+/g,' ').slice(0,60)+'...')
   console.log(errors.length? '\n  '+errors.length+' ERROR(S):\n   '+[...new Set(errors)].join('\n   ')
                            : '\n  no uncaught errors across any interaction')
