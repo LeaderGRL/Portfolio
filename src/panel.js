@@ -39,6 +39,13 @@ export function bindAssets() {
   s.setProperty("--mobile-ap-t", mobileAp[1]);
   s.setProperty("--mobile-ap-r", mobileAp[2]);
   s.setProperty("--mobile-ap-b", mobileAp[3]);
+  if (ASSET_META.mobile_chassis.material_color) {
+    s.setProperty("--compact-material", ASSET_META.mobile_chassis.material_color);
+  }
+  for (const edge of ['top', 'bottom', 'left', 'right']) {
+    const source = ASSETS[`mobile-fill-${edge}`];
+    if (source) s.setProperty(`--compact-fill-${edge}`, `url("${source}")`);
+  }
   s.setProperty("--ar-key", String(ASSET_META.key.aspect));
   const cr = ASSET_META.key.cap_rect;          // l, t, w, h within the key
   s.setProperty("--cap-l", cr[0]);
