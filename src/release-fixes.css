@@ -71,6 +71,18 @@ body.is-compact-stage #stage::after{
   background-position:left center;
 }
 
+/* Very wide, short viewports use the horizontal 1920x1080 composition at
+ * cover scale so the CRT and controls stay comfortably readable. A centered
+ * cover crop can clip the nameplate on modern 19.5:9 / 20:9 phones, though.
+ * Shift the authored panel down by a small physical amount instead of reducing
+ * the whole chassis: the crop is then taken from decorative material below
+ * while the complete nameplate remains inside the viewport. */
+@media (max-height:600px) and (min-aspect-ratio:1.8){
+  body:not(.is-compact-stage) .machine:not(.is-compact){
+    top:calc(50% + clamp(18px,5vh,28px));
+  }
+}
+
 /* The semantic article mirror is transparent because visible pixels come from
  * article-source -> CRT shader. When keyboard focus enters that mirror, this
  * proxy makes the focused control visible on the physical CRT instead of
