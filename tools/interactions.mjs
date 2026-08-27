@@ -12,6 +12,14 @@ w.matchMedia = () => ({ matches: false, addEventListener(){}, removeEventListene
 w.devicePixelRatio = 1
 w.scrollBy = () => {}
 w.scrollTo = () => {}
+w.HTMLElement.prototype.scrollBy = function scrollBy(optionsOrX, y) {
+  if (typeof optionsOrX === 'object') this.scrollTop += Number(optionsOrX?.top || 0)
+  else this.scrollTop += Number(y || 0)
+}
+w.HTMLElement.prototype.scrollTo = function scrollTo(optionsOrX, y) {
+  if (typeof optionsOrX === 'object') this.scrollTop = Number(optionsOrX?.top || 0)
+  else this.scrollTop = Number(y || 0)
+}
 Object.defineProperty(w,'innerWidth',{value:1440,configurable:true})
 Object.defineProperty(w,'innerHeight',{value:900,configurable:true})
 const obj=t=>({__t:t})
