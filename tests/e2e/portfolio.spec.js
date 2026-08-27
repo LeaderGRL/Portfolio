@@ -13,6 +13,31 @@ async function boot(page, path = '/') {
   await page.waitForTimeout(700)
 }
 
+async function compactGeometry(page) {
+  return page.evaluate(() => {
+    const machine = document.getElementById('machine').getBoundingClientRect()
+    const bodyStyle = getComputedStyle(document.body)
+    const stageStyle = getComputedStyle(document.getElementById('stage'))
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      machine,
+      bodyBackground: bodyStyle.backgroundImage,
+      stageBackground: stageStyle.backgroundImage,
+    }
+  })
+}
+
+function expectContainedCompactGeometry(dimensions) {
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth + 1)
+  expect(dimensions.machine.left).toBeGreaterThanOrEqual(-1)
+  expect(dimensions.machine.right).toBeLessThanOrEqual(dimensions.innerWidth + 1)
+  expect(dimensions.machine.top).toBeGreaterThanOrEqual(-1)
+  expect(dimensions.machine.bottom).toBeLessThanOrEqual(dimensions.innerHeight + 1)
+  expect(`${dimensions.bodyBackground} ${dimensions.stageBackground}`).toContain('gradient')
+}
+
 test('panel navigation keeps terminal arrows active after clicking PROJECTS', async ({ page }, testInfo) => {
   test.skip(isMobileProject(testInfo), 'Hardware-keyboard scenario is covered by desktop browser engines')
   await boot(page)
@@ -78,31 +103,19 @@ test('deep project links render without uncaught page errors', async ({ page }) 
   expect(errors).toEqual([])
 })
 
-test('compact viewport keeps the machine contained and extends chassis material to the viewport', async ({ page }, testInfo) => {
+test('mobile compact geometry is contained over full-viewport chassis material', async ({ page }, testInfo) => {
   test.skip(!isMobileProject(testInfo), 'Mobile-only layout assertion')
   await boot(page)
   await expect(page.locator('#machine')).toHaveClass(/is-compact/)
+  expectContainedCompactGeometry(await compactGeometry(page))
+})
 
-  const dimensions = await page.evaluate(() => {
-    const machine = document.getElementById('machine').getBoundingClientRect()
-    const bodyStyle = getComputedStyle(document.body)
-    const stageStyle = getComputedStyle(document.getElementById('stage'))
-    return {
-      scrollWidth: document.documentElement.scrollWidth,
-      innerWidth: window.innerWidth,
-      innerHeight: window.innerHeight,
-      machine,
-      bodyBackground: bodyStyle.backgroundImage,
-      stageBackground: stageStyle.backgroundImage,
-    }
-  })
-
-  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth + 1)
-  expect(dimensions.machine.left).toBeGreaterThanOrEqual(-1)
-  expect(dimensions.machine.right).toBeLessThanOrEqual(dimensions.innerWidth + 1)
-  expect(dimensions.machine.top).toBeGreaterThanOrEqual(-1)
-  expect(dimensions.machine.bottom).toBeLessThanOrEqual(dimensions.innerHeight + 1)
-  expect(`${dimensions.bodyBackground} ${dimensions.stageBackground}`).toContain('gradient')
+test('tablet compact geometry is contained over full-viewport chassis material', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Tablet geometry only needs one browser engine')
+  await page.setViewportSize({ width: 768, height: 1024 })
+  await boot(page)
+  await expect(page.locator('#machine')).toHaveClass(/is-compact/)
+  expectContainedCompactGeometry(await compactGeometry(page))
 })
 
 test('semantic article focus has a visible CRT proxy', async ({ page }, testInfo) => {
