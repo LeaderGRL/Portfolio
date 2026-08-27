@@ -40,7 +40,10 @@ body.is-compact-stage #stage::before{
     inset 0 0 8px rgba(47,208,109,.10);
   transition:left 80ms linear, top 80ms linear, width 80ms linear, height 80ms linear;
 }
-.semantic-focus-proxy[hidden]{ display:none !important; }
+.semantic-focus-proxy[hidden],
+.tube.is-powered-off .semantic-focus-proxy{
+  display:none !important;
+}
 .semantic-focus-proxy::after{
   content:attr(data-label);
   position:absolute;
