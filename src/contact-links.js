@@ -8,6 +8,10 @@ import { CHAR_H, CHAR_W, PAD_X, PAD_Y, SRC_H, SRC_W } from './core.js'
  * replacing the terminal renderer or drawing a second copy of the content.
  * ========================================================================== */
 
+const CONTACT_FIRST_ROW = 7
+const CONTACT_ROW_STRIDE = 3
+const CONTACT_TARGET_ROWS = 3
+
 function hrefForContact(label, value) {
   const key = String(label || '').toLowerCase()
   const text = String(value || '').trim()
@@ -47,16 +51,18 @@ export function syncContactLinks(route, contacts = []) {
     const href = hrefForContact(label, value)
     if (!href) return
 
-    const row = 8 + index * 2
+    const row = CONTACT_FIRST_ROW + index * CONTACT_ROW_STRIDE
     const x = PAD_X + 17 * CHAR_W
-    const y = PAD_Y + row * CHAR_H - 3
+    const centerY = PAD_Y + row * CHAR_H + CHAR_H * 0.5
+    const targetHeight = CONTACT_TARGET_ROWS * CHAR_H
+    const y = centerY - targetHeight * 0.5
     const anchor = document.createElement('a')
     anchor.href = href
     anchor.className = 'terminal-contact-link'
     anchor.style.left = `${(x / SRC_W) * 100}%`
     anchor.style.top = `${(y / SRC_H) * 100}%`
     anchor.style.width = `${((SRC_W - PAD_X - x) / SRC_W) * 100}%`
-    anchor.style.height = `${(CHAR_H + 6) / SRC_H * 100}%`
+    anchor.style.height = `${(targetHeight / SRC_H) * 100}%`
     anchor.setAttribute('aria-label', `${label}: ${value}`)
     anchor.title = `${label}: ${value}`
     if (!href.startsWith('mailto:')) {
