@@ -82,6 +82,10 @@ export function makeKey(label, cls, icon = '') {
   b.addEventListener("pointerup", up);
   b.addEventListener("pointerleave", up);
   b.addEventListener("pointercancel", up);
+  // Panel keys behave like hardware selectors rather than form controls. Once
+  // activated, release DOM focus so global terminal navigation immediately
+  // owns ArrowUp/ArrowDown again without requiring a click inside the CRT.
+  b.addEventListener("click", () => b.blur());
   b.tap = () => { down(); setTimeout(up, 90); };
   return b;
 }
