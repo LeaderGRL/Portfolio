@@ -19,7 +19,8 @@ const checks = [
   ['article deep links are mapped', nginx.includes('"/articles/')],
   ['canonical is request-aware', nginx.includes('sub_filter \'<link rel="canonical" href="/">\' \'<link rel="canonical" href="$seo_url">\';')],
   ['Twitter title is request-aware', nginx.includes(`sub_filter '<meta name="twitter:title" content="${BASE_TITLE}">' '<meta name="twitter:title" content="$seo_title">';`)],
-  ['canonical excludes query parameters', nginx.includes('set $seo_url "$scheme://$host$seo_path";')],
+  ['forwarded public scheme is normalized', nginx.includes('map $http_x_forwarded_proto $seo_scheme')],
+  ['canonical excludes query parameters', nginx.includes('set $seo_url "$seo_scheme://$host$seo_path";')],
   ['Open Graph URL is request-aware', nginx.includes('content="$seo_url"')],
   ['social type can be article', nginx.includes('"article";')],
 ]
