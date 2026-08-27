@@ -4,16 +4,16 @@ title: RESUME
 
 ## PROFILE
 
-Versatile developer specialized in gameplay programming with Unity and C# and
-in systems programming. I am building a 3D engine in Rust to explore engine
-architecture, memory management, ECS design, and low-level optimization.
+Software and systems engineer focused on performance, architecture, and low-level
+software design. I am building a 3D engine in Rust to explore memory management,
+ECS design, concurrency, scheduling, and data-oriented optimization.
 
 ## APR 2026 — PRESENT · B&R DIGITAL
 
 Freelance Rust/Tauri software developer, Paris.
 
 - Windows configuration and performance optimization application.
-- TypeScript and Svelte interface.
+- Desktop application architecture and native integration.
 - PostgreSQL database with Prisma.
 - CI/CD pipeline.
 
@@ -22,7 +22,7 @@ Freelance Rust/Tauri software developer, Paris.
 Freelance programming instructor for Oteria, Ynov, EPSI, and other schools.
 
 - C, C++, C#, Rust, OOP, and algorithms.
-- Unity, gameplay architecture, engine design, AI, and optimization.
+- Unity, software architecture, engine design, AI, and optimization.
 - JavaScript, Node.js, REST APIs, and relational databases.
 - Course material, exams, grading rubrics, project supervision, and juries.
 
