@@ -51,6 +51,13 @@ test('volume retains its own keyboard boundary', async ({ page }, testInfo) => {
 
 test('mobile can open a project directly by tapping a CRT listing row', async ({ page }, testInfo) => {
   test.skip(!isMobileProject(testInfo), 'Touch-only interaction scenario')
+
+  // The real CRT/document pipeline is intentionally heavier than the terminal
+  // list on emulated mobile hardware. Keep this interaction under its own
+  // budget so a successful tap is not reported as a failure while the rich
+  // semantic document surface is being mounted.
+  test.setTimeout(60_000)
+
   await boot(page)
   await projectsKey(page).tap()
   await expect(page).toHaveURL(/\/projects$/)
@@ -62,6 +69,9 @@ test('mobile can open a project directly by tapping a CRT listing row', async ({
   // the same 480x360 source mapping used by runtime-controls.js.
   const sourceY = 32 + 3 * 14 + 7
   await page.touchscreen.tap(tube.x + tube.width * 0.5, tube.y + tube.height * (sourceY / 360))
+
+  await expect(page.locator('#tube')).toHaveAttribute('data-display-mode', 'article')
+  await expect(page.locator('.article-reader')).toBeAttached()
   await expect(page).toHaveURL(/\/projects\/.+/)
 })
 
