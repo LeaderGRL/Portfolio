@@ -55,16 +55,3 @@ export const CONTENT = {
   articles: sortCollection(bundle.articles.map(listEntry)),
   pages: bundle.pages,
 }
-
-/** Every media file referenced anywhere, so the loader can warm them before a
- *  page that needs them is routed to. */
-export const MEDIA = [
-  ...CONTENT.projects, ...CONTENT.articles, ...Object.values(CONTENT.pages),
-].flatMap(d => d.blocks || [])
- .filter(b => b.type === 'image' || b.type === 'video')
- .map(b => b.src)
-
-export function findItem(route, id) {
-  const pool = route === 'articles' ? CONTENT.articles : CONTENT.projects
-  return pool.find(x => x.id === id) || null
-}
