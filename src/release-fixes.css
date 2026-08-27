@@ -83,6 +83,22 @@ body.is-compact-stage #stage::after{
   }
 }
 
+/* The semantic reader is transparent while its pixels are rasterised through
+ * the CRT. Inner native scroll areas would therefore scroll an invisible DOM
+ * copy without moving the CRT picture. Keep code in the document flow instead:
+ * preserve authored line breaks and tabs, but wrap long lines to the aperture. */
+.article-reader__code{
+  overflow:visible;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.article-reader__code code{
+  white-space:inherit;
+  overflow-wrap:inherit;
+  word-break:inherit;
+}
+
 /* The semantic article mirror is transparent because visible pixels come from
  * article-source -> CRT shader. When keyboard focus enters that mirror, this
  * proxy makes the focused control visible on the physical CRT instead of
