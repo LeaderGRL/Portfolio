@@ -39,6 +39,13 @@ export function bindAssets() {
   s.setProperty("--mobile-ap-t", mobileAp[1]);
   s.setProperty("--mobile-ap-r", mobileAp[2]);
   s.setProperty("--mobile-ap-b", mobileAp[3]);
+  if (ASSET_META.mobile_chassis.material_color) {
+    s.setProperty("--compact-material", ASSET_META.mobile_chassis.material_color);
+  }
+  for (const edge of ['top', 'bottom', 'left', 'right']) {
+    const source = ASSETS[`mobile-fill-${edge}`];
+    if (source) s.setProperty(`--compact-fill-${edge}`, `url("${source}")`);
+  }
   s.setProperty("--ar-key", String(ASSET_META.key.aspect));
   const cr = ASSET_META.key.cap_rect;          // l, t, w, h within the key
   s.setProperty("--cap-l", cr[0]);
@@ -82,38 +89,35 @@ export function makeKey(label, cls, icon = '') {
   b.addEventListener("pointerup", up);
   b.addEventListener("pointerleave", up);
   b.addEventListener("pointercancel", up);
+  // Panel keys behave like hardware selectors rather than form controls. Once
+  // activated, release DOM focus so global terminal navigation immediately
+  // owns ArrowUp/ArrowDown again without requiring a click inside the CRT.
+  b.addEventListener("click", () => b.blur());
   b.tap = () => { down(); setTimeout(up, 90); };
   return b;
 }
 
-export function bindMobileMenu() {
-  const menu = document.getElementById('mobile-menu')
-  if (!menu) return
-  menu.querySelector('.mobile-menu__icon').innerHTML = ICONS.bars
-  menu.addEventListener('click', () => {
-    const collapsed = document.getElementById('machine').classList.toggle('nav-collapsed')
-    menu.setAttribute('aria-expanded', String(!collapsed))
-    foley.ensure(); foley.clunk(collapsed ? 0.7 : 0.9)
-  })
-}
-
-/* Parallax only. The key light is baked into every sprite at a fixed angle,
- * so nothing here may move a highlight — the tilt is the one thing that can
- * respond to the pointer without putting the panel's lighting out of
- * agreement with the parts sitting on it. */
+/* Parallax only. App owns the only persistent RAF and calls frame() here. The
+ * key light is baked into every sprite at a fixed angle, so nothing here may
+ * move a highlight — tilt only changes the panel's subtle spatial response. */
 export function bindTilt() {
-  if (REDUCED) return;
+  if (REDUCED) return null;
   const root = document.documentElement.style;
   let tx = 0, ty = 0, cx = 0, cy = 0;
-  addEventListener("pointermove", e => {
+  const onPointerMove = e => {
     tx = clamp((e.clientX / innerWidth) * 2 - 1, -1, 1);
     ty = clamp((e.clientY / innerHeight) * 2 - 1, -1, 1);
-  });
-  const tick = () => {
-    cx = lerp(cx, tx, 0.06); cy = lerp(cy, ty, 0.06);
-    root.setProperty("--px", cx.toFixed(3));
-    root.setProperty("--py", cy.toFixed(3));
-    requestAnimationFrame(tick);
   };
-  tick();
+  addEventListener("pointermove", onPointerMove);
+
+  return {
+    frame() {
+      cx = lerp(cx, tx, 0.06); cy = lerp(cy, ty, 0.06);
+      root.setProperty("--px", cx.toFixed(3));
+      root.setProperty("--py", cy.toFixed(3));
+    },
+    destroy() {
+      removeEventListener("pointermove", onPointerMove);
+    },
+  };
 }

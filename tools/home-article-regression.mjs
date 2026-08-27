@@ -8,6 +8,8 @@ const check = (condition, label) => {
 
 const site = JSON.parse(fs.readFileSync('content/site.json', 'utf8'))
 const pages = fs.readFileSync('src/pages.js', 'utf8')
+const about = fs.readFileSync('content/pages/about.md', 'utf8')
+const resume = fs.readFileSync('content/pages/resume.md', 'utf8')
 const rasteriser = fs.readFileSync('src/article-rasteriser.js', 'utf8')
 const integrations = fs.readFileSync('src/document/default-integrations.js', 'utf8')
 const frogbyte = fs.readFileSync('content/projects/frogbyte.md', 'utf8')
@@ -21,6 +23,14 @@ check(/performance/i.test(site.identity.tagline), 'HOME tagline communicates per
 check(pages.includes('t.opAt(2, (g, py) =>'), 'HOME bitmap headline is separated from chrome rows')
 check(!pages.includes('BASE    PARIS / FR'), 'HOME no longer hardcodes the former base')
 check(!pages.includes('STACK   RUST·C#·TS'), 'HOME no longer hardcodes TypeScript')
+
+check(/software and systems engineer/i.test(about), 'ABOUT opens with an engineering profile')
+check(!/\bgameplay\b/i.test(about), 'ABOUT no longer positions around gameplay')
+check(!/\bSvelte\b/i.test(about), 'ABOUT does not list Svelte')
+check(!/\bTypeScript\b/i.test(about), 'ABOUT does not list TypeScript')
+check(!/\bSvelte\b/i.test(resume), 'RESUME does not list Svelte')
+check(!/\bTypeScript\b/i.test(resume), 'RESUME does not list TypeScript')
+check(/systems engineer/i.test(resume), 'RESUME profile is engineering-oriented')
 
 check(rasteriser.includes("if (entry.type === 'image')"), 'plain image blocks expose an interaction')
 check(rasteriser.includes("provider: 'media-single'"), 'plain images reuse the generic CRT inspector')

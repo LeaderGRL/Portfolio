@@ -10,6 +10,17 @@ const parsePipeRows = body => splitRows(body).map(line => {
   return { value: first, label: rest.join(' | ') }
 })
 
+function withAlpha(color, alpha) {
+  const value = String(color || '').trim()
+  const match = /^#([0-9a-f]{6})$/i.exec(value)
+  if (!match) return value
+  const hex = match[1]
+  const r = parseInt(hex.slice(0, 2), 16)
+  const g = parseInt(hex.slice(2, 4), 16)
+  const b = parseInt(hex.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
 function drawContainedImage(g, image, x, y, width, height) {
   if (!image?.complete || !image.naturalWidth || !image.naturalHeight) return false
   const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight)
@@ -60,14 +71,14 @@ export function createDefaultBlockRegistry({ local3d }) {
       const h = layout.height - 18
       const painted = drawCoverImage(g, media, layout.x, layout.y, layout.width, h)
       if (!painted) {
-        g.fillStyle = '#04170d'
+        g.fillStyle = env.colors.panel
         g.fillRect(layout.x, layout.y, layout.width, h)
       }
 
       const gradient = g.createLinearGradient(0, layout.y, 0, layout.y + h)
-      gradient.addColorStop(0, 'rgba(0,8,4,.08)')
-      gradient.addColorStop(.58, 'rgba(0,8,4,.24)')
-      gradient.addColorStop(1, 'rgba(0,8,4,.90)')
+      gradient.addColorStop(0, withAlpha(env.colors.bg, .08))
+      gradient.addColorStop(.58, withAlpha(env.colors.bg, .24))
+      gradient.addColorStop(1, withAlpha(env.colors.bg, .90))
       g.fillStyle = gradient
       g.fillRect(layout.x, layout.y, layout.width, h)
 
@@ -100,9 +111,9 @@ export function createDefaultBlockRegistry({ local3d }) {
         const x = layout.x + col * (cellW + gap)
         const y = layout.y + row * 58
 
-        g.fillStyle = 'rgba(2,15,8,.62)'
+        g.fillStyle = withAlpha(env.colors.panel, .62)
         g.fillRect(x, y, cellW, cellH)
-        g.strokeStyle = 'rgba(47,208,109,.38)'
+        g.strokeStyle = withAlpha(env.colors.mid, .38)
         g.strokeRect(x + .5, y + .5, cellW - 1, cellH - 1)
 
         env.drawLines([String(item.value || '').toUpperCase()], x + 7, y + 14, 7, 9, env.colors.amber, 700)
@@ -132,9 +143,9 @@ export function createDefaultBlockRegistry({ local3d }) {
         const x = layout.x + col * (cellW + gap)
         const y = layout.y + row * 78
 
-        g.fillStyle = index === 0 ? 'rgba(5,23,13,.82)' : 'rgba(2,14,8,.68)'
+        g.fillStyle = withAlpha(env.colors.panel, index === 0 ? .82 : .68)
         g.fillRect(x, y, cellW, cellH)
-        g.strokeStyle = index === 0 ? 'rgba(185,255,201,.46)' : 'rgba(47,208,109,.28)'
+        g.strokeStyle = withAlpha(index === 0 ? env.colors.core : env.colors.mid, index === 0 ? .46 : .28)
         g.strokeRect(x + .5, y + .5, cellW - 1, cellH - 1)
 
         g.fillStyle = index === 0 ? env.colors.amber : env.colors.dim
@@ -162,7 +173,7 @@ export function createDefaultBlockRegistry({ local3d }) {
         const y = layout.y + index * 42
         if (index > 0) {
           const cx = layout.x + layout.width * .5
-          g.strokeStyle = 'rgba(47,208,109,.48)'
+          g.strokeStyle = withAlpha(env.colors.mid, .48)
           g.beginPath()
           g.moveTo(cx, y - 11)
           g.lineTo(cx, y - 2)
@@ -177,9 +188,9 @@ export function createDefaultBlockRegistry({ local3d }) {
           g.fill()
         }
 
-        g.fillStyle = 'rgba(2,13,7,.72)'
+        g.fillStyle = withAlpha(env.colors.panel, .72)
         g.fillRect(nodeX, y, nodeW, nodeH)
-        g.strokeStyle = index === items.length - 1 ? 'rgba(185,255,201,.58)' : 'rgba(47,208,109,.36)'
+        g.strokeStyle = withAlpha(index === items.length - 1 ? env.colors.core : env.colors.mid, index === items.length - 1 ? .58 : .36)
         g.strokeRect(nodeX + .5, y + .5, nodeW - 1, nodeH - 1)
 
         const left = String(item.value || '').toUpperCase()
@@ -212,12 +223,12 @@ export function createDefaultBlockRegistry({ local3d }) {
         const row = Math.floor(index / columns)
         const x = layout.x + col * (cellW + gap)
         const y = layout.y + row * 146
-        g.fillStyle = '#020d07'
+        g.fillStyle = env.colors.bg
         g.fillRect(x, y, cellW, cellH)
         const image = imageFrom(env, item.value)
         drawCoverImage(g, image, x, y, cellW, cellH - 23)
         if (item.label) {
-          g.fillStyle = 'rgba(1,10,5,.86)'
+          g.fillStyle = withAlpha(env.colors.bg, .86)
           g.fillRect(x, y + cellH - 23, cellW, 23)
           env.drawLines(env.wrap(item.label, cellW - 10, 7, 600).slice(0, 2), x + 6, y + cellH - 11, 7, 9, env.colors.mid, 600)
         }
@@ -266,10 +277,10 @@ export function createDefaultBlockRegistry({ local3d }) {
       const entries = [[block.before, block.beforeLabel || 'BEFORE'], [block.after, block.afterLabel || 'AFTER']]
       entries.forEach(([src, label], index) => {
         const x = layout.x + index * (half + gap)
-        g.fillStyle = '#020c06'
+        g.fillStyle = env.colors.bg
         g.fillRect(x, layout.y, half, mediaH)
         drawCoverImage(g, imageFrom(env, src), x, layout.y, half, mediaH)
-        g.fillStyle = 'rgba(1,9,5,.78)'
+        g.fillStyle = withAlpha(env.colors.bg, .78)
         g.fillRect(x, layout.y + mediaH - 20, half, 20)
         env.drawLines([String(label).toUpperCase()], x + 7, layout.y + mediaH - 7, 7, 9, index ? env.colors.core : env.colors.dim, 700)
       })
@@ -309,7 +320,7 @@ export function createDefaultBlockRegistry({ local3d }) {
         env.drawLines(['LOADING 3D ASSET...'], layout.x + 14, layout.y + h * .5, 9, 12, env.colors.mid, 700)
       }
 
-      g.fillStyle = 'rgba(1,10,5,.72)'
+      g.fillStyle = withAlpha(env.colors.bg, .72)
       g.fillRect(layout.x, layout.y + h - 23, layout.width, 23)
       env.drawLines([String(block.label || block.title || 'INTERACTIVE 3D MODEL').toUpperCase()], layout.x + 8, layout.y + h - 9, 7, 9, env.colors.core, 700)
       env.drawLines(['DRAG / ZOOM'], layout.x + layout.width - 72, layout.y + h - 9, 7, 9, env.colors.amber, 700)

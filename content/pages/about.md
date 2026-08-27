@@ -2,17 +2,17 @@
 title: ABOUT
 ---
 
-Gameplay and systems programmer with a focus on the parts nobody sees: memory
-layout, cache behavior, scheduling, and engine architecture.
+Software and systems engineer focused on performance-critical architecture:
+memory layout, cache behavior, scheduling, concurrency, and engine design.
 
-I work across Rust, C#, Unity, Tauri, Svelte, and backend services. Alongside
-freelance development, I teach programming and supervise technical projects.
+I work across Rust, C#, C++, Unity, Tauri, and backend services. Alongside
+freelance engineering, I teach programming and supervise technical projects.
 Explaining a system remains one of the best tests of whether it is understood.
 
 ## FOCUS
 
+- Systems programming
 - Data-oriented design
 - Rust
-- C# / Unity
-- TypeScript
+- C# / C++
 - Engine architecture and optimization

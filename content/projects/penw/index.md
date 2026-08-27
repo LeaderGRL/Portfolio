@@ -52,7 +52,7 @@ DISPLAY | GAME + CABINET DESIGNED TOGETHER
 
 The 3D model shows how the recovered cabinet was reworked around the game. The display, control surface and internal hardware all had to fit the existing shell while leaving enough room for the rotary encoders, arcade buttons and audio system. The final proportions came from those physical constraints rather than from a purely visual redesign.
 
-::model3d{src=/media/penw/arcade-cabinet.glb label="ARCADE CABINET / INTERACTIVE 3D" autospin=0.06 exposure=1.12 shadow=off}
+::model3d{src=/media/penw/arcade-cabinet.glb poster=/media/penw/cabinet-photo.webp label="ARCADE CABINET / INTERACTIVE 3D" autospin=0.06 exposure=1.12 shadow=off}
 
 The original control surface did not match the mechanics, so measurements became a new panel designed around the actual buttons and rotary encoders rather than around the shape of the recovered cabinet.
 

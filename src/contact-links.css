@@ -1,0 +1,28 @@
+/* Native hit layer aligned with terminal-rendered CONTACT rows. */
+.terminal-contact-links{
+  position:absolute;
+  inset:0;
+  z-index:3;
+  pointer-events:none;
+}
+.terminal-contact-links[hidden]{ display:none !important; }
+.terminal-contact-link{
+  position:absolute;
+  display:block;
+  pointer-events:auto;
+  border-radius:2px;
+  background:transparent;
+  -webkit-tap-highlight-color:transparent;
+}
+.terminal-contact-link:hover{
+  background:rgba(107,243,154,.055);
+}
+.terminal-contact-link:focus-visible{
+  outline:1px solid rgba(107,243,154,.85);
+  outline-offset:2px;
+  background:rgba(107,243,154,.08);
+}
+.tube.is-powered-off .terminal-contact-links{
+  pointer-events:none;
+  display:none;
+}

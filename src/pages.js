@@ -1,17 +1,16 @@
 import { CONTENT } from './content.js'
-import { CHAR_H, CHAR_W, PAD_X, PAD_Y, ROWS, SRC_W, wrap } from './core.js'
+import { CHAR_H, CHAR_W, PAD_X, PAD_Y, SRC_W, wrap } from './core.js'
 import { blit, getImage, getVideo } from './media.js'
-import { SHADE, Terminal } from './terminal.js'
+import { SHADE } from './terminal.js'
 import { bitmapText, bitmapWidth } from './type.js'
 
 /* ==========================================================================
- * 5. PAGES — each writes a Terminal buffer for the current state
+ * 5. PAGES — terminal-only screens
  * ======================================================================== */
 /* Every page respects the glass safe area: the picture mask is a bulged
- * superellipse, so the corners round in hard. Text near the top and bottom
- * rows stays centred, lists start at row 3, and full-width rules are allowed
- * to run into the curve — a line fading into glass reads as authentic, a
- * clipped word reads as a bug. */
+ * superellipse, so the corners round in hard. Project/article documents are
+ * owned exclusively by ArticleCRTRuntime and never render through this module.
+ */
 
 export function chrome(t, label) {
   t.center(0, " " + label + " ", "mid", true);
@@ -22,14 +21,21 @@ export function footer(t, str) {
   t.center(t.rows - 2, str, "dim");
 }
 
+function ellipsize(value, width) {
+  const text = String(value || "");
+  const limit = Math.max(0, width | 0);
+  if (!limit) return "";
+  if (text.length <= limit) return text;
+  if (limit === 1) return "…";
+  return text.slice(0, limit - 1) + "…";
+}
+
 /* --------------------------------------------------------------------------
  * BLOCK RENDERER
  *
- * Every screen that shows authored content goes through this, so a block type
- * added for a project page works on the about page for free. Layout is a
- * single downward cursor and nothing caps at ROWS: the Terminal owns the
- * document/window split, and a renderer that had to know how much fits would
- * stop being a pure function of its content.
+ * Terminal-authored pages such as ABOUT and RESUME share this lightweight
+ * renderer. Long-form project/article content uses the document block registry
+ * instead, so there is now only one document engine.
  * ----------------------------------------------------------------------- */
 export function renderBlocks(t, blocks, y) {
   const W = t.cols - 8;
@@ -153,7 +159,7 @@ export const PAGES = {
   },
 
   /* --------------------------------------------------------------- ABOUT */
-  about(t, st) {
+  about(t) {
     chrome(t, "ABOUT");
     const page = CONTENT.pages.about;
     renderBlocks(t, page ? page.blocks : [], 3);
@@ -161,7 +167,7 @@ export const PAGES = {
   },
 
   /* -------------------------------------------------------------- RESUME */
-  resume(t, st) {
+  resume(t) {
     chrome(t, "RESUME");
     const page = CONTENT.pages.resume;
     renderBlocks(t, page ? page.blocks : [], 3);
@@ -173,7 +179,7 @@ export const PAGES = {
   articles(t, st) { list(t, st, "ARTICLES", CONTENT.articles); },
 
   /* ------------------------------------------------------------- CONTACT */
-  contact(t, st) {
+  contact(t) {
     chrome(t, "CONTACT");
     const s = 3, label = "SAY HELLO";
     // Keep the bitmap headline in its own rows. It previously started at
@@ -182,74 +188,19 @@ export const PAGES = {
     t.opAt(3, (g, py) => {
       bitmapText(g, label, (SRC_W - bitmapWidth(label, s)) / 2, py, s, SHADE.core);
     });
-    t.center(6, "OPEN TO RUST / C# ENGINEERING ROLES", "mid");
-    let y = 8;
+    t.center(5, "OPEN TO RUST / C# ENGINEERING ROLES", "mid");
+    let y = 7;
     for (const [k, v] of CONTENT.contact) {
       t.put(8, y, k.padEnd(9, " "), "dim");
       t.put(18, y, v, "bright");
-      y += 2;
+      y += 3;
     }
-    // Row 18 belongs to footer(); reserve row 16 for the status so neither
-    // text nor phosphor bloom can collide with the footer rule.
-    t.center(16, "─ TRANSMISSION READY ─", "dim");
+    t.center(17, "─ TRANSMISSION READY ─", "dim");
     footer(t, "ESC BACK");
-  },
-
-  /* -------------------------------------------------------------- DETAIL */
-  /* ------------------------------------------------------------------ ITEM
-   * Renders the typed blocks the content plugin produced. Adding a block type
-   * is adding a case here and a name to KNOWN_DIRECTIVES in the plugin —
-   * nothing else in the pipeline needs to know it exists.
-   *
-   * Layout is a single downward cursor, so the page is as tall as its content
-   * and the Terminal handles the rest. Nothing here caps at ROWS.
-   */
-  detail(t, st) {
-    const item = st.item;
-
-    const s = item.label.length > 14 ? 2 : 4;
-    const w = bitmapWidth(item.label, s);
-    t.opAt(0, (g, py) => {
-      const x = (SRC_W - w) / 2;
-      g.save(); g.globalAlpha = 0.3;
-      bitmapText(g, item.label, x - 1, py - 1, s, SHADE.dim);
-      g.restore();
-      bitmapText(g, item.label, x, py, s, SHADE.core);
-    });
-
-    let y = 3;
-    if (item.sub) { t.center(y++, item.sub.toUpperCase(), "bright"); }
-    y += 2;
-
-    // A project's signature visual owns the first viewport. Long-form prose
-    // begins below the fold, so the initial state matches the physical-screen
-    // composition instead of becoming a dense article excerpt.
-    const visual = item.blocks.find(b => b.type === "figure");
-    const rest = visual ? item.blocks.filter(b => b !== visual) : item.blocks;
-    if (visual) {
-      renderBlocks(t, [visual], y);
-      t.center(20, item.meta || "DETAIL", "bright");
-      t.opAt(20, (g, py) => {
-        g.fillStyle = SHADE.mid;
-        g.fillRect(SRC_W / 2 - 18, py + CHAR_H + 16, 36, 1);
-      });
-      y = ROWS + 2;
-    }
-    y = renderBlocks(t, rest, y);
-    if (item.link) { t.put(4, y + 1, "→ " + item.link, "amber"); y += 2; }
   },
 };
 
 /** Dense two-row listing with a live readout line for the selection. */
-/* --------------------------------------------------------------------------
- * COLLECTION LIST
- *
- * Reads only fields the content adapter documents. It used to reach for
- * `it.tag` and `cur.status`, which the Markdown bundle does not produce — so
- * PROJECTS and ARTICLES threw on undefined.length and rendered nothing. An
- * empty collection is also survivable now: a directory with no files is a
- * legitimate state, not a crash.
- * ----------------------------------------------------------------------- */
 export function list(t, st, label, items) {
   chrome(t, label);
 
@@ -263,11 +214,17 @@ export function list(t, st, label, items) {
   items.forEach((it, i) => {
     const y = 3 + i * 2;
     const sel = i === cursor;
+    const rawTag = it.meta || (it.stack && it.stack[0]) || "";
+    const maxTagWidth = Math.max(10, Math.floor((t.cols - 8) * 0.38));
+    const tag = ellipsize(rawTag, maxTagWidth);
+    const tagX = tag ? t.cols - tag.length - 2 : t.cols - 2;
+    const labelWidth = Math.max(4, tagX - 6);
+    const subtitleWidth = Math.max(4, t.cols - 8);
+
     t.put(2, y, sel ? "\u25b6" : " ", "core");
-    t.put(4, y, it.label, sel ? "core" : "bright");
-    if (it.sub) t.put(6, y + 1, it.sub.toUpperCase(), "dim");
-    const tag = it.meta || (it.stack && it.stack[0]) || "";
-    if (tag) t.put(t.cols - tag.length - 2, y, tag, sel ? "amber" : "dim");
+    t.put(4, y, ellipsize(it.label, labelWidth), sel ? "core" : "bright");
+    if (it.sub) t.put(6, y + 1, ellipsize(it.sub.toUpperCase(), subtitleWidth), "dim");
+    if (tag) t.put(tagX, y, tag, sel ? "amber" : "dim");
     if (sel) {
       t.opAt(y, (g, py) => {
         g.fillStyle = "rgba(107,243,154,0.10)";

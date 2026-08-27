@@ -4,14 +4,180 @@ import { DisplayPipeline } from './display-pipeline.js'
 import { createDefaultBlockRegistry } from './document/default-blocks.js'
 import { createDefaultIntegrationRegistry } from './document/default-integrations.js'
 import { InlineIntegrationController } from './document/inline-integrations.js'
-import { Local3DManager } from './document/local-3d.js'
+import { SafeLocal3DManager } from './document/safe-local-3d.js'
+import { enhanceModel3DFallback } from './document/model3d-fallback.js'
 import { enhanceMediaBlocks } from './document/media-blocks.js'
 import { MediaViewer } from './document/media-viewer.js'
 import { DocumentProgressOverlay } from './document/progress-overlay.js'
 
 /* ========================================================================== *
- * Document CRT bridge
+ * Article CRT runtime
+ *
+ * App owns navigation and the single persistent RAF. This runtime owns only
+ * document pixel sources, rich integrations and media lifecycle. It plugs into
+ * App through explicit frame/paint/back hooks instead of replacing App methods.
  * ========================================================================== */
+class ArticleCRTRuntime {
+  constructor(app, { tube, reader, documentCanvas }) {
+    this.app = app
+    this.tube = tube
+    this.reader = reader
+    this.documentCanvas = documentCanvas
+    this.previousDisplayPipeline = app.displayPipeline
+
+    this.pipeline = new DisplayPipeline({
+      crt: app.crt,
+      sources: {
+        terminal: app.raster.canvas,
+        document: documentCanvas,
+      },
+    })
+
+    this.inlineIntegrations = null
+    this.documentRaster = null
+    this.progressOverlay = new DocumentProgressOverlay()
+    this.mediaViewer = new MediaViewer({
+      tube,
+      crtCanvas: documentCanvas,
+      onChange: ({ open } = {}) => {
+        app.dirty = true
+        if (open) this.inlineIntegrations?.clear?.()
+        else this.documentRaster?.markDirty?.()
+      },
+    })
+
+    this.local3d = new SafeLocal3DManager(() => {
+      app.dirty = true
+      this.documentRaster?.markDirty?.()
+    })
+
+    this.blockRegistry = enhanceMediaBlocks(
+      enhanceModel3DFallback(createDefaultBlockRegistry({ local3d: this.local3d }), this.local3d),
+    )
+    this.integrations = createDefaultIntegrationRegistry({
+      local3d: this.local3d,
+      mediaViewer: this.mediaViewer,
+    })
+
+    this.documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
+      app.dirty = true
+    }, { blockRegistry: this.blockRegistry })
+
+    this.inlineIntegrations = new InlineIntegrationController({
+      tube,
+      rasteriser: this.documentRaster,
+      registry: this.integrations,
+    })
+
+    this.articleRaster = this.documentRaster
+    this.destroyed = false
+  }
+
+  isDocument() {
+    return (
+      (this.app.state?.route === 'articles' || this.app.state?.route === 'projects') &&
+      Boolean(this.app.state?.item)
+    )
+  }
+
+  visibleLocal3DBlocks() {
+    if (this.mediaViewer.isOpen) return []
+    const visible = []
+    for (const entry of this.documentRaster.layout || []) {
+      if (entry.type !== 'model3d') continue
+      const top = entry.y - this.documentRaster.scroll
+      const bottom = top + entry.height
+      if (bottom > 1 && top < this.documentCanvas.height - 1) visible.push(entry.block)
+    }
+    return visible
+  }
+
+  syncSource() {
+    if (this.destroyed) return
+    const documentItem = this.isDocument() ? this.app.state.item : null
+    syncArticleReader(documentItem)
+
+    const itemChanged = this.documentRaster.setItem(documentItem)
+    if (itemChanged) {
+      this.mediaViewer.close()
+      this.inlineIntegrations.clear()
+    }
+
+    const nextId = documentItem ? 'document' : 'terminal'
+    if (this.pipeline.setSource(nextId)) {
+      this.app.dirty = true
+      this.app.state.static = this.mediaViewer.isOpen
+        ? 0
+        : Math.max(this.app.state.static || 0, 0.7)
+    }
+
+    this.tube.dataset.displayMode = this.mediaViewer.isOpen ? 'media' : documentItem ? 'article' : 'terminal'
+    this.tube.classList.toggle('has-dom-surface', Boolean(documentItem) && !this.mediaViewer.isOpen)
+    this.tube.classList.toggle('is-reading', Boolean(documentItem) && !this.mediaViewer.isOpen)
+    if (!documentItem) this.mediaViewer.close()
+  }
+
+  paint() {
+    this.syncSource()
+    if (this.mediaViewer.isOpen) return true
+    if (!this.isDocument()) return false
+
+    this.documentRaster.paint(true)
+    this.progressOverlay.paint(this.documentRaster)
+    return true
+  }
+
+  frame(time) {
+    if (this.destroyed || !this.isDocument()) return
+
+    if (this.mediaViewer.isOpen) {
+      this.inlineIntegrations.clear()
+      return
+    }
+
+    for (const block of this.visibleLocal3DBlocks()) this.local3d.tick(block, time)
+
+    this.inlineIntegrations.sync()
+    if (this.documentRaster.videoNodes.some(video => !video.paused && !video.ended && video.readyState >= 2)) {
+      this.app.dirty = true
+    }
+  }
+
+  handleBack() {
+    if (!this.mediaViewer.isOpen) return false
+    this.mediaViewer.close()
+    this.syncSource()
+    this.app.dirty = true
+    return true
+  }
+
+  enterFullscreen() {
+    return this.pipeline.enterFullscreen(document.getElementById('screen'))
+  }
+
+  exitFullscreen() {
+    return this.pipeline.exitFullscreen()
+  }
+
+  destroy() {
+    if (this.destroyed) return
+    this.destroyed = true
+    this.inlineIntegrations.destroy()
+    this.mediaViewer.destroy()
+    this.local3d.dispose()
+    syncArticleReader(null)
+    this.pipeline.setSource('terminal')
+
+    if (this.previousDisplayPipeline === undefined) delete this.app.displayPipeline
+    else this.app.displayPipeline = this.previousDisplayPipeline
+
+    this.tube.dataset.displayMode = 'terminal'
+    this.tube.classList.remove('has-dom-surface', 'is-reading', 'is-media-inspecting')
+    if (this.app.__articleCRTBridge === this) delete this.app.__articleCRTBridge
+    this.app.detachDocumentRuntime?.(this)
+  }
+}
+
 export function attachArticleCRT(app) {
   if (!app || app.__articleCRTBridge) return app?.__articleCRTBridge || null
 
@@ -20,169 +186,10 @@ export function attachArticleCRT(app) {
   const documentCanvas = document.getElementById('article-source')
   if (!tube || !reader || !documentCanvas || !app.crt || !app.raster) return null
 
-  const terminalCanvas = app.raster.canvas
-  const terminalPaint = app.raster.paint.bind(app.raster)
-  const previousDisplayPipeline = app.displayPipeline
-  const pipeline = new DisplayPipeline({
-    crt: app.crt,
-    sources: {
-      terminal: terminalCanvas,
-      document: documentCanvas,
-    },
-  })
-
-  let inlineIntegrations = null
-  let documentRaster = null
-  const progressOverlay = new DocumentProgressOverlay()
-  const mediaViewer = new MediaViewer({
-    tube,
-    crtCanvas: documentCanvas,
-    onChange: ({ open } = {}) => {
-      app.dirty = true
-      if (open) inlineIntegrations?.clear?.()
-      else documentRaster?.markDirty?.()
-    },
-  })
-  const local3d = new Local3DManager(() => {
-    app.dirty = true
-    documentRaster?.markDirty?.()
-  })
-  const blockRegistry = enhanceMediaBlocks(createDefaultBlockRegistry({ local3d }))
-  const integrations = createDefaultIntegrationRegistry({ local3d, mediaViewer })
-
-  documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
-    app.dirty = true
-  }, { blockRegistry })
-
-  inlineIntegrations = new InlineIntegrationController({
-    tube,
-    rasteriser: documentRaster,
-    registry: integrations,
-  })
-
-  const isDocument = () => (
-    (app.state?.route === 'articles' || app.state?.route === 'projects') &&
-    Boolean(app.state?.item)
-  )
-
-  const visibleLocal3DBlocks = () => {
-    if (mediaViewer.isOpen) return []
-    const visible = []
-    for (const entry of documentRaster.layout || []) {
-      if (entry.type !== 'model3d') continue
-      const top = entry.y - documentRaster.scroll
-      const bottom = top + entry.height
-      if (bottom > 1 && top < documentCanvas.height - 1) visible.push(entry.block)
-    }
-    return visible
-  }
-
-  const syncSource = () => {
-    const documentItem = isDocument() ? app.state.item : null
-    syncArticleReader(documentItem)
-
-    const itemChanged = documentRaster.setItem(documentItem)
-    if (itemChanged) {
-      mediaViewer.close()
-      inlineIntegrations.clear()
-    }
-
-    const nextId = documentItem ? 'document' : 'terminal'
-    if (pipeline.setSource(nextId)) {
-      app.dirty = true
-      app.state.static = mediaViewer.isOpen
-        ? 0
-        : Math.max(app.state.static || 0, 0.7)
-    }
-
-    tube.dataset.displayMode = mediaViewer.isOpen ? 'media' : documentItem ? 'article' : 'terminal'
-    tube.classList.toggle('has-dom-surface', Boolean(documentItem) && !mediaViewer.isOpen)
-    tube.classList.toggle('is-reading', Boolean(documentItem) && !mediaViewer.isOpen)
-    if (!documentItem) mediaViewer.close()
-  }
-
-  app.raster.paint = (term, reveal, cursorOn) => {
-    syncSource()
-    if (mediaViewer.isOpen) return true
-    if (isDocument()) {
-      const painted = documentRaster.paint(true)
-      progressOverlay.paint(documentRaster)
-      return painted
-    }
-    return terminalPaint(term, reveal, cursorOn)
-  }
-
-  const originalRender = app.render.bind(app)
-  app.render = (...args) => {
-    const result = originalRender(...args)
-    syncSource()
-    return result
-  }
-
-  const originalBack = app.back.bind(app)
-  app.back = (...args) => {
-    if (mediaViewer.isOpen) {
-      mediaViewer.close()
-      syncSource()
-      app.dirty = true
-      return
-    }
-    return originalBack(...args)
-  }
-
-  let raf = 0
-  const mediaFrame = time => {
-    raf = requestAnimationFrame(mediaFrame)
-    if (!isDocument()) return
-
-    if (mediaViewer.isOpen) {
-      inlineIntegrations.clear()
-      return
-    }
-
-    for (const block of visibleLocal3DBlocks()) local3d.tick(block, time)
-
-    inlineIntegrations.sync()
-    if (documentRaster.videoNodes.some(video => !video.paused && !video.ended && video.readyState >= 2)) {
-      app.dirty = true
-    }
-  }
-  raf = requestAnimationFrame(mediaFrame)
-
-  syncSource()
-  inlineIntegrations.sync()
-
-  const bridge = {
-    documentRaster,
-    articleRaster: documentRaster,
-    blockRegistry,
-    integrations,
-    inlineIntegrations,
-    local3d,
-    mediaViewer,
-    progressOverlay,
-    pipeline,
-    syncSource,
-    enterFullscreen: () => pipeline.enterFullscreen(document.getElementById('screen')),
-    exitFullscreen: () => pipeline.exitFullscreen(),
-    destroy() {
-      cancelAnimationFrame(raf)
-      app.back = originalBack
-      app.render = originalRender
-      inlineIntegrations.destroy()
-      mediaViewer.destroy()
-      local3d.dispose()
-      syncArticleReader(null)
-      app.raster.paint = terminalPaint
-      pipeline.setSource('terminal')
-      if (previousDisplayPipeline === undefined) delete app.displayPipeline
-      else app.displayPipeline = previousDisplayPipeline
-      tube.dataset.displayMode = 'terminal'
-      tube.classList.remove('has-dom-surface', 'is-reading', 'is-media-inspecting')
-      delete app.__articleCRTBridge
-    },
-  }
-  app.__articleCRTBridge = bridge
-  app.displayPipeline = pipeline
-  return bridge
+  const runtime = new ArticleCRTRuntime(app, { tube, reader, documentCanvas })
+  app.__articleCRTBridge = runtime
+  app.displayPipeline = runtime.pipeline
+  app.attachDocumentRuntime(runtime)
+  runtime.inlineIntegrations.sync()
+  return runtime
 }

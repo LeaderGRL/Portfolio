@@ -1,0 +1,147 @@
+/* Release-level visual and accessibility fixes that intentionally layer over
+ * the authored chassis stylesheet.
+ *
+ * Compact geometry stays contain-fitted so no physical control can be cropped.
+ * The empty viewport axis is filled with reflected strips generated directly
+ * from the supplied mobile chassis photograph. The strip touching the machine
+ * shares its exact outer source row/column, so the extension preserves real
+ * grain and lighting instead of approximating the material with CSS gradients.
+ */
+body.is-compact-stage{
+  background:var(--compact-material,#d5c2ad);
+}
+
+body.is-compact-stage #stage{
+  background:transparent;
+}
+
+body.is-compact-stage .machine.is-compact{
+  z-index:2;
+}
+
+/* Top and bottom extension. These are visible when width is the limiting axis,
+ * which is the usual phone case. A two-pixel overlap hides fractional transform
+ * rounding while the seam-facing edge remains sourced from the chassis itself. */
+body.is-compact-stage::before,
+body.is-compact-stage::after{
+  content:"";
+  position:fixed;
+  z-index:0;
+  left:var(--compact-gap-x,0px);
+  right:var(--compact-gap-x,0px);
+  height:calc(var(--compact-gap-y,0px) + 2px);
+  pointer-events:none;
+  background-repeat:no-repeat;
+  background-size:100% auto;
+}
+body.is-compact-stage::before{
+  top:0;
+  background-image:var(--compact-fill-top,none);
+  background-position:center bottom;
+}
+body.is-compact-stage::after{
+  bottom:0;
+  background-image:var(--compact-fill-bottom,none);
+  background-position:center top;
+}
+
+/* Left and right extension. These become visible when height is limiting, as on
+ * a portrait tablet. The source strips contain only blank chassis material and
+ * therefore cannot duplicate the CRT, nameplate or controls. */
+body.is-compact-stage #stage::before,
+body.is-compact-stage #stage::after{
+  content:"";
+  position:absolute;
+  z-index:1;
+  top:var(--compact-gap-y,0px);
+  bottom:var(--compact-gap-y,0px);
+  width:calc(var(--compact-gap-x,0px) + 2px);
+  pointer-events:none;
+  background-repeat:no-repeat;
+  background-size:auto 100%;
+}
+body.is-compact-stage #stage::before{
+  left:0;
+  background-image:var(--compact-fill-left,none);
+  background-position:right center;
+}
+body.is-compact-stage #stage::after{
+  right:0;
+  background-image:var(--compact-fill-right,none);
+  background-position:left center;
+}
+
+/* Very wide, short viewports use the horizontal 1920x1080 composition at
+ * cover scale so the CRT and controls stay comfortably readable. A centered
+ * cover crop can clip the nameplate on modern 19.5:9 / 20:9 phones, though.
+ * Shift the authored panel down by a small physical amount instead of reducing
+ * the whole chassis: the crop is then taken from decorative material below
+ * while the complete nameplate remains inside the viewport. */
+@media (max-height:600px) and (min-aspect-ratio:1.8){
+  body:not(.is-compact-stage) .machine:not(.is-compact){
+    top:calc(50% + clamp(18px,5vh,28px));
+  }
+}
+
+/* The semantic reader is transparent while its pixels are rasterised through
+ * the CRT. Inner native scroll areas would therefore scroll an invisible DOM
+ * copy without moving the CRT picture. Keep code in the document flow instead:
+ * preserve authored line breaks and tabs, but wrap long lines to the aperture. */
+.article-reader__code{
+  overflow:visible;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.article-reader__code code{
+  white-space:inherit;
+  overflow-wrap:inherit;
+  word-break:inherit;
+}
+
+/* The semantic article mirror is transparent because visible pixels come from
+ * article-source -> CRT shader. When keyboard focus enters that mirror, this
+ * proxy makes the focused control visible on the physical CRT instead of
+ * leaving users focused on an invisible DOM element. */
+.semantic-focus-proxy{
+  position:absolute;
+  z-index:3;
+  pointer-events:none;
+  border:2px solid rgba(184,255,206,.95);
+  border-radius:3px;
+  background:rgba(32,255,111,.045);
+  box-shadow:
+    0 0 4px rgba(107,243,154,.85),
+    0 0 12px rgba(47,208,109,.34),
+    inset 0 0 8px rgba(47,208,109,.10);
+  transition:left 80ms linear, top 80ms linear, width 80ms linear, height 80ms linear;
+}
+.semantic-focus-proxy[hidden],
+.tube.is-powered-off .semantic-focus-proxy{
+  display:none !important;
+}
+.semantic-focus-proxy::after{
+  content:attr(data-label);
+  position:absolute;
+  left:0;
+  top:0;
+  max-width:min(360px, 90vw);
+  padding:3px 6px;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  color:#d5ffe1;
+  background:rgba(1,17,8,.92);
+  font:700 10px/1.2 ui-monospace,"SFMono-Regular",Consolas,monospace;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  text-shadow:0 0 4px rgba(67,255,132,.55);
+  transform:translateY(-100%);
+}
+.semantic-focus-proxy.is-label-inside::after{
+  transform:none;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .semantic-focus-proxy{ transition:none; }
+}

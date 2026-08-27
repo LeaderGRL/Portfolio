@@ -1,11 +1,29 @@
 import { foley } from './audio.js'
-import { articleReaderScroll, syncArticleReader } from './article-reader.js'
+import { articleReaderScroll } from './article-reader.js'
 import { CONTENT } from './content.js'
 import { COLS, REDUCED, ROWS, clamp, lerp, now } from './core.js'
 import { CRT } from './crt.js'
+import { syncNavigationHistory, syncNavigationMetadata, resolveNavigation } from './navigation.js'
 import { PAGES } from './pages.js'
-import { ROUTES, bindAssets, bindMobileMenu, bindTilt, makeKey } from './panel.js'
+import { ROUTES, bindAssets, bindTilt, makeKey } from './panel.js'
 import { Rasteriser, Terminal } from './terminal.js'
+
+const INTERACTIVE_KEY_TARGET = [
+  'button',
+  'a[href]',
+  'input',
+  'textarea',
+  'select',
+  'iframe',
+  'video',
+  'audio',
+  '[role="button"]',
+  '[role="switch"]',
+  '[role="slider"]',
+  '[role="link"]',
+  '[role="application"]',
+  '[contenteditable]:not([contenteditable="false"])',
+].join(',')
 
 /* ==========================================================================
  * 8. APP
@@ -34,15 +52,16 @@ export class App {
     this.dirty = true;
     this.bootAt = now();
     this.lastBlip = 0;
+    this.documentRuntime = null;
 
     this._buildKeys();
     this._bindControls();
     this._bindKeyboard();
     bindAssets();
-    bindMobileMenu();
-    bindTilt();
+    this.tilt = bindTilt();
     this._fit();
     addEventListener("resize", () => this._fit());
+    addEventListener("popstate", () => this._restoreNavigation());
 
     this.boot();
     requestAnimationFrame(t => this.frame(t));
@@ -128,8 +147,19 @@ export class App {
 
   _bindKeyboard() {
     addEventListener("keydown", e => {
-      if (e.target.tagName === "INPUT") return;
       const k = e.key;
+      const interactive = e.target instanceof Element && e.target.closest(INTERACTIVE_KEY_TARGET);
+
+      // Back remains a global hardware action even when a native control owns
+      // focus. Arrows and Enter still stay local to sliders, links and media.
+      if (k === "Escape" || k === "Backspace") {
+        e.preventDefault();
+        this.backKey.tap();
+        this.back();
+        return;
+      }
+      if (interactive) return;
+
       const num = "12345".indexOf(k);
       if (num >= 0) { this.navKeys[ROUTES[num + 1].id].tap(); this.go(ROUTES[num + 1].id); return; }
       if (k === "0" || k === "h") { this.navKeys.home.tap(); this.go("home"); return; }
@@ -150,7 +180,6 @@ export class App {
       else if (k === "Home" && this.state.item) { e.preventDefault(); if (!articleReaderScroll('home')) this.scrollTo(0); }
       else if (k === "End" && this.state.item) { e.preventDefault(); if (!articleReaderScroll('end')) this.scrollTo(1e9); }
       else if (k === "Enter") { e.preventDefault(); this.enterKey.tap(); this.enter(); }
-      else if (k === "Escape" || k === "Backspace") { e.preventDefault(); this.backKey.tap(); this.back(); }
       else if (k === "p" || k === "P") { document.getElementById("power").click(); }
       else if (k === "c" || k === "C") { document.getElementById("crt-switch").click(); }
     });
@@ -158,16 +187,37 @@ export class App {
 
   _fit() {
     const machine = document.getElementById("machine");
-    const compact = innerWidth < 980 || innerWidth / innerHeight < 1.05;
+
+    // The 941x1672 chassis is an authored portrait composition. Selecting it
+    // merely because a phone is narrow collapses it to unreadable scale in
+    // landscape; landscape viewports use the horizontal desktop composition.
+    const compact = innerWidth / innerHeight < 1.05;
     machine.classList.toggle("is-compact", compact);
     document.body.classList.toggle("is-compact-stage", compact);
 
     const dw = compact ? 941 : 1920;
     const dh = compact ? 1672 : 1080;
     const fit = compact
-      ? Math.max(innerWidth / dw, innerHeight / dh)
+      ? Math.min(innerWidth / dw, innerHeight / dh)
       : Math.max(innerWidth / dw, innerHeight / dh);
-    document.documentElement.style.setProperty("--fit", fit.toFixed(4));
+    const root = document.documentElement.style;
+    root.setProperty("--fit", fit.toFixed(4));
+
+    if (compact) {
+      const renderedWidth = dw * fit;
+      const renderedHeight = dh * fit;
+      const gapX = Math.max(0, (innerWidth - renderedWidth) * 0.5);
+      const gapY = Math.max(0, (innerHeight - renderedHeight) * 0.5);
+      root.setProperty("--compact-render-w", `${renderedWidth}px`);
+      root.setProperty("--compact-render-h", `${renderedHeight}px`);
+      root.setProperty("--compact-gap-x", `${gapX}px`);
+      root.setProperty("--compact-gap-y", `${gapY}px`);
+    } else {
+      root.removeProperty("--compact-render-w");
+      root.removeProperty("--compact-render-h");
+      root.removeProperty("--compact-gap-x");
+      root.removeProperty("--compact-gap-y");
+    }
 
     if (this.crt.ok) {
       const tube = document.getElementById("tube");
@@ -176,7 +226,40 @@ export class App {
     }
   }
 
-  go(route) {
+  attachDocumentRuntime(runtime) {
+    if (!runtime || this.documentRuntime === runtime) return runtime;
+    if (this.documentRuntime) this.documentRuntime.destroy?.();
+    this.documentRuntime = runtime;
+    runtime.syncSource?.();
+    this.dirty = true;
+    return runtime;
+  }
+
+  detachDocumentRuntime(runtime) {
+    if (runtime && this.documentRuntime !== runtime) return;
+    this.documentRuntime = null;
+    this.dirty = true;
+  }
+
+  _commitNavigation(mode = "push", extraState = {}) {
+    syncNavigationHistory(this.state, mode, extraState);
+    syncNavigationMetadata(this.state);
+  }
+
+  _restoreNavigation() {
+    if (this.booting) return;
+    const target = resolveNavigation(CONTENT);
+    this.state.route = target.route;
+    this.state.item = target.item;
+    this.state.cursor = target.cursor;
+    this.state.static = 0.8;
+    this.render(true);
+    this._syncKeys();
+    syncNavigationMetadata(this.state);
+    if (!target.valid) syncNavigationHistory(this.state, "replace");
+  }
+
+  go(route, { historyMode = "push" } = {}) {
     foley.ensure();
     if (this.state.route === route && !this.state.item) return;
     this.state.route = route;
@@ -186,6 +269,7 @@ export class App {
     foley.sweep();
     this.render(true);
     this._syncKeys();
+    this._commitNavigation(historyMode);
   }
 
   scrollBy(rows) {
@@ -215,6 +299,7 @@ export class App {
       const i = clamp(arr.indexOf(st.item) + d, 0, arr.length - 1);
       st.item = arr[i]; st.cursor = i;
       st.static = 0.6; foley.sweep(); this.render(true);
+      this._commitNavigation("replace");
       return;
     }
     if (st.route !== "projects" && st.route !== "articles") return;
@@ -222,6 +307,7 @@ export class App {
     st.cursor = clamp(st.cursor + d, 0, arr.length - 1);
     foley.blip();
     this.render();
+    this._commitNavigation("replace");
   }
 
   enter() {
@@ -229,18 +315,40 @@ export class App {
     if (st.route === "projects" || st.route === "articles") {
       if (st.item) return;
       const arr = st.route === "projects" ? CONTENT.projects : CONTENT.articles;
+      const parentPath = `/${st.route}`;
       st.item = arr[st.cursor];
       st.static = 1; foley.sweep();
       this.render(true);
+      this._commitNavigation("push", { parentPath });
     } else if (st.route === "home") {
       this.navKeys.projects.tap(); this.go("projects");
     }
   }
 
   back() {
+    if (this.documentRuntime?.handleBack?.()) return;
+
     const st = this.state;
-    if (st.item) { st.item = null; st.static = 0.8; foley.sweep(); this.render(true); return; }
-    if (st.route !== "home") { this.navKeys.home.tap(); this.go("home"); }
+    if (st.item) {
+      const expectedParent = `/${st.route}`;
+      if (history.state?.parentPath === expectedParent && history.length > 1) {
+        history.back();
+        return;
+      }
+
+      // A deep link has no in-app collection entry to return to, so replace it
+      // with the collection rather than synthesising a duplicate history step.
+      st.item = null;
+      st.static = 0.8;
+      foley.sweep();
+      this.render(true);
+      this._commitNavigation("replace");
+      return;
+    }
+    if (st.route !== "home") {
+      this.navKeys.home.tap();
+      this.go("home", { historyMode: "replace" });
+    }
   }
 
   _syncKeys() {
@@ -252,9 +360,6 @@ export class App {
     const keepScroll = this.term.scroll;
     this.term.clear();
 
-    // Project/article details are owned by the document runtime. Do not also
-    // render their authored blocks into the hidden terminal buffer: doing so
-    // would instantiate a second set of local videos through pages.js/media.js.
     const documentItem = (st.route === 'articles' || st.route === 'projects') && st.item
       ? st.item
       : null;
@@ -264,15 +369,11 @@ export class App {
       if (documentItem.sub) this.term.put(4, 5, documentItem.sub.slice(0, this.term.cols - 8), "dim");
       this.term.put(4, 7, "DOCUMENT VIEW ACTIVE", "mid");
     } else {
-      const page = st.item ? PAGES.detail : (PAGES[st.route] || PAGES.home);
+      const page = PAGES[st.route] || PAGES.home;
       page(this.term, st);
     }
 
-    // Articles and projects are both long-form documents now. The same DOM
-    // mirror supplies semantics, native media elements and scroll state while
-    // the visible pixels continue to come from the raster/CRT pipeline.
-    syncArticleReader(documentItem);
-    document.getElementById('tube').classList.toggle('is-reading', Boolean(documentItem));
+    this.documentRuntime?.syncSource?.();
 
     this.term.scroll = retype ? 0 : Math.min(keepScroll, this.term.maxScroll);
     this.total = this.term.countGlyphs();
@@ -312,23 +413,18 @@ export class App {
     ];
     lines.forEach((l, i) => t.put(4, 3 + i, l, i === 0 ? "bright" : "mid"));
     this.total = t.countGlyphs();
-    this.reveal = 0;
-    this.revealTarget = this.total;
-    this.dirty = true;
+    this.reveal = 0; this.revealTarget = this.total;
     this.booting = true;
-    this.state.warm = 0;
-    this.state.degauss = 1;
+    this.dirty = true;
+    foley.humOn(true);
+    foley.degauss(); this.state.degauss = 1;
     setTimeout(() => {
       this.booting = false;
-      this.go("home");
-      this._syncKeys();
-      const hint = document.getElementById("hint");
-      setTimeout(() => { hint.style.opacity = "0"; }, 6000);
-    }, REDUCED ? 400 : 2400);
+      this._restoreNavigation();
+    }, REDUCED ? 80 : 1200);
   }
 
   frame(ms) {
-    requestAnimationFrame(t => this.frame(t));
     const st = this.state;
     const t = ms / 1000;
     const dt = Math.min(0.05, t - (this._last || t));
@@ -344,34 +440,53 @@ export class App {
     const d = new Date();
     const pad = n => String(n).padStart(2, "0");
     const clock = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    const up = Math.floor(t - (this.bootAt ? 0 : 0));
+    const up = Math.max(0, Math.floor(t - this.bootAt));
     const uptime = `${pad(Math.floor(up / 3600))}:${pad(Math.floor(up / 60) % 60)}:${pad(up % 60)}`;
     if (clock !== st.clock) {
-      st.clock = clock; st.uptime = uptime;
+      st.clock = clock;
+      st.uptime = uptime;
       if (!this.booting && st.route === "home" && !st.item) this.render();
     }
 
     if (this.reveal < this.revealTarget) {
-      const speed = REDUCED ? 100000 : 900;
+      const speed = REDUCED ? 100000 : (this.booting ? 360 : 900);
       const before = Math.floor(this.reveal);
       this.reveal = Math.min(this.revealTarget, this.reveal + speed * dt);
       if (Math.floor(this.reveal) !== before) {
         this.dirty = true;
-        if (t - this.lastBlip > 0.028) { foley.blip(); this.lastBlip = t; }
+        if (!REDUCED && t - this.lastBlip > 0.028) { foley.blip(0.18); this.lastBlip = t; }
       }
     }
 
     const blink = Math.floor(t * 2) % 2 === 0;
-    if (blink !== this._blink) { this._blink = blink; this.dirty = true; }
-
-    if (this.dirty) {
-      this.raster.paint(this.term, Math.floor(this.reveal), blink && this.reveal >= this.revealTarget);
+    if (blink !== this._blink) {
+      this._blink = blink;
+      if (!this.documentRuntime?.isDocument?.()) this.dirty = true;
     }
 
-    if (this.crt.ok) this.crt.render(st, this.dirty);
+    this.tilt?.frame?.();
+    this.documentRuntime?.frame?.(ms);
+
+    const sourceDirty = this.dirty;
+    if (sourceDirty) {
+      const handled = this.documentRuntime?.paint?.(Math.floor(this.reveal)) || false;
+      if (!handled) {
+        this.raster.paint(
+          this.term,
+          Math.floor(this.reveal),
+          blink && this.reveal >= this.revealTarget,
+        );
+      }
+    }
+
+    // CRT owns the visible WebGL canvas and composites every frame for
+    // persistence, scanlines, degauss/static and power-collapse animation.
+    // `sourceDirty` only controls whether the active source texture is uploaded.
+    if (this.crt.ok) this.crt.render(st, sourceDirty);
     this.dirty = false;
+
+    requestAnimationFrame(n => this.frame(n));
   }
 }
 
-let instance = null;
-export const start = () => (instance ||= new App());
+export function start() { return new App(); }

@@ -22,6 +22,7 @@ const progressOverlay = fs.readFileSync('src/document/progress-overlay.js', 'utf
 const bridge = fs.readFileSync('src/article-crt-bridge.js', 'utf8')
 const reader = fs.readFileSync('src/article-reader.js', 'utf8')
 const app = fs.readFileSync('src/app.js', 'utf8')
+const panel = fs.readFileSync('src/panel.js', 'utf8')
 const installer = fs.readFileSync('tools/install-project-model.mjs', 'utf8')
 const displayCss = fs.readFileSync('src/display.css', 'utf8')
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'))
@@ -102,7 +103,15 @@ check(mediaViewer.includes('media-inspect-hires'), 'CRT-off viewer has hires sou
 check(bridge.includes('MediaViewer'), 'document bridge wires CRT media inspection')
 check(!bridge.includes('ArticleInteractionController'), 'legacy modal interaction path removed')
 check(!fs.existsSync('src/article-interaction.js'), 'legacy modal controller file removed')
-check(bridge.includes('app.render = originalRender'), 'bridge teardown restores wrapped app render')
+check(!bridge.includes('app.render ='), 'document runtime does not monkey-patch app render')
+check(!bridge.includes('app.back ='), 'document runtime does not monkey-patch app back')
+check(!bridge.includes('app.raster.paint ='), 'document runtime does not monkey-patch terminal raster')
+check(bridge.includes('class ArticleCRTRuntime'), 'document runtime is an explicit object')
+check(app.includes('attachDocumentRuntime(runtime)'), 'app exposes explicit document runtime attachment')
+check(app.includes('this.documentRuntime?.paint?.'), 'app delegates document painting explicitly')
+check(app.includes('this.documentRuntime?.frame?.(ms)'), 'app schedules document runtime from its RAF')
+check(!bridge.includes('requestAnimationFrame('), 'document runtime owns no persistent RAF')
+check(!panel.includes('requestAnimationFrame(tick)'), 'panel tilt owns no persistent RAF')
 
 check(reader.includes("video.preload = 'none'"), 'local video starts without eager preload')
 check(reader.includes('video.volume = panelMediaVolume()'), 'physical volume initializes local video')
@@ -122,7 +131,7 @@ check(installer.includes('path.win32.basename(filename)'), 'model installer reje
 
 check(progressOverlay.includes('class DocumentProgressOverlay'), 'generic document progress overlay exists')
 check(progressOverlay.includes("block.type === 'heading'"), 'chapter progress derives from headings')
-check(bridge.includes('progressOverlay.paint(documentRaster)'), 'chapter progress paints into CRT source')
+check(bridge.includes('this.progressOverlay.paint(this.documentRaster)'), 'chapter progress paints into CRT source')
 
 check(penw.includes('::video{src="/media/penw/'), 'PENW uses local video in real CRT path')
 check(!penw.includes('provider=youtube'), 'PENW no longer needs YouTube playback')

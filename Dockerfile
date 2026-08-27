@@ -34,11 +34,11 @@ COPY . .
 # Generate production assets
 RUN npm run assets
 
-# Build the production bundle
+# Build the production bundle and route-aware Nginx SEO configuration
 RUN npm run build
 
-# Run the test suite
-RUN npm test
+# Run runtime regressions against the exact production output
+RUN npm run test:runtime
 
 
 # -----------------------------
@@ -46,7 +46,8 @@ RUN npm test
 # -----------------------------
 FROM nginx:1.30.4-alpine
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Production uses the route metadata generated directly from content/.
+COPY --from=builder /app/dist/nginx.conf /etc/nginx/conf.d/default.conf
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 

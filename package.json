@@ -6,15 +6,20 @@
   "description": "Skeuomorphic CRT terminal portfolio",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node tools/generate-seo-nginx.mjs",
     "preview": "vite preview",
     "assets": "node tools/assets.mjs",
-    "test": "node tools/smoke.mjs && node tools/smoke.mjs --gl && node tools/interactions.mjs && node tools/display-smoke.mjs && node tools/document-schema-smoke.mjs && node tools/article-parser-smoke.mjs && node tools/home-article-regression.mjs"
+    "audit:assets": "node tools/asset-audit.mjs",
+    "test:runtime": "node tools/smoke.mjs && node tools/smoke.mjs --gl && node tools/interactions.mjs && node tools/display-smoke.mjs && node tools/document-schema-smoke.mjs && node tools/article-parser-smoke.mjs && node tools/home-article-regression.mjs && node tools/navigation-smoke.mjs && node tools/seo-smoke.mjs",
+    "test:e2e": "playwright test",
+    "test": "npm run build && npm run test:runtime"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.62.1",
     "jsdom": "^25.0.0",
-    "vite": "^5.4.0",
-    "vite-plugin-singlefile": "^2.0.0"
+    "vite": "^6.4.3",
+    "vite-plugin-singlefile": "^2.3.3"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.1",

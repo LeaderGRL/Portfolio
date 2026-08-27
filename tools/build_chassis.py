@@ -15,6 +15,14 @@ MOBILE_FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-mobile.png"
 EXPORT = ROOT / "assets" / "chassis"
 BUILD = ROOT / "assets" / "build"
 
+# The compact machine remains contain-fitted so no physical control can be
+# cropped. The continuation strips are sampled from the exact rendered frame
+# used by the browser, not from a related moulding source. This keeps the seam
+# colour, grain and lighting identical at the machine boundary.
+MOBILE_FILL_SAMPLE_DEPTH = 128
+MOBILE_FILL_EXTENT = 512
+
+
 def aperture_from_mask(mask):
     ys, xs = np.nonzero(np.asarray(mask, dtype=np.float32) > 127)
     width, height = mask.size
@@ -67,6 +75,75 @@ def publish_staged(source, destination):
         source.unlink()
 
 
+def reflected_indices(distance, depth):
+    """Map outward distance onto a mirrored source band without hard repeats."""
+    depth = max(2, int(depth))
+    period = 2 * (depth - 1)
+    phase = np.asarray(distance, dtype=np.int32) % period
+    return np.where(phase < depth, phase, period - phase)
+
+
+def compact_material_fills(image):
+    """Create edge-continuous material strips for arbitrary compact viewports.
+
+    Each strip's seam-facing row/column is exactly the corresponding outer row
+    or column of the browser-visible mobile frame. Moving away from the seam
+    walks inward through a blank material band and mirrors it, preserving real
+    grain and lighting without synthesising another UI or stretching one line.
+    """
+    rgba = np.asarray(image.convert("RGBA"))
+    rgb = rgba[:, :, :3].copy()
+    alpha = rgba[:, :, 3:4].astype(np.float32) / 255.0
+
+    # The sampled border is opaque in the supplied frame. Compositing any
+    # antialiased edge pixels onto their own border mean avoids black RGB from
+    # transparent pixels ever leaking into WebP resampling.
+    border_rgb = np.concatenate([
+        rgb[:12].reshape(-1, 3),
+        rgb[-12:].reshape(-1, 3),
+        rgb[:, :12].reshape(-1, 3),
+        rgb[:, -12:].reshape(-1, 3),
+    ])
+    border_alpha = np.concatenate([
+        alpha[:12].reshape(-1, 1),
+        alpha[-12:].reshape(-1, 1),
+        alpha[:, :12].reshape(-1, 1),
+        alpha[:, -12:].reshape(-1, 1),
+    ])
+    opaque_border = border_rgb[border_alpha[:, 0] > 0.95]
+    mean = np.rint((opaque_border if len(opaque_border) else border_rgb).mean(axis=0)).astype(np.uint8)
+    rgb = np.rint(rgb * alpha + mean.reshape(1, 1, 3) * (1.0 - alpha)).astype(np.uint8)
+
+    height, width = rgb.shape[:2]
+    depth = min(MOBILE_FILL_SAMPLE_DEPTH, max(2, width // 3), max(2, height // 3))
+    extent = MOBILE_FILL_EXTENT
+
+    # Top image is stored far-edge -> seam, so its last row matches source y=0.
+    top_distance = np.arange(extent - 1, -1, -1)
+    top = rgb[reflected_indices(top_distance, depth), :, :]
+
+    # Bottom image is stored seam -> far-edge, so its first row matches y=h-1.
+    bottom_distance = np.arange(extent)
+    bottom_rows = (height - 1) - reflected_indices(bottom_distance, depth)
+    bottom = rgb[bottom_rows, :, :]
+
+    # Left is far-edge -> seam; right is seam -> far-edge for the same reason.
+    left_distance = np.arange(extent - 1, -1, -1)
+    left = rgb[:, reflected_indices(left_distance, depth), :]
+    right_distance = np.arange(extent)
+    right_cols = (width - 1) - reflected_indices(right_distance, depth)
+    right = rgb[:, right_cols, :]
+
+    material_color = "#" + "".join(f"{int(channel):02x}" for channel in mean)
+
+    return {
+        "top": Image.fromarray(top),
+        "bottom": Image.fromarray(bottom),
+        "left": Image.fromarray(left),
+        "right": Image.fromarray(right),
+    }, material_color
+
+
 def main():
     EXPORT.mkdir(parents=True, exist_ok=True)
     BUILD.mkdir(parents=True, exist_ok=True)
@@ -108,6 +185,13 @@ def main():
     save_webp_atomic(mobile, EXPORT / "chassis-mobile.webp")
     save_webp_atomic(mobile_frame, BUILD / "chassis-frame-mobile.webp")
 
+    # Responsive continuation must come from the exact frame displayed by CSS.
+    # Sampling MOBILE_SOURCE here creates visible tone changes because the
+    # artist-cut frame and the moulding reference are not pixel-identical.
+    fills, material_color = compact_material_fills(mobile_frame)
+    for edge, fill in fills.items():
+        save_webp_atomic(fill, BUILD / f"mobile-fill-{edge}.webp")
+
     metadata_path = BUILD / "meta.json"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata["chassis"] = {
@@ -122,6 +206,9 @@ def main():
         "aperture": aperture_from_mask(mobile_hole),
         "source_size": [mobile.width, mobile.height],
         "frame_source": MOBILE_FRAME_SOURCE.name,
+        "material_color": material_color,
+        "fill_sample_depth": MOBILE_FILL_SAMPLE_DEPTH,
+        "fill_extent": MOBILE_FILL_EXTENT,
     }
     metadata_tmp = metadata_path.with_name(metadata_path.name + ".tmp")
     metadata_tmp.write_text(json.dumps(metadata, indent=1), encoding="utf-8")
@@ -131,6 +218,8 @@ def main():
     for path in sorted(EXPORT.glob("chassis-*.webp")):
         print(f"{path.name}: {path.stat().st_size / 1024:.1f} KB")
     for path in sorted(BUILD.glob("chassis-frame-*.webp")):
+        print(f"{path.name}: {path.stat().st_size / 1024:.1f} KB")
+    for path in sorted(BUILD.glob("mobile-fill-*.webp")):
         print(f"{path.name}: {path.stat().st_size / 1024:.1f} KB")
 
 

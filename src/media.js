@@ -142,8 +142,3 @@ function placeholder(g, x, y, w, h, label) {
   g.fillText(label, x + 6, y + 14)
   g.restore()
 }
-
-/** True while anything on screen still needs repainting every frame. */
-export function isAnimating(entry) {
-  return entry && entry.kind === 'video' && entry.ready && !entry.el.paused
-}
