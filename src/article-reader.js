@@ -45,14 +45,11 @@ function appendInline(node, value = '') {
 
 const makeRich = (tag, className, text) => appendInline(make(tag, className), text)
 
-function makeCodeRegion(className, label) {
-  const pre = make('pre', className)
-  // Code blocks can overflow horizontally because authored whitespace is
-  // preserved. Giving the scrolling element its own tab stop lets keyboard
-  // users pan it with the native browser controls and satisfies WCAG 2.1.1.
-  pre.tabIndex = 0
-  pre.setAttribute('aria-label', label)
-  return pre
+function makeCodeBlock(className) {
+  // The semantic reader is transparent while the visible copy is rasterised
+  // through the CRT. A native inner scroll position therefore cannot be shown
+  // to the user. Code is wrapped instead of creating an invisible scroll area.
+  return make('pre', className)
 }
 
 let volumeObserver = null
@@ -129,8 +126,7 @@ function renderBlock(block) {
       return list
     }
     case 'code': {
-      const language = block.language ? ` — ${block.language}` : ''
-      const pre = makeCodeRegion('article-reader__code', `Scrollable code block${language}`)
+      const pre = makeCodeBlock('article-reader__code')
       const code = make('code', '', block.body || '')
       if (block.language) code.dataset.language = block.language
       pre.append(code)
@@ -171,7 +167,7 @@ function renderBlock(block) {
     case 'note':
       return make('aside', 'article-reader__note', block.body || '')
     case 'figure': {
-      const pre = makeCodeRegion('article-reader__code article-reader__code--figure', 'Scrollable technical figure')
+      const pre = makeCodeBlock('article-reader__code article-reader__code--figure')
       pre.textContent = [block.cols, block.body].filter(Boolean).join('\n')
       return pre
     }
