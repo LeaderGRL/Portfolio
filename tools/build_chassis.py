@@ -16,8 +16,9 @@ EXPORT = ROOT / "assets" / "chassis"
 BUILD = ROOT / "assets" / "build"
 
 # The compact machine remains contain-fitted so no physical control can be
-# cropped. These strips extend only the blank photographed chassis material
-# beyond the authored 941x1672 render when the viewport has a different ratio.
+# cropped. The continuation strips are sampled from the exact rendered frame
+# used by the browser, not from a related moulding source. This keeps the seam
+# colour, grain and lighting identical at the machine boundary.
 MOBILE_FILL_SAMPLE_DEPTH = 128
 MOBILE_FILL_EXTENT = 512
 
@@ -86,11 +87,33 @@ def compact_material_fills(image):
     """Create edge-continuous material strips for arbitrary compact viewports.
 
     Each strip's seam-facing row/column is exactly the corresponding outer row
-    or column of the supplied mobile chassis. Moving away from the seam walks
-    inward through a blank material band and mirrors it, preserving real grain
-    and lighting without synthesising another UI or stretching one pixel line.
+    or column of the browser-visible mobile frame. Moving away from the seam
+    walks inward through a blank material band and mirrors it, preserving real
+    grain and lighting without synthesising another UI or stretching one line.
     """
-    rgb = np.asarray(image.convert("RGB"))
+    rgba = np.asarray(image.convert("RGBA"))
+    rgb = rgba[:, :, :3].copy()
+    alpha = rgba[:, :, 3:4].astype(np.float32) / 255.0
+
+    # The sampled border is opaque in the supplied frame. Compositing any
+    # antialiased edge pixels onto their own border mean avoids black RGB from
+    # transparent pixels ever leaking into WebP resampling.
+    border_rgb = np.concatenate([
+        rgb[:12].reshape(-1, 3),
+        rgb[-12:].reshape(-1, 3),
+        rgb[:, :12].reshape(-1, 3),
+        rgb[:, -12:].reshape(-1, 3),
+    ])
+    border_alpha = np.concatenate([
+        alpha[:12].reshape(-1, 1),
+        alpha[-12:].reshape(-1, 1),
+        alpha[:, :12].reshape(-1, 1),
+        alpha[:, -12:].reshape(-1, 1),
+    ])
+    opaque_border = border_rgb[border_alpha[:, 0] > 0.95]
+    mean = np.rint((opaque_border if len(opaque_border) else border_rgb).mean(axis=0)).astype(np.uint8)
+    rgb = np.rint(rgb * alpha + mean.reshape(1, 1, 3) * (1.0 - alpha)).astype(np.uint8)
+
     height, width = rgb.shape[:2]
     depth = min(MOBILE_FILL_SAMPLE_DEPTH, max(2, width // 3), max(2, height // 3))
     extent = MOBILE_FILL_EXTENT
@@ -111,14 +134,6 @@ def compact_material_fills(image):
     right_cols = (width - 1) - reflected_indices(right_distance, depth)
     right = rgb[:, right_cols, :]
 
-    # A border-derived fallback colour covers sub-pixel gaps while images load.
-    border = np.concatenate([
-        rgb[:12].reshape(-1, 3),
-        rgb[-12:].reshape(-1, 3),
-        rgb[:, :12].reshape(-1, 3),
-        rgb[:, -12:].reshape(-1, 3),
-    ])
-    mean = np.rint(border.mean(axis=0)).astype(np.uint8)
     material_color = "#" + "".join(f"{int(channel):02x}" for channel in mean)
 
     return {
@@ -170,7 +185,10 @@ def main():
     save_webp_atomic(mobile, EXPORT / "chassis-mobile.webp")
     save_webp_atomic(mobile_frame, BUILD / "chassis-frame-mobile.webp")
 
-    fills, material_color = compact_material_fills(mobile)
+    # Responsive continuation must come from the exact frame displayed by CSS.
+    # Sampling MOBILE_SOURCE here creates visible tone changes because the
+    # artist-cut frame and the moulding reference are not pixel-identical.
+    fills, material_color = compact_material_fills(mobile_frame)
     for edge, fill in fills.items():
         save_webp_atomic(fill, BUILD / f"mobile-fill-{edge}.webp")
 
