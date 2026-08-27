@@ -7,6 +7,7 @@
  */
 
 const FOCUSABLE = 'a[href], button, input, select, textarea, video[controls], [tabindex]:not([tabindex="-1"])'
+const MIN_PHYSICAL_TARGET = 24
 
 function labelFor(node) {
   return node.getAttribute('aria-label')
@@ -17,18 +18,13 @@ function labelFor(node) {
 
 export function installSemanticFocusProxy() {
   const reader = document.getElementById('article-reader')
-  const surface = document.getElementById('display-surface')
   const tube = document.getElementById('tube')
-  if (!reader || !surface || !tube || tube.querySelector('.semantic-focus-proxy')) return null
+  if (!reader || !tube || tube.querySelector('.semantic-focus-proxy')) return null
 
   const proxy = document.createElement('div')
   proxy.className = 'semantic-focus-proxy'
   proxy.hidden = true
   proxy.setAttribute('aria-hidden', 'true')
-
-  // The semantic surface is intentionally opacity:0 while article pixels are
-  // displayed through the CRT. The proxy must therefore be a sibling of that
-  // surface, not its child, otherwise it would inherit the same invisibility.
   tube.append(proxy)
 
   let focused = null
@@ -39,29 +35,41 @@ export function installSemanticFocusProxy() {
       return
     }
 
-    const surfaceRect = surface.getBoundingClientRect()
+    const tubeRect = tube.getBoundingClientRect()
     const rect = focused.getBoundingClientRect()
-    if (!surfaceRect.width || !surfaceRect.height || !rect.width || !rect.height) {
+    const localWidth = tube.offsetWidth
+    const localHeight = tube.offsetHeight
+    if (!tubeRect.width || !tubeRect.height || !localWidth || !localHeight || !rect.width || !rect.height) {
       proxy.hidden = true
       return
     }
 
-    const left = Math.max(0, rect.left - surfaceRect.left)
-    const top = Math.max(0, rect.top - surfaceRect.top)
-    const right = Math.min(surfaceRect.width, rect.right - surfaceRect.left)
-    const bottom = Math.min(surfaceRect.height, rect.bottom - surfaceRect.top)
-
-    if (right <= 0 || bottom <= 0 || left >= surfaceRect.width || top >= surfaceRect.height) {
+    // Bounding rectangles are post-transform physical CSS pixels. The proxy is
+    // positioned in the tube's pre-transform local coordinate system, so all
+    // geometry must be converted back before CSS applies the machine scale.
+    const scaleX = tubeRect.width / localWidth
+    const scaleY = tubeRect.height / localHeight
+    if (!scaleX || !scaleY) {
       proxy.hidden = true
       return
     }
 
-    proxy.style.left = `${left}px`
-    proxy.style.top = `${top}px`
-    proxy.style.width = `${Math.max(24, right - left)}px`
-    proxy.style.height = `${Math.max(24, bottom - top)}px`
+    const physicalLeft = Math.max(0, rect.left - tubeRect.left)
+    const physicalTop = Math.max(0, rect.top - tubeRect.top)
+    const physicalRight = Math.min(tubeRect.width, rect.right - tubeRect.left)
+    const physicalBottom = Math.min(tubeRect.height, rect.bottom - tubeRect.top)
+
+    if (physicalRight <= 0 || physicalBottom <= 0 || physicalLeft >= tubeRect.width || physicalTop >= tubeRect.height) {
+      proxy.hidden = true
+      return
+    }
+
+    proxy.style.left = `${physicalLeft / scaleX}px`
+    proxy.style.top = `${physicalTop / scaleY}px`
+    proxy.style.width = `${Math.max(MIN_PHYSICAL_TARGET / scaleX, (physicalRight - physicalLeft) / scaleX)}px`
+    proxy.style.height = `${Math.max(MIN_PHYSICAL_TARGET / scaleY, (physicalBottom - physicalTop) / scaleY)}px`
     proxy.dataset.label = labelFor(focused).slice(0, 80)
-    proxy.classList.toggle('is-label-inside', top < 28)
+    proxy.classList.toggle('is-label-inside', physicalTop < 28)
     proxy.hidden = false
   }
 
