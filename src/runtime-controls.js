@@ -1,12 +1,14 @@
 import { CHAR_H, PAD_Y, SRC_H } from './core.js'
 import { CONTENT } from './content.js'
+import { syncContactLinks } from './contact-links.js'
 
 /* ========================================================================== *
  * Runtime coarse-pointer controls
  *
  * App owns keyboard boundaries and viewport sizing. This module only augments
  * coarse-pointer hit testing without changing the visible industrial sprites,
- * and turns terminal listing rows into direct touch targets on compact layouts.
+ * turns terminal listing rows into direct touch targets on compact layouts,
+ * and keeps native CONTACT anchors aligned with terminal navigation state.
  * ========================================================================== */
 
 const INTERACTIVE_SELECTOR = [
@@ -175,10 +177,28 @@ function bindScreenListingPointer(app) {
   }
 }
 
+function bindContactLinkLayer(app) {
+  const nav = document.getElementById('nav-keys')
+  if (!nav) return () => {}
+
+  const sync = () => syncContactLinks(app.state?.route, CONTENT.contact)
+  const observer = new MutationObserver(sync)
+  observer.observe(nav, { subtree: true, attributes: true, attributeFilter: ['class'] })
+  addEventListener('popstate', sync)
+  sync()
+
+  return () => {
+    observer.disconnect()
+    removeEventListener('popstate', sync)
+    syncContactLinks(null, CONTENT.contact)
+  }
+}
+
 export function installRuntimeControls(app) {
   const cleanups = [
     bindCompactTargetExpansion(),
     bindScreenListingPointer(app),
+    bindContactLinkLayer(app),
   ]
 
   return () => {
