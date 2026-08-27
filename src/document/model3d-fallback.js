@@ -6,6 +6,13 @@
  * the same article-source -> CRT pipeline.
  * ========================================================================== */
 
+function withAlpha(color, alpha) {
+  const match = /^#([0-9a-f]{6})$/i.exec(String(color || '').trim())
+  if (!match) return color
+  const hex = match[1]
+  return `rgba(${parseInt(hex.slice(0, 2), 16)},${parseInt(hex.slice(2, 4), 16)},${parseInt(hex.slice(4, 6), 16)},${alpha})`
+}
+
 function drawContainedImage(g, image, x, y, width, height) {
   if (!image?.complete || !image.naturalWidth || !image.naturalHeight) return false
   const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight)
@@ -34,7 +41,7 @@ export function enhanceModel3DFallback(registry, local3d) {
 
       const h = layout.height - 28
       const poster = block.poster ? env.images.get(block.poster) : null
-      g.fillStyle = '#020d07'
+      g.fillStyle = env.colors.bg
       g.fillRect(layout.x, layout.y, layout.width, h)
 
       const painted = drawContainedImage(g, poster, layout.x, layout.y, layout.width, h)
@@ -42,7 +49,7 @@ export function enhanceModel3DFallback(registry, local3d) {
         env.drawLines(['3D MODEL UNAVAILABLE'], layout.x + 14, layout.y + h * 0.5, 9, 12, env.colors.amber, 700)
       }
 
-      g.fillStyle = 'rgba(1,10,5,.78)'
+      g.fillStyle = withAlpha(env.colors.bg, .78)
       g.fillRect(layout.x, layout.y + h - 23, layout.width, 23)
       env.drawLines([String(block.label || block.title || '3D MODEL').toUpperCase()], layout.x + 8, layout.y + h - 9, 7, 9, env.colors.core, 700)
       env.drawLines(['STATIC FALLBACK'], layout.x + layout.width - 92, layout.y + h - 9, 7, 9, env.colors.amber, 700)
