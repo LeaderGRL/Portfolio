@@ -4,10 +4,50 @@ import path from 'node:path'
 const ROOT = process.cwd()
 const CONTENT_ROOT = path.join(ROOT, 'content')
 const TEMPLATE_PATH = path.join(ROOT, 'nginx.conf')
+const DIST_HTML_PATH = path.join(ROOT, 'dist', 'index.html')
 const OUTPUT_PATH = path.join(ROOT, 'dist', 'nginx.conf')
 
 const BASE_TITLE = 'Jordan Grilly — Systems / Performance / Architecture'
 const BASE_DESCRIPTION = 'Portfolio of Jordan Grilly, systems and performance engineer.'
+
+const SEO_ANCHORS = [
+  {
+    pattern: /<title>[^<]*<\/title>/i,
+    value: `<title>${BASE_TITLE}</title>`,
+  },
+  {
+    pattern: /<meta\b(?=[^>]*\bname=["']description["'])[^>]*>/i,
+    value: `<meta name="description" content="${BASE_DESCRIPTION}">`,
+  },
+  {
+    pattern: /<meta\b(?=[^>]*\bproperty=["']og:title["'])[^>]*>/i,
+    value: `<meta property="og:title" content="${BASE_TITLE}">`,
+  },
+  {
+    pattern: /<meta\b(?=[^>]*\bproperty=["']og:description["'])[^>]*>/i,
+    value: `<meta property="og:description" content="${BASE_DESCRIPTION}">`,
+  },
+  {
+    pattern: /<meta\b(?=[^>]*\bproperty=["']og:type["'])[^>]*>/i,
+    value: '<meta property="og:type" content="website">',
+  },
+  {
+    pattern: /<meta\b(?=[^>]*\bproperty=["']og:url["'])[^>]*>/i,
+    value: '<meta property="og:url" content="/">',
+  },
+  {
+    pattern: /<meta\b(?=[^>]*\bname=["']twitter:title["'])[^>]*>/i,
+    value: `<meta name="twitter:title" content="${BASE_TITLE}">`,
+  },
+  {
+    pattern: /<meta\b(?=[^>]*\bname=["']twitter:description["'])[^>]*>/i,
+    value: `<meta name="twitter:description" content="${BASE_DESCRIPTION}">`,
+  },
+  {
+    pattern: /<link\b(?=[^>]*\brel=["']canonical["'])[^>]*>/i,
+    value: '<link rel="canonical" href="/">',
+  },
+]
 
 function parseFrontMatter(raw) {
   if (!raw.startsWith('---')) return {}
@@ -52,6 +92,25 @@ function nginx(value) {
 
 function regexEscape(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function normalizeDistSeoAnchors() {
+  let builtHtml = fs.readFileSync(DIST_HTML_PATH, 'utf8')
+
+  for (const anchor of SEO_ANCHORS) {
+    if (anchor.pattern.test(builtHtml)) {
+      builtHtml = builtHtml.replace(anchor.pattern, anchor.value)
+      continue
+    }
+
+    // The source template should contain every anchor. If a future Vite/plugin
+    // version removes one entirely, reinsert it before </head> rather than
+    // silently shipping a route that Nginx cannot customize.
+    if (!builtHtml.includes('</head>')) throw new Error('dist/index.html has no closing head element')
+    builtHtml = builtHtml.replace('</head>', `${anchor.value}</head>`)
+  }
+
+  fs.writeFileSync(DIST_HTML_PATH, builtHtml)
 }
 
 const routes = new Map([
@@ -114,9 +173,11 @@ const filters = `        set $seo_url "$scheme://$host$seo_path";\n\n` +
 `        sub_filter '<meta property="og:description" content="${BASE_DESCRIPTION}">' '<meta property="og:description" content="$seo_description">';\n` +
 `        sub_filter '<meta property="og:type" content="website">' '<meta property="og:type" content="$seo_type">';\n` +
 `        sub_filter '<meta property="og:url" content="/">' '<meta property="og:url" content="$seo_url">';\n` +
-`        sub_filter '<meta name="twitter:title" content="${BASE_TITLE}">' '<meta name="twitter:title" content="$seo_title">';\n` +
+`        sub_filter '<meta name="twitter:title" content="${BASE_TITLE}</title>' '<meta name="twitter:title" content="$seo_title">';\n` +
 `        sub_filter '<meta name="twitter:description" content="${BASE_DESCRIPTION}">' '<meta name="twitter:description" content="$seo_description">';\n` +
 `        sub_filter '<link rel="canonical" href="/">' '<link rel="canonical" href="$seo_url">';`
+
+normalizeDistSeoAnchors()
 
 const template = fs.readFileSync(TEMPLATE_PATH, 'utf8')
 if (!template.includes('# SEO_MAPS_GENERATED_HERE') || !template.includes('# SEO_SUB_FILTERS_GENERATED_HERE')) {
@@ -129,4 +190,4 @@ const output = template
 
 fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true })
 fs.writeFileSync(OUTPUT_PATH, output)
-console.log(`generated route-aware SEO config for ${routes.size} routes -> ${path.relative(ROOT, OUTPUT_PATH)}`)
+console.log(`normalized static SEO anchors and generated route-aware config for ${routes.size} routes -> ${path.relative(ROOT, OUTPUT_PATH)}`)
