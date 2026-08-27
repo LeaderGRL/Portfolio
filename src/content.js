@@ -16,6 +16,7 @@ const listEntry = (d) => ({
   meta: d.status || d.year || '',
   stack: d.stack || [],
   link: d.link || '',
+  theme: d.theme || 'default',
   blocks: d.blocks || [],
 })
 
