@@ -10,9 +10,11 @@ import './crt-bypass.css'
 import './media-viewer.css'
 import { start } from './app.js'
 import { attachArticleCRT } from './article-crt-bridge.js'
+import { installRuntimeControls } from './runtime-controls.js'
 
 const boot = () => {
   const app = start()
+  installRuntimeControls(app)
   attachArticleCRT(app)
 }
 
