@@ -18,13 +18,18 @@ function labelFor(node) {
 export function installSemanticFocusProxy() {
   const reader = document.getElementById('article-reader')
   const surface = document.getElementById('display-surface')
-  if (!reader || !surface || surface.querySelector('.semantic-focus-proxy')) return null
+  const tube = document.getElementById('tube')
+  if (!reader || !surface || !tube || tube.querySelector('.semantic-focus-proxy')) return null
 
   const proxy = document.createElement('div')
   proxy.className = 'semantic-focus-proxy'
   proxy.hidden = true
   proxy.setAttribute('aria-hidden', 'true')
-  surface.append(proxy)
+
+  // The semantic surface is intentionally opacity:0 while article pixels are
+  // displayed through the CRT. The proxy must therefore be a sibling of that
+  // surface, not its child, otherwise it would inherit the same invisibility.
+  tube.append(proxy)
 
   let focused = null
 
