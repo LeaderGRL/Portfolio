@@ -188,14 +188,14 @@ export const PAGES = {
     t.opAt(3, (g, py) => {
       bitmapText(g, label, (SRC_W - bitmapWidth(label, s)) / 2, py, s, SHADE.core);
     });
-    t.center(6, "OPEN TO RUST / C# ENGINEERING ROLES", "mid");
-    let y = 8;
+    t.center(5, "OPEN TO RUST / C# ENGINEERING ROLES", "mid");
+    let y = 7;
     for (const [k, v] of CONTENT.contact) {
       t.put(8, y, k.padEnd(9, " "), "dim");
       t.put(18, y, v, "bright");
-      y += 2;
+      y += 3;
     }
-    t.center(16, "─ TRANSMISSION READY ─", "dim");
+    t.center(17, "─ TRANSMISSION READY ─", "dim");
     footer(t, "ESC BACK");
   },
 };
