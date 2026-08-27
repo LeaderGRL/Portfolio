@@ -50,6 +50,10 @@ function nginx(value) {
   return String(value).replaceAll('\\', '\\\\').replaceAll('"', '\\"')
 }
 
+function regexEscape(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 const routes = new Map([
   ['/', { title: BASE_TITLE, description: BASE_DESCRIPTION, type: 'website' }],
   ['/about', { title: 'About — Jordan Grilly', description: `About — ${BASE_DESCRIPTION}`, type: 'website' }],
@@ -72,8 +76,21 @@ for (const [section, documents] of [
   }
 }
 
+// $request_uri always keeps the browser's original request, even when
+// try_files internally falls back to /index.html. Normalize it once into a
+// query-free stable path and drive every SEO map from that path.
+function pathMap() {
+  const lines = ['map $request_uri $seo_path {', '    default "/";']
+  for (const route of routes.keys()) {
+    const pattern = regexEscape(route)
+    lines.push(`    ~^${pattern}(?:\\?.*)?$ "${nginx(route)}";`)
+  }
+  lines.push('}')
+  return lines.join('\n')
+}
+
 function mapBlock(variable, field, fallback) {
-  const lines = [`map $uri $${variable} {`, `    default "${nginx(html(fallback))}";`]
+  const lines = [`map $seo_path $${variable} {`, `    default "${nginx(html(fallback))}";`]
   for (const [route, meta] of routes) {
     const value = meta[field] || fallback
     lines.push(`    "${nginx(route)}" "${nginx(html(value))}";`)
@@ -83,14 +100,13 @@ function mapBlock(variable, field, fallback) {
 }
 
 const maps = [
+  pathMap(),
   mapBlock('seo_title', 'title', BASE_TITLE),
   mapBlock('seo_description', 'description', BASE_DESCRIPTION),
   mapBlock('seo_type', 'type', 'website'),
 ].join('\n\n')
 
-// Canonical/social URLs deliberately use $uri rather than $request_uri so
-// tracking parameters never become part of a canonical URL.
-const filters = `        set $seo_url "$scheme://$host$uri";\n\n` +
+const filters = `        set $seo_url "$scheme://$host$seo_path";\n\n` +
 `        sub_filter_once off;\n` +
 `        sub_filter '<title>${BASE_TITLE}</title>' '<title>$seo_title</title>';\n` +
 `        sub_filter '<meta name="description" content="${BASE_DESCRIPTION}">' '<meta name="description" content="$seo_description">';\n` +
