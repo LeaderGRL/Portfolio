@@ -88,7 +88,9 @@ const maps = [
   mapBlock('seo_type', 'type', 'website'),
 ].join('\n\n')
 
-const filters = `        set $seo_url "$scheme://$host$request_uri";\n\n` +
+// Canonical/social URLs deliberately use $uri rather than $request_uri so
+// tracking parameters never become part of a canonical URL.
+const filters = `        set $seo_url "$scheme://$host$uri";\n\n` +
 `        sub_filter_once off;\n` +
 `        sub_filter '<title>${BASE_TITLE}</title>' '<title>$seo_title</title>';\n` +
 `        sub_filter '<meta name="description" content="${BASE_DESCRIPTION}">' '<meta name="description" content="$seo_description">';\n` +
