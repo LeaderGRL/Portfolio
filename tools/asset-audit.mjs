@@ -7,6 +7,9 @@ const TEXT_ROOTS = ['content', 'src', 'tools']
 const MEDIA_ROOT = path.join(ROOT, 'public', 'media')
 const SOURCE_ROOT = path.join(ROOT, 'assets', 'src')
 const REPORT_PATH = path.join(ROOT, 'tmp', 'asset-audit.json')
+const MEDIA_EXTENSIONS = new Set([
+  '.avif', '.gif', '.jpeg', '.jpg', '.m4v', '.mov', '.mp4', '.png', '.svg', '.webm', '.webp',
+])
 
 function walk(root) {
   if (!fs.existsSync(root)) return []
@@ -35,7 +38,11 @@ const textFiles = TEXT_ROOTS.flatMap(root => walk(path.join(ROOT, root)))
   .filter(file => /\.(?:js|mjs|json|md|css|html|py)$/i.test(file))
 const searchableText = textFiles.map(file => fs.readFileSync(file, 'utf8')).join('\n')
 
+// README files and other documentation may live next to public media but are
+// not deployable media assets. Keep them out of media totals/candidates so the
+// report only measures files a browser could actually consume as media.
 const mediaFiles = walk(MEDIA_ROOT)
+  .filter(file => MEDIA_EXTENSIONS.has(path.extname(file).toLowerCase()))
 const sourceFiles = walk(SOURCE_ROOT)
 const allAudited = [...mediaFiles, ...sourceFiles]
 
@@ -50,9 +57,6 @@ const generatorText = [
   path.join(ROOT, 'tools', 'build_chassis.py'),
 ].filter(fs.existsSync).map(file => fs.readFileSync(file, 'utf8')).join('\n')
 
-// The current asset builders glob assets/src and then address source renders by
-// basename. Mark a source as directly named when its stem appears in generator
-// code; otherwise keep it as a review candidate rather than deleting it.
 const sources = sourceFiles.map(file => ({
   path: rel(file),
   bytes: bytes(file),
