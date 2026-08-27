@@ -3,9 +3,13 @@ import fs from 'node:fs'
 const html = fs.readFileSync('dist/index.html', 'utf8')
 const nginx = fs.readFileSync('dist/nginx.conf', 'utf8')
 
+// Vite may normalize void-element markup or attribute order in the built HTML.
+// Validate semantics instead of requiring the source template's exact string.
+const hasRootCanonical = /<link\b(?=[^>]*\brel=["']canonical["'])(?=[^>]*\bhref=["']\/?["'])[^>]*>/i.test(html)
+
 const checks = [
   ['base Open Graph title exists', html.includes('<meta property="og:title"')],
-  ['base canonical exists', html.includes('<link rel="canonical" href="/">')],
+  ['base canonical exists', hasRootCanonical],
   ['original request path is normalized', nginx.includes('map $request_uri $seo_path')],
   ['SEO maps use stable deep-link path', nginx.includes('map $seo_path $seo_title') && nginx.includes('map $seo_path $seo_description')],
   ['project deep links are mapped', nginx.includes('"/projects/penw"')],
