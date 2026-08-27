@@ -173,7 +173,7 @@ const filters = `        set $seo_url "$scheme://$host$seo_path";\n\n` +
 `        sub_filter '<meta property="og:description" content="${BASE_DESCRIPTION}">' '<meta property="og:description" content="$seo_description">';\n` +
 `        sub_filter '<meta property="og:type" content="website">' '<meta property="og:type" content="$seo_type">';\n` +
 `        sub_filter '<meta property="og:url" content="/">' '<meta property="og:url" content="$seo_url">';\n` +
-`        sub_filter '<meta name="twitter:title" content="${BASE_TITLE}</title>' '<meta name="twitter:title" content="$seo_title">';\n` +
+`        sub_filter '<meta name="twitter:title" content="${BASE_TITLE}">' '<meta name="twitter:title" content="$seo_title">';\n` +
 `        sub_filter '<meta name="twitter:description" content="${BASE_DESCRIPTION}">' '<meta name="twitter:description" content="$seo_description">';\n` +
 `        sub_filter '<link rel="canonical" href="/">' '<link rel="canonical" href="$seo_url">';`
 
