@@ -15,6 +15,7 @@ const make = (tag, className, text) => {
 }
 
 const INLINE_TOKEN = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_)/g
+const GENERIC_IMAGE_ALT = /^(?:article illustration|illustration|image)$/i
 
 function appendInline(node, value = '') {
   let cursor = 0
@@ -167,6 +168,11 @@ function renderBlock(block) {
   }
 }
 
+function accessibleBlock(block, context) {
+  if (block.type !== 'image' || !GENERIC_IMAGE_ALT.test(String(block.alt || '').trim())) return block
+  return { ...block, alt: `${context || 'Technical article'} — technical illustration` }
+}
+
 let currentId = null
 
 export function syncArticleReader(item) {
@@ -208,8 +214,10 @@ export function syncArticleReader(item) {
   }
   reader.append(header)
 
+  let context = item.label
   for (const block of item.blocks || []) {
-    const node = renderBlock(block)
+    if (block.type === 'heading' && block.text) context = block.text
+    const node = renderBlock(accessibleBlock(block, context))
     if (node) reader.append(node)
   }
   syncPanelMediaVolume(reader)
