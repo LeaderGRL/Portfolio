@@ -147,8 +147,19 @@ export class App {
 
   _bindKeyboard() {
     addEventListener("keydown", e => {
-      if (e.target instanceof Element && e.target.closest(INTERACTIVE_KEY_TARGET)) return;
       const k = e.key;
+      const interactive = e.target instanceof Element && e.target.closest(INTERACTIVE_KEY_TARGET);
+
+      // Back remains a global hardware action even when a native control owns
+      // focus. Arrows and Enter still stay local to sliders, links and media.
+      if (k === "Escape" || k === "Backspace") {
+        e.preventDefault();
+        this.backKey.tap();
+        this.back();
+        return;
+      }
+      if (interactive) return;
+
       const num = "12345".indexOf(k);
       if (num >= 0) { this.navKeys[ROUTES[num + 1].id].tap(); this.go(ROUTES[num + 1].id); return; }
       if (k === "0" || k === "h") { this.navKeys.home.tap(); this.go("home"); return; }
@@ -169,7 +180,6 @@ export class App {
       else if (k === "Home" && this.state.item) { e.preventDefault(); if (!articleReaderScroll('home')) this.scrollTo(0); }
       else if (k === "End" && this.state.item) { e.preventDefault(); if (!articleReaderScroll('end')) this.scrollTo(1e9); }
       else if (k === "Enter") { e.preventDefault(); this.enterKey.tap(); this.enter(); }
-      else if (k === "Escape" || k === "Backspace") { e.preventDefault(); this.backKey.tap(); this.back(); }
       else if (k === "p" || k === "P") { document.getElementById("power").click(); }
       else if (k === "c" || k === "C") { document.getElementById("crt-switch").click(); }
     });
@@ -227,8 +237,8 @@ export class App {
     this.dirty = true;
   }
 
-  _commitNavigation(mode = "push") {
-    syncNavigationHistory(this.state, mode);
+  _commitNavigation(mode = "push", extraState = {}) {
+    syncNavigationHistory(this.state, mode, extraState);
     syncNavigationMetadata(this.state);
   }
 
@@ -293,6 +303,7 @@ export class App {
     st.cursor = clamp(st.cursor + d, 0, arr.length - 1);
     foley.blip();
     this.render();
+    this._commitNavigation("replace");
   }
 
   enter() {
@@ -300,10 +311,11 @@ export class App {
     if (st.route === "projects" || st.route === "articles") {
       if (st.item) return;
       const arr = st.route === "projects" ? CONTENT.projects : CONTENT.articles;
+      const parentPath = `/${st.route}`;
       st.item = arr[st.cursor];
       st.static = 1; foley.sweep();
       this.render(true);
-      this._commitNavigation("push");
+      this._commitNavigation("push", { parentPath });
     } else if (st.route === "home") {
       this.navKeys.projects.tap(); this.go("projects");
     }
@@ -314,6 +326,14 @@ export class App {
 
     const st = this.state;
     if (st.item) {
+      const expectedParent = `/${st.route}`;
+      if (history.state?.parentPath === expectedParent && history.length > 1) {
+        history.back();
+        return;
+      }
+
+      // A deep link has no in-app collection entry to return to, so replace it
+      // with the collection rather than synthesising a duplicate history step.
       st.item = null;
       st.static = 0.8;
       foley.sweep();
@@ -425,13 +445,18 @@ export class App {
     this.tilt?.frame?.();
     this.documentRuntime?.frame?.(ms);
 
-    if (this.dirty) {
+    const sourceDirty = this.dirty;
+    if (sourceDirty) {
       const handled = this.documentRuntime?.paint?.(Math.floor(this.reveal)) || false;
       if (!handled) this.raster.paint(this.term, Math.floor(this.reveal));
-      this.dirty = false;
     }
 
-    this.crt.frame({ ...this.state, time:t });
+    // CRT owns the visible WebGL canvas and must composite every frame for
+    // persistence, scanlines, degauss/static and power-collapse animation.
+    // `sourceDirty` only controls whether the source texture is re-uploaded.
+    if (this.crt.ok) this.crt.render(this.state, sourceDirty);
+    this.dirty = false;
+
     requestAnimationFrame(n => this.frame(n));
   }
 }
