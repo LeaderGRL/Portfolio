@@ -79,17 +79,28 @@ test('panel navigation keeps terminal arrows active after clicking PROJECTS', as
 
 test('ARTICLES supports keyboard selection and browser history', async ({ page }, testInfo) => {
   test.skip(isMobileProject(testInfo), 'Hardware-keyboard scenario is covered by desktop browser engines')
+  test.setTimeout(60_000)
+
   await boot(page)
-  await articlesKey(page).click()
+
+  // The physical key has continuous CRT/panel animation around it. A forced
+  // click still exercises the real button handler but avoids Playwright waiting
+  // for visual "stability" that an animated surface can never strictly reach.
+  await articlesKey(page).click({ force: true })
   await expect(page).toHaveURL(/\/articles$/)
+
   await page.keyboard.press('ArrowDown')
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/\/articles\/.+/)
   const detailUrl = page.url()
-  await page.goBack()
+
+  await page.goBack({ waitUntil: 'commit' })
   await expect(page).toHaveURL(/\/articles$/)
-  await page.goForward()
+  await expect(page.locator('#tube')).toHaveAttribute('data-display-mode', 'terminal')
+
+  await page.goForward({ waitUntil: 'commit' })
   await expect(page).toHaveURL(detailUrl)
+  await expect(page.locator('#tube')).toHaveAttribute('data-display-mode', 'article')
 })
 
 test('volume retains its own keyboard boundary', async ({ page }, testInfo) => {
