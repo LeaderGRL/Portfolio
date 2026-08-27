@@ -7,7 +7,9 @@
  */
 
 const FOCUSABLE = 'a[href], button, input, select, textarea, video[controls], [tabindex]:not([tabindex="-1"])'
-const MIN_PHYSICAL_TARGET = 24
+// Keep one physical CSS pixel of headroom. Exact 24px targets can round down
+// after the machine's transform matrix (for example to 23.9908px in Chromium).
+const MIN_PHYSICAL_TARGET = 25
 
 function labelFor(node) {
   return node.getAttribute('aria-label')
