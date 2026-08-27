@@ -1,5 +1,5 @@
 import { foley } from './audio.js'
-import { articleReaderScroll, syncArticleReader } from './article-reader.js'
+import { articleReaderScroll } from './article-reader.js'
 import { CONTENT } from './content.js'
 import { COLS, REDUCED, ROWS, clamp, lerp, now } from './core.js'
 import { CRT } from './crt.js'
@@ -52,12 +52,13 @@ export class App {
     this.dirty = true;
     this.bootAt = now();
     this.lastBlip = 0;
+    this.documentRuntime = null;
 
     this._buildKeys();
     this._bindControls();
     this._bindKeyboard();
     bindAssets();
-    bindTilt();
+    this.tilt = bindTilt();
     this._fit();
     addEventListener("resize", () => this._fit());
     addEventListener("popstate", () => this._restoreNavigation());
@@ -194,6 +195,21 @@ export class App {
     }
   }
 
+  attachDocumentRuntime(runtime) {
+    if (!runtime || this.documentRuntime === runtime) return runtime;
+    if (this.documentRuntime) this.documentRuntime.destroy?.();
+    this.documentRuntime = runtime;
+    runtime.syncSource?.();
+    this.dirty = true;
+    return runtime;
+  }
+
+  detachDocumentRuntime(runtime) {
+    if (runtime && this.documentRuntime !== runtime) return;
+    this.documentRuntime = null;
+    this.dirty = true;
+  }
+
   _commitNavigation(mode = "push") {
     syncNavigationHistory(this.state, mode);
     syncNavigationMetadata(this.state);
@@ -277,6 +293,8 @@ export class App {
   }
 
   back() {
+    if (this.documentRuntime?.handleBack?.()) return;
+
     const st = this.state;
     if (st.item) {
       st.item = null;
@@ -317,11 +335,7 @@ export class App {
       page(this.term, st);
     }
 
-    // Articles and projects are both long-form documents now. The same DOM
-    // mirror supplies semantics, native media elements and scroll state while
-    // the visible pixels continue to come from the raster/CRT pipeline.
-    syncArticleReader(documentItem);
-    document.getElementById('tube').classList.toggle('is-reading', Boolean(documentItem));
+    this.documentRuntime?.syncSource?.();
 
     this.term.scroll = retype ? 0 : Math.min(keepScroll, this.term.maxScroll);
     this.total = this.term.countGlyphs();
@@ -383,6 +397,9 @@ export class App {
     this._last = t;
     st.time = t;
 
+    this.tilt?.frame?.();
+    this.documentRuntime?.frame?.(ms);
+
     st.power = lerp(st.power, st.powerTarget, 1 - Math.pow(0.001, dt * 1.6));
     st.crt = lerp(st.crt, st.crtTarget, 1 - Math.pow(0.001, dt * 3));
     st.degauss = Math.max(0, st.degauss - dt * 0.9);
@@ -413,7 +430,8 @@ export class App {
     if (blink !== this._blink) { this._blink = blink; this.dirty = true; }
 
     if (this.dirty) {
-      this.raster.paint(this.term, Math.floor(this.reveal), blink && this.reveal >= this.revealTarget);
+      const handled = this.documentRuntime?.paint?.(this.term, Math.floor(this.reveal), blink && this.reveal >= this.revealTarget);
+      if (!handled) this.raster.paint(this.term, Math.floor(this.reveal), blink && this.reveal >= this.revealTarget);
     }
 
     if (this.crt.ok) this.crt.render(st, this.dirty);
