@@ -92,6 +92,7 @@ const gl = new Proxy({
   getUniformLocation: (_program, name) => name,
   texImage2D: (...args) => { if (args.length === 9) allocations.push([args[3], args[4]]) },
   uniform2f: (name, x, y) => { uniforms[name] = [x, y] },
+  uniform1f: (name, value) => { uniforms[name] = value },
   deleteFramebuffer: () => { disposed++ },
 }, { get: (target, key) => key in target ? target[key] : /^[A-Z0-9_]+$/.test(key) ? key : () => ({}) })
 const source = { width: 1920, height: 1080 }
@@ -100,12 +101,17 @@ const state = { fullscreen: true, crt: 1, power: 1, time: 0, warm: 1, static: 0,
 crt.render(state, true)
 check(allocations.slice(-2).every(([w, h]) => w === 1920 && h === 1080), 'both persistence textures retain full source resolution')
 check(uniforms.uSrc?.join('x') === '1920x1080', 'shader source-pixel optics use the real resolution')
+check(uniforms.uScanlines === 360, 'fullscreen preserves the classic tube beam count')
+check(uniforms.uDecay === 0.72, 'fullscreen preserves classic phosphor persistence')
 const count = allocations.length
 crt.render(state, false)
 check(allocations.length === count, 'stable frames do not reallocate persistence textures')
 Object.assign(source, { width: 480, height: 360 })
 crt.render({ ...state, fullscreen: false }, true)
 check(allocations.slice(-2).every(([w, h]) => w === 480 && h === 360) && disposed === 4, 'return to desk releases high-resolution framebuffers')
+check(uniforms.uScanlines === 360 && uniforms.uDecay === 0.72, 'desk and fullscreen share the same CRT profile')
+crt.render({ ...state, crt: 0 }, false)
+check(uniforms.uDecay === 0, 'CRT OFF still disables phosphor persistence')
 
 console.log(failed ? `\n  ${failed} display check(s) FAILED` : '\n  all display checks passed')
 process.exit(failed ? 1 : 0)

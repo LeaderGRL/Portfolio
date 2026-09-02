@@ -110,9 +110,11 @@ match the reference hardware legends.
   documents reflow into a readable column with 15–20 CSS px body text. Sources
   and persistence textures use the actual output resolution (2x density,
   4096-pixel dimension and 8-megapixel caps), including media inspection.
-  Fullscreen bloom, scanlines and chromatic separation are restrained at the
-  physical-pixel scale. Its reflection belongs to the window's upper-left edge,
-  never an enlarged photograph of the small bezel; desk optics remain unchanged.
+  Fullscreen restores the original CRT profile: bloom, curvature, grille,
+  chromatic separation and phosphor persistence match the desk. The original
+  photographic shade and two-layer upper-left gloss remain active in both
+  modes. Beam count stays independent of source resolution, preserving the
+  CRT character without downsampling article content. No substitute CSS glare.
   The chassis is hidden; a phosphor-styled softkey row at the bottom carries the
   sections, BACK, ENTER and EXIT so touch and pointer users are never
   stranded. `Escape` leaves full screen before it means BACK.

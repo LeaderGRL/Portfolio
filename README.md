@@ -109,8 +109,10 @@ black bands. Articles and projects reflow into a readable column (15–20 CSS px
 body text); images retain their aspect ratio. Canvas sources and persistence
 textures render at viewport resolution rather than enlarging 480x360 pixels.
 Density is capped at 2x, 4096 pixels per dimension and 8 megapixels to bound GPU
-memory. Fullscreen optics use a restrained physical-pixel halo, fine scanlines
-and an upper-left reflection anchored to the window; the desk optics stay intact.
+memory. Fullscreen uses the original CRT bloom, curvature, grille and phosphor
+persistence, together with the original photographic upper-left reflection.
+Scanlines retain the tube's beam count independently of the sharper source;
+the desk optics stay intact, and CRT OFF still provides a neutral display.
 
 While the chassis is away a softkey row along the bottom of the glass carries
 the six sections, BACK, ENTER and EXIT FULL SCREEN, so pointer and touch users

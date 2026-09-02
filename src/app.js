@@ -383,11 +383,10 @@ export class App {
       style.setProperty('--fullscreen-bottom', `${layout.bottom}px`);
       style.setProperty('--document-column', `${Math.min(520, layout.documentWidth - (layout.documentWidth < SRC_W ? 40 : 84)) * layout.textScale}px`);
       style.setProperty('--document-scale', layout.textScale);
-      style.setProperty('--crt-pixel', `${vw / layout.pixelWidth}px`);
     } else {
       this.raster.setViewport(null);
       this.documentRuntime?.setViewport?.(null);
-      for (const name of ["--raster-x", "--raster-y", "--raster-base-w", "--raster-base-h", "--raster-k", '--fullscreen-bottom', '--document-column', '--document-scale', '--crt-pixel']) {
+      for (const name of ["--raster-x", "--raster-y", "--raster-base-w", "--raster-base-h", "--raster-k", '--fullscreen-bottom', '--document-column', '--document-scale']) {
         style.removeProperty(name);
       }
     }

@@ -59,8 +59,11 @@ test('full screen fills the viewport with a high-resolution continuous glass sur
   expect(Math.round(surface.x)).toBe(0)
   const source = await page.locator('#fallback2d').evaluate(canvas => ({ width: canvas.width, height: canvas.height }))
   expect(source).toEqual(DESKTOP)
-  await expect(page.locator('.tube__gloss--core')).toBeHidden()
-  await expect(page.locator('.fullscreen-reflection')).toBeVisible()
+  await expect(page.locator('.tube__shade')).toBeVisible()
+  await expect(page.locator('.tube__gloss--soft')).toBeVisible()
+  await expect(page.locator('.tube__gloss--core')).toBeVisible()
+  await expect(page.locator('.tube__gloss--core')).toHaveCSS('object-fit', 'cover')
+  await expect(page.locator('.fullscreen-reflection')).toHaveCount(0)
 
   // Navigation stays available on the glass.
   const softkeys = page.locator('#softkeys')
@@ -76,7 +79,7 @@ test('full screen fills the viewport with a high-resolution continuous glass sur
   await expect(fullscreenSwitch).toHaveAttribute('aria-checked', 'false')
   await expect(page.locator('.panel--left')).toBeVisible()
   expect(await page.locator('#fallback2d').evaluate(canvas => [canvas.width, canvas.height])).toEqual([480, 360])
-  await expect(page.locator('.fullscreen-reflection')).toBeHidden()
+  await expect(page.locator('.fullscreen-reflection')).toHaveCount(0)
   await expect(page.locator('.tube__gloss--core')).toBeVisible()
 })
 
@@ -192,7 +195,11 @@ for (const mode of ['crt-off', 'no-webgl']) {
       expect(Math.abs(surface[dimension] - pixels[dimension])).toBeLessThan(1)
     }
     expect(await page.locator('#article-source').evaluate(canvas => ({ width: canvas.width, height: canvas.height }))).toEqual(DESKTOP)
-    if (mode === 'crt-off') await expect(page.locator('.fullscreen-reflection')).toBeHidden()
+    if (mode === 'crt-off') {
+      await expect(page.locator('.tube__shade')).toBeHidden()
+      await expect(page.locator('.tube__gloss--core')).toBeHidden()
+      await expect(page.locator('.tube__gloss--soft')).toBeHidden()
+    }
     await attachScreenshot(page, testInfo, `article-fullscreen-${mode}`)
     await page.locator('.softkeys__key--exit').click()
     await expect.poll(drift).toBeLessThanOrEqual(1)
@@ -200,7 +207,7 @@ for (const mode of ['crt-off', 'no-webgl']) {
   })
 }
 
-test('fullscreen article and media use the same sharp source on desktop and mobile', async ({ page }, testInfo) => {
+test('fullscreen article and media retain high-resolution sources and classic glass on desktop and mobile', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo) && !isMobile(testInfo), 'Resolution and touch geometry use Chromium profiles')
   test.setTimeout(60_000)
   if (isChromiumDesktop(testInfo)) await page.setViewportSize({ width: 1920, height: 1080 })
@@ -224,7 +231,9 @@ test('fullscreen article and media use the same sharp source on desktop and mobi
   expect(dimensions.width).toBe(Math.round(dimensions.viewportWidth * dimensions.dpr))
   expect(dimensions.height).toBe(Math.round(dimensions.viewportHeight * dimensions.dpr))
   expect(dimensions.width).toBeGreaterThan(480)
-  await attachScreenshot(page, testInfo, 'fullscreen-sharp-article')
+  await expect(page.locator('.tube__gloss--core')).toBeVisible()
+  await expect(page.locator('.tube__shade')).toBeVisible()
+  await attachScreenshot(page, testInfo, 'fullscreen-classic-article')
 
   // The first illustration is above the fold at these sizes. Its real DOM
   // hit target must agree with the reflowed raster and open the same pipeline.
@@ -237,7 +246,8 @@ test('fullscreen article and media use the same sharp source on desktop and mobi
   await expect(page.locator('#tube')).toHaveClass(/is-media-inspecting/)
   const inspected = await page.locator('#article-source').evaluate(canvas => ({ width: canvas.width, height: canvas.height }))
   expect(inspected).toEqual({ width: dimensions.width, height: dimensions.height })
-  await attachScreenshot(page, testInfo, 'fullscreen-sharp-media')
+  await expect(page.locator('.tube__gloss--core')).toBeVisible()
+  await attachScreenshot(page, testInfo, 'fullscreen-classic-media')
   await page.keyboard.press('Escape')
   await expect(page.locator('#tube')).not.toHaveClass(/is-media-inspecting/)
   await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)

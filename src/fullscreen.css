@@ -80,46 +80,12 @@ body.is-crt-fullscreen .article-reader{
 body.is-crt-fullscreen .document-inline-integrations{
   clip-path:inset(0 0 calc(var(--fullscreen-bottom) + 32px * var(--document-scale)) 0);
 }
-body.is-crt-fullscreen .document-inline-integration__surface{
-  filter:contrast(1.015) saturate(.98);
+/* Restore the original photographic shade and two-layer gloss. Cover-fit
+   the specular from its upper-left origin to preserve its shape on both
+   landscape and portrait glass; the source still fills the entire window. */
+body.is-crt-fullscreen .tube__gloss{
+  object-fit:cover; object-position:0 0;
 }
-/* Cross-origin embeds cannot enter WebGL; their compositor optics follow the
-   same fine pixel pitch and restrained vignette as the fullscreen canvas. */
-body.is-crt-fullscreen .document-inline-integration::before{
-  background:repeating-linear-gradient(0deg,
-    rgba(0,3,1,.075) 0 var(--crt-pixel),
-    transparent var(--crt-pixel) calc(3 * var(--crt-pixel)));
-}
-body.is-crt-fullscreen .document-inline-integration::after{ opacity:.15; }
-
-/* The desk photograph contains the small curved bezel's specular. It cannot
-   be enlarged to a borderless window: use a quieter edge-anchored reflection
-   here, always lit from upper left and outside the main reading column. */
-body.is-crt-fullscreen .tube__shade,
-body.is-crt-fullscreen .tube__gloss{ display:none; }
-.fullscreen-reflection{ display:none; }
-body.is-crt-fullscreen .fullscreen-reflection{
-  display:block; position:absolute; inset:0; z-index:6; pointer-events:none;
-  background:
-    radial-gradient(ellipse 380px 210px at 0 0, rgba(222,241,234,.13), transparent 75%),
-    linear-gradient(113deg, rgba(209,237,227,.025), transparent 28%);
-  box-shadow:inset 1px 1px 1px rgba(225,247,239,.16);
-}
-.fullscreen-reflection::before{
-  content:""; position:absolute; top:0; left:0;
-  width:min(30vw, 360px); height:min(22vh, 180px);
-  border-top:1px solid rgba(239,255,248,.38);
-  border-left:1px solid rgba(239,255,248,.23);
-  border-top-left-radius:12px;
-  mask-image:radial-gradient(ellipse at 0 0, #000, transparent 74%);
-}
-.fullscreen-reflection::after{
-  content:""; position:absolute; top:-28px; left:-28px;
-  width:clamp(120px, 15vw, 220px); height:clamp(90px, 16vh, 160px);
-  background:radial-gradient(ellipse at 100% 100%, transparent 59%, rgba(234,250,242,.26) 66%, transparent 76%);
-  filter:blur(5px);
-}
-body.is-crt-fullscreen .tube.is-crt-off .fullscreen-reflection{ display:none; }
 
 /* ---------------------------------------------------------------------------
    Softkeys: the last screen line labels the keys, as terminals did.
