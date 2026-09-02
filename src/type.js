@@ -12,13 +12,15 @@ export const CHARSET =
   "─│┌┐└┘├┤┬┴┼█▓▒░•▸▶←→↑↓·▪—…";
 
 export class GlyphAtlas {
-  constructor(cw, ch, fontPx, weight) {
+  constructor(cw, ch, fontPx, weight, density = 1) {
     this.cw = cw; this.ch = ch;
+    this.density = density;
     this.index = new Map();
     const cols = CHARSET.length;
     const c = document.createElement("canvas");
-    c.width = cols * cw; c.height = ch;
+    c.width = cols * cw * density; c.height = ch * density;
     const g = c.getContext("2d");
+    g.scale(density, density);
     g.font = `${weight} ${fontPx}px ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace`;
     g.textAlign = "center";
     g.textBaseline = "middle";
@@ -50,7 +52,7 @@ export class GlyphAtlas {
   blit(ctx, color, ch, x, y) {
     const i = this.index.get(ch);
     if (i === undefined) return;
-    ctx.drawImage(this.tint(color), i * this.cw, 0, this.cw, this.ch, x, y, this.cw, this.ch);
+    ctx.drawImage(this.tint(color), i * this.cw * this.density, 0, this.cw * this.density, this.ch * this.density, x, y, this.cw, this.ch);
   }
 }
 

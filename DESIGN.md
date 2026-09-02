@@ -105,13 +105,20 @@ match the reference hardware legends.
   EFFECTS, captioned in the same language (OFF/ON). On the desk it sits
   between CRT EFFECTS and VOLUME, grouping the two display controls; on the
   portable the CRT / FULL SCREEN / VOLUME tier is one three-column row.
-- Full screen is underscan, not a stretch: the glass fills the viewport and
-  the 480x360 raster keeps its aspect, centred, so every terminal layout and
-  every glyph is the desk picture enlarged. The unlit phosphor around it
-  stays under the same curvature, grille, shade and gloss. The chassis leaves
-  the DOM; a phosphor-styled softkey row on the last screen line carries the
+- Full screen uses a continuous, viewport-filling phosphor surface with no
+  4:3 backing rectangle or black bars. The terminal grid stays proportional;
+  documents reflow into a readable column with 15–20 CSS px body text. Sources
+  and persistence textures use the actual output resolution (2x density,
+  4096-pixel dimension and 8-megapixel caps), including media inspection.
+  Fullscreen bloom, scanlines and chromatic separation are restrained at the
+  physical-pixel scale. Its reflection belongs to the window's upper-left edge,
+  never an enlarged photograph of the small bezel; desk optics remain unchanged.
+  The chassis is hidden; a phosphor-styled softkey row at the bottom carries the
   sections, BACK, ENTER and EXIT so touch and pointer users are never
   stranded. `Escape` leaves full screen before it means BACK.
+- Fullscreen reserves separate document, progress-footer and navigation bands.
+  Images preserve their proportions; narrow-column media frames scale down
+  rather than introducing large empty vertical gaps.
 - Entering full screen moves keyboard focus to EXIT; leaving it restores the
   triggering control. Keyboard softkey activation preserves focus. BACK uses
   `Backspace`, not `Escape`, while full screen is active; modified shortcuts

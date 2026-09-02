@@ -143,15 +143,17 @@ export class InlineIntegrationController {
   _visibleAmount(entry) {
     const top = entry.y - this.rasteriser.scroll
     const bottom = top + entry.height
-    return Math.max(0, Math.min(bottom, SRC_H) - Math.max(top, 0))
+    return Math.max(0, Math.min(bottom, this.rasteriser.readingHeight || SRC_H) - Math.max(top, 0))
   }
 
   _position(host, entry) {
     const top = entry.y - this.rasteriser.scroll
-    host.style.left = `${(entry.x / SRC_W) * 100}%`
-    host.style.top = `${(top / SRC_H) * 100}%`
-    host.style.width = `${(entry.width / SRC_W) * 100}%`
-    host.style.height = `${(entry.height / SRC_H) * 100}%`
+    const width = this.rasteriser.width || SRC_W
+    const height = this.rasteriser.height || SRC_H
+    host.style.left = `${(entry.x / width) * 100}%`
+    host.style.top = `${(top / height) * 100}%`
+    host.style.width = `${(entry.width / width) * 100}%`
+    host.style.height = `${(entry.height / height) * 100}%`
   }
 
   _scrollDocument(deltaY) {

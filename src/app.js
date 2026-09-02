@@ -1,7 +1,7 @@
 import { foley } from './audio.js'
 import { articleReaderScroll } from './article-reader.js'
 import { CONTENT } from './content.js'
-import { ASSET_META } from './assets.js'
+import { fullscreenLayout } from './fullscreen-layout.js'
 import { COLS, REDUCED, ROWS, SRC_H, SRC_W, clamp, lerp, now } from './core.js'
 import { CRT } from './crt.js'
 import { syncNavigationHistory, syncNavigationMetadata, resolveNavigation } from './navigation.js'
@@ -55,9 +55,8 @@ export class App {
     this.bootAt = now();
     this.lastBlip = 0;
     this.documentRuntime = null;
-    // Where the raster sits inside the tube, as fractions of the tube box.
-    // Normal mode stretches the picture over the whole glass; full screen
-    // centres it at its own aspect (see _fitRaster).
+    // Terminal-grid hit geometry, as fractions of the tube box. Fullscreen
+    // documents and pixel surfaces cover the entire viewport (see _fitRaster).
     this.rasterRect = { x: 0, y: 0, w: 1, h: 1 };
     this.ownsNativeFullscreen = false;
     this.nativeFullscreenRequest = null;
@@ -349,24 +348,19 @@ export class App {
       root.removeProperty("--compact-gap-y");
     }
 
-    if (this.crt.ok) {
+    // Fullscreen owns its bounded resolution below. Do not allocate an
+    // uncapped intermediate buffer (e.g. 8K at devicePixelRatio 2) first.
+    if (this.crt.ok && !this.state.fullscreen) {
       const tube = document.getElementById("tube");
       this.crt.resize(tube.offsetWidth || 740, tube.offsetHeight || 576,
                       Math.min(devicePixelRatio || 1, 2));
     }
-    this._fitRaster(compact);
+    this._fitRaster();
   }
 
-  /**
-   * Places the raster on the glass. On the desk the picture is stretched over
-   * the whole aperture, as it always was. Full screen keeps the 480x360 aspect
-   * and centres it: the shader gets the rectangle as a uniform, and the DOM
-   * layers that must register with the picture (semantic reader, contact
-   * anchors, inline integrations, CRT-off canvases) get the same rectangle as
-   * custom properties. Those layers keep their desk-size layout and are
-   * scaled, so wrapping and hit geometry stay identical to normal mode.
-   */
-  _fitRaster(compact) {
+  // Fullscreen providers paint the complete viewport. Only the terminal's
+  // fixed grid is centred; documents reflow and media retain their own aspect.
+  _fitRaster() {
     const tube = document.getElementById("tube");
     const style = tube.style;
     let rect = { x: 0, y: 0, w: 1, h: 1 };
@@ -374,31 +368,32 @@ export class App {
     if (this.state.fullscreen) {
       const vw = tube.offsetWidth || innerWidth || 1;
       const vh = tube.offsetHeight || innerHeight || 1;
-      const scale = Math.min(vw / SRC_W, vh / SRC_H);
-      const w = SRC_W * scale, h = SRC_H * scale;
-      rect = { x: (vw - w) / 2 / vw, y: (vh - h) / 2 / vh, w: w / vw, h: h / vh };
-
-      // The desk tube's width, from the same aperture and bleed CSS uses, so
-      // the semantic layers wrap exactly as they do on the desk. Height is
-      // 3:4 of that: the layers must map 1:1 onto the displayed raster.
-      const machine = document.getElementById("machine");
-      const ap = compact ? ASSET_META.mobile_chassis.aperture : ASSET_META.chassis.aperture;
-      const bleed = parseFloat(getComputedStyle(machine).getPropertyValue("--tube-bleed-x")) || 0;
-      const baseW = Math.max(1, (ap[2] - ap[0]) * (compact ? 941 : 1920) + bleed * 2);
-      const baseH = baseW * (SRC_H / SRC_W);
+      const layout = fullscreenLayout(vw, vh, devicePixelRatio || 1, document.getElementById('softkeys')?.offsetHeight || 0);
+      const picture = layout.terminal;
+      const documentMode = Boolean(this.state.item);
+      if (!documentMode) rect = { x: picture.x / vw, y: picture.y / vh, w: picture.width / vw, h: picture.height / vh };
+      this.raster.setViewport(layout);
+      this.documentRuntime?.setViewport?.(layout);
+      this.crt.resize(layout.pixelWidth, layout.pixelHeight, 1);
       style.setProperty("--raster-x", `${(rect.x * 100).toFixed(4)}%`);
       style.setProperty("--raster-y", `${(rect.y * 100).toFixed(4)}%`);
-      style.setProperty("--raster-base-w", `${baseW.toFixed(3)}px`);
-      style.setProperty("--raster-base-h", `${baseH.toFixed(3)}px`);
-      style.setProperty("--raster-k", (w / baseW).toFixed(5));
+      style.setProperty("--raster-base-w", `${SRC_W}px`);
+      style.setProperty("--raster-base-h", `${SRC_H}px`);
+      style.setProperty("--raster-k", (picture.width / SRC_W).toFixed(5));
+      style.setProperty('--fullscreen-bottom', `${layout.bottom}px`);
+      style.setProperty('--document-column', `${Math.min(520, layout.documentWidth - (layout.documentWidth < SRC_W ? 40 : 84)) * layout.textScale}px`);
+      style.setProperty('--document-scale', layout.textScale);
+      style.setProperty('--crt-pixel', `${vw / layout.pixelWidth}px`);
     } else {
-      for (const name of ["--raster-x", "--raster-y", "--raster-base-w", "--raster-base-h", "--raster-k"]) {
+      this.raster.setViewport(null);
+      this.documentRuntime?.setViewport?.(null);
+      for (const name of ["--raster-x", "--raster-y", "--raster-base-w", "--raster-base-h", "--raster-k", '--fullscreen-bottom', '--document-column', '--document-scale', '--crt-pixel']) {
         style.removeProperty(name);
       }
     }
 
     this.rasterRect = rect;
-    this.crt.setRaster?.(rect.x, rect.y, rect.w, rect.h);
+    this.dirty = true;
   }
 
   /** Tube-relative rectangle of the raster in client pixels. */

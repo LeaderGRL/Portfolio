@@ -103,11 +103,14 @@ article rows directly on the CRT.
 
 The aperture is small by design, so the panel carries a FULL SCREEN switch
 (shortcut `F`) next to CRT EFFECTS. It is an accessibility mode: the glass
-fills the viewport, the chassis is set aside, and the same 480x360 raster is
-shown at its own 4:3 aspect, centred — about 3x larger on a 1080p display,
-2x on a phone — with nothing re-laid out, the way a screen magnifier works.
-The surround beyond the picture is unlit phosphor under the same curvature,
-grille and glass, not a black frame.
+fills the viewport and the chassis is set aside. The terminal keeps a proportional
+cell grid on a continuous phosphor surface, without a 4:3 backing rectangle or
+black bands. Articles and projects reflow into a readable column (15–20 CSS px
+body text); images retain their aspect ratio. Canvas sources and persistence
+textures render at viewport resolution rather than enlarging 480x360 pixels.
+Density is capped at 2x, 4096 pixels per dimension and 8 megapixels to bound GPU
+memory. Fullscreen optics use a restrained physical-pixel halo, fine scanlines
+and an upper-left reflection anchored to the window; the desk optics stay intact.
 
 While the chassis is away a softkey row along the bottom of the glass carries
 the six sections, BACK, ENTER and EXIT FULL SCREEN, so pointer and touch users
@@ -122,8 +125,9 @@ The document retains its normalized reading position across the layout change,
 including CRT-off and WebGL fallback rendering.
 `Backspace` remains BACK within full screen; browser shortcuts such as `Ctrl+F`
 are not intercepted. A refused or delayed native request cannot strand the
-browser in a different layout state. This is a magnification aid, not a
-replacement for a reflowing large-text reader on narrow screens.
+browser in a different layout state. Navigation and the progress footer each
+reserve space below the document so they cannot cover its last visible lines.
+Media inspection uses the same high-resolution source as the fullscreen article.
 
 ## Display architecture
 

@@ -132,19 +132,41 @@ export class Rasteriser {
     this.ctx = canvas.getContext("2d", { alpha: false });
     this.ctx.imageSmoothingEnabled = false;
     this.atlas = new GlyphAtlas(CHAR_W, CHAR_H, 12, "500");
+    this.fullscreen = null;
+  }
+
+  setViewport(layout) {
+    const width = layout?.pixelWidth || SRC_W;
+    const height = layout?.pixelHeight || SRC_H;
+    this.fullscreen = layout;
+    if (this.canvas.width === width && this.canvas.height === height) return;
+    this.canvas.width = width;
+    this.canvas.height = height;
+    const density = layout ? Math.min(4, Math.max(1, Math.ceil(layout.terminal.width / SRC_W * width / layout.width))) : 1;
+    this.atlas = new GlyphAtlas(CHAR_W, CHAR_H, 12, "500", density);
+    this.ctx.imageSmoothingEnabled = Boolean(layout);
   }
 
   paint(term, reveal, cursorOn) {
     const g = this.ctx;
+    const fs = this.fullscreen;
+    const width = fs ? fs.width : SRC_W;
+    const height = fs ? fs.height : SRC_H;
+    g.save();
+    g.setTransform(this.canvas.width / width, 0, 0, this.canvas.height / height, 0, 0);
 
     // tube background: not black, a very dark charged phosphor with vignette
     g.fillStyle = "#031009";
-    g.fillRect(0, 0, SRC_W, SRC_H);
-    const grad = g.createRadialGradient(SRC_W / 2, SRC_H / 2, 30, SRC_W / 2, SRC_H / 2, SRC_W * 0.62);
+    g.fillRect(0, 0, width, height);
+    const grad = g.createRadialGradient(width / 2, height / 2, 30, width / 2, height / 2, fs ? Math.max(width, height) * 0.7 : SRC_W * 0.62);
     grad.addColorStop(0, "rgba(16,64,36,0.30)");
     grad.addColorStop(1, "rgba(2,10,5,0)");
     g.fillStyle = grad;
-    g.fillRect(0, 0, SRC_W, SRC_H);
+    g.fillRect(0, 0, width, height);
+    if (fs) {
+      g.translate(fs.terminal.x, fs.terminal.y);
+      g.scale(fs.terminal.width / SRC_W, fs.terminal.height / SRC_H);
+    }
 
     let shown = 0, lastX = PAD_X, lastY = PAD_Y;
 
@@ -195,5 +217,6 @@ export class Rasteriser {
       g.fillStyle = SHADE.core;
       g.fillRect(lastX + CHAR_W, lastY + 2, CHAR_W - 1, CHAR_H - 4);
     }
+    g.restore();
   }
 }

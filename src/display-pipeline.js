@@ -41,7 +41,7 @@ export class DisplayPipeline {
     gl.clearColor(0, 0, 0, 1)
     for (const target of [crt.a, crt.b]) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, target.fb)
-      gl.viewport(0, 0, SRC_W, SRC_H)
+      gl.viewport(0, 0, crt.sourceWidth || SRC_W, crt.sourceHeight || SRC_H)
       gl.clear(gl.COLOR_BUFFER_BIT)
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, previous || null)

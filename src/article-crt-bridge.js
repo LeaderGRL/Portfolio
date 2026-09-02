@@ -87,7 +87,7 @@ class ArticleCRTRuntime {
       if (entry.type !== 'model3d') continue
       const top = entry.y - this.documentRaster.scroll
       const bottom = top + entry.height
-      if (bottom > 1 && top < this.documentCanvas.height - 1) visible.push(entry.block)
+      if (bottom > 1 && top < this.documentRaster.readingHeight - 1) visible.push(entry.block)
     }
     return visible
   }
@@ -105,6 +105,7 @@ class ArticleCRTRuntime {
 
     const nextId = documentItem ? 'document' : 'terminal'
     if (this.pipeline.setSource(nextId)) {
+      this.app._fitRaster()
       this.app.dirty = true
       this.app.state.static = this.mediaViewer.isOpen
         ? 0
@@ -131,6 +132,14 @@ class ArticleCRTRuntime {
     if (!this.isDocument()) return null
     const range = Math.max(0, this.reader.scrollHeight - this.reader.clientHeight)
     return { item: this.app.state.item, progress: range ? this.reader.scrollTop / range : 0 }
+  }
+
+  setViewport(layout) {
+    const position = this.captureReadingPosition()
+    if (!this.documentRaster.setViewport(layout)) return
+    this.restoreReadingPosition(position)
+    this.inlineIntegrations.clear()
+    this.mediaViewer.resize()
   }
 
   restoreReadingPosition(position) {

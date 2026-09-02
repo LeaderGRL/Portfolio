@@ -28,7 +28,7 @@ function overlaps(a, b) {
 // its device pixel ratio.
 const DESKTOP = { width: 960, height: 540 }
 
-test('full screen fills the viewport with glass and keeps the raster at 4:3', async ({ page }, testInfo) => {
+test('full screen fills the viewport with a high-resolution continuous glass surface', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')
   await page.setViewportSize(DESKTOP)
   await boot(page)
@@ -50,13 +50,17 @@ test('full screen fills the viewport with glass and keeps the raster at 4:3', as
   await expect(page.locator('.panel--left')).toBeHidden()
   await expect(page.locator('.panel--right')).toBeHidden()
 
-  // The DOM layers that register with the picture take the raster rectangle:
-  // 4:3, height-limited on a 16:9 viewport, centred.
+  // Both the picture and its interaction layers fill the viewport. The cell
+  // grid remains proportional within that surface, not a 4:3 backing canvas.
   const surface = await page.locator('.display-surface').boundingBox()
   expect(surface).not.toBeNull()
   expect(Math.round(surface.height)).toBe(DESKTOP.height)
-  expect(Math.round(surface.width)).toBe(DESKTOP.height * 4 / 3)
-  expect(Math.round(surface.x)).toBe((DESKTOP.width - DESKTOP.height * 4 / 3) / 2)
+  expect(Math.round(surface.width)).toBe(DESKTOP.width)
+  expect(Math.round(surface.x)).toBe(0)
+  const source = await page.locator('#fallback2d').evaluate(canvas => ({ width: canvas.width, height: canvas.height }))
+  expect(source).toEqual(DESKTOP)
+  await expect(page.locator('.tube__gloss--core')).toBeHidden()
+  await expect(page.locator('.fullscreen-reflection')).toBeVisible()
 
   // Navigation stays available on the glass.
   const softkeys = page.locator('#softkeys')
@@ -71,6 +75,9 @@ test('full screen fills the viewport with glass and keeps the raster at 4:3', as
   await expect(page.locator('body')).not.toHaveClass(/is-crt-fullscreen/)
   await expect(fullscreenSwitch).toHaveAttribute('aria-checked', 'false')
   await expect(page.locator('.panel--left')).toBeVisible()
+  expect(await page.locator('#fallback2d').evaluate(canvas => [canvas.width, canvas.height])).toEqual([480, 360])
+  await expect(page.locator('.fullscreen-reflection')).toBeHidden()
+  await expect(page.locator('.tube__gloss--core')).toBeVisible()
 })
 
 test('escape leaves full screen before it means BACK', async ({ page }, testInfo) => {
@@ -111,10 +118,10 @@ test('full screen switch sits on its own tier on the portable panel', async ({ p
 
   await page.locator('#fullscreen-switch').tap()
   await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
-  // Width-limited on a portrait viewport: the raster spans the full width.
+  // A portrait screen uses its height too; no short landscape picture window.
   const surface = await page.locator('.display-surface').boundingBox()
   expect(Math.round(surface.width)).toBe(viewport.width)
-  expect(Math.round(surface.height)).toBe(Math.round(viewport.width * 3 / 4))
+  expect(Math.round(surface.height)).toBe(viewport.height)
   await expect(page.locator('#softkeys')).toBeVisible()
   await attachScreenshot(page, testInfo, 'full-screen-portable')
   await page.locator('.softkeys__key--exit').tap()
@@ -184,9 +191,64 @@ for (const mode of ['crt-off', 'no-webgl']) {
     for (const dimension of ['x', 'y', 'width', 'height']) {
       expect(Math.abs(surface[dimension] - pixels[dimension])).toBeLessThan(1)
     }
+    expect(await page.locator('#article-source').evaluate(canvas => ({ width: canvas.width, height: canvas.height }))).toEqual(DESKTOP)
+    if (mode === 'crt-off') await expect(page.locator('.fullscreen-reflection')).toBeHidden()
     await attachScreenshot(page, testInfo, `article-fullscreen-${mode}`)
     await page.locator('.softkeys__key--exit').click()
     await expect.poll(drift).toBeLessThanOrEqual(1)
     await expect(page).toHaveURL(/\/articles\/01-ecs-entity-management$/)
   })
 }
+
+test('fullscreen article and media use the same sharp source on desktop and mobile', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo) && !isMobile(testInfo), 'Resolution and touch geometry use Chromium profiles')
+  test.setTimeout(60_000)
+  if (isChromiumDesktop(testInfo)) await page.setViewportSize({ width: 1920, height: 1080 })
+  await page.addInitScript(() => {
+    // Chromium disallows setWindowBounds while natively fullscreen. Keep the
+    // CSS fullscreen layout active to exercise live resizing/orientation here;
+    // the preceding scenarios cover native entry and exit separately.
+    Element.prototype.requestFullscreen = () => Promise.reject(new Error('Test: CSS fullscreen resize'))
+  })
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  await boot(page, '/articles/02-ecs-rust-data-oriented-design')
+  await page.locator('#fullscreen-switch').click()
+  await expect(page.locator('#tube')).toHaveAttribute('data-display-mode', 'article')
+
+  const dimensions = await page.locator('#article-source').evaluate(canvas => ({
+    width: canvas.width, height: canvas.height,
+    viewportWidth: innerWidth, viewportHeight: innerHeight,
+    dpr: Math.min(devicePixelRatio, 2),
+  }))
+  expect(dimensions.width).toBe(Math.round(dimensions.viewportWidth * dimensions.dpr))
+  expect(dimensions.height).toBe(Math.round(dimensions.viewportHeight * dimensions.dpr))
+  expect(dimensions.width).toBeGreaterThan(480)
+  await attachScreenshot(page, testInfo, 'fullscreen-sharp-article')
+
+  // The first illustration is above the fold at these sizes. Its real DOM
+  // hit target must agree with the reflowed raster and open the same pipeline.
+  const media = page.locator('.document-inline-integrations button').first()
+  await expect(media).toBeVisible()
+  const target = await media.boundingBox()
+  expect(target.x).toBeGreaterThanOrEqual(0)
+  expect(target.x + target.width).toBeLessThanOrEqual(dimensions.viewportWidth + 1)
+  await media.click()
+  await expect(page.locator('#tube')).toHaveClass(/is-media-inspecting/)
+  const inspected = await page.locator('#article-source').evaluate(canvas => ({ width: canvas.width, height: canvas.height }))
+  expect(inspected).toEqual({ width: dimensions.width, height: dimensions.height })
+  await attachScreenshot(page, testInfo, 'fullscreen-sharp-media')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#tube')).not.toHaveClass(/is-media-inspecting/)
+  await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
+
+  // Reflow after orientation/window changes must keep hotspots and rendering
+  // alive; returning to the chassis restores the native 480x360 source.
+  const progress = await page.locator('#article-reader').evaluate(node => node.scrollTop)
+  await page.setViewportSize(isMobile(testInfo) ? { width: 851, height: 393 } : { width: 960, height: 720 })
+  await expect(media).toBeVisible()
+  expect(await page.locator('#article-reader').evaluate(node => node.scrollTop)).toBe(progress)
+  await page.locator('.softkeys__key--exit').click()
+  expect(await page.locator('#article-source').evaluate(canvas => [canvas.width, canvas.height])).toEqual([480, 360])
+  expect(errors).toEqual([])
+})

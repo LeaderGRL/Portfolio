@@ -1,32 +1,10 @@
 /* ============================================================================
    FULL SCREEN — the glass fills the viewport, the chassis is set aside
 
-   An accessibility mode. The aperture on the desk is ~590x450 CSS px on a
-   1080p display, which puts terminal body text at ~10 px and article prose
-   at about the same; on a phone the same raster lands near 5 px. Full screen
-   scales that raster ~3x on desktop and ~2x on a phone without changing what
-   is on it: the same 480x360 picture, the same layouts, only larger. That is
-   the behaviour of a screen magnifier, and it is what low-vision readers
-   expect — reflowing content into more columns would not make a single
-   glyph bigger, and would push article lines past 90 characters.
-
-   Geometry works like underscan on a real tube. The whole viewport becomes
-   glass (curvature, grille, shade and gloss cover all of it), and the raster
-   sits centred at its own aspect. The shader receives that rectangle as a
-   uniform; every DOM layer that has to register with the picture receives it
-   here as custom properties on the tube (set by App._fitRaster):
-
-     --raster-x / --raster-y      origin of the raster inside the tube
-     --raster-base-w / -base-h    the layer's desk-size layout box (4:3)
-     --raster-k                   uniform scale from that box to the raster
-
-   Those layers keep their desk layout and are scaled rather than re-laid
-   out, so line wrapping, hit targets and the keyboard focus proxy behave
-   exactly as they do on the desk.
-
-   Native full screen is layered on top when the browser allows it; the
-   layout below never depends on it. iOS Safari has no element full screen
-   and still gets the enlarged tube inside its viewport.
+   Viewport-sized high-resolution sources feed the same physical CRT. Documents
+   reflow into a readable column; the terminal grid remains proportional on a
+   continuous phosphor surface, with no 4:3 backing rectangle or black bands.
+   Native fullscreen is optional: the CSS layout also works without permission.
    ========================================================================= */
 
 body.is-crt-fullscreen{
@@ -73,19 +51,11 @@ body.is-compact-stage.is-crt-fullscreen #stage::after{
 }
 
 /* ---------------------------------------------------------------------------
-   Raster-registered layers.
-
-   Specificity note: the CRT-off bypass and the 2D fallback address these
-   canvases by id with `inset:0; width:100%; height:100%`, which is right on
-   the desk (the raster is stretched over the whole glass). Full screen has
-   to win against those rules, hence the explicit id selectors below.
+   Only terminal contact anchors follow the proportional cell grid. Document
+   hit targets and both CRT-off canvases cover the complete viewport, matching
+   their reflowed high-resolution raster rather than an enlarged 4:3 rectangle.
    ------------------------------------------------------------------------ */
-body.is-crt-fullscreen .tube > .raster-layer,
-body.is-crt-fullscreen .tube.is-crt-off > #article-source,
-body.is-crt-fullscreen .tube.is-crt-off > #fallback2d,
-body.is-crt-fullscreen .tube.is-crt-off > #media-inspect-hires,
-body.is-crt-fullscreen .tube.is-fallback > #article-source,
-body.is-crt-fullscreen .tube.is-fallback > #fallback2d{
+body.is-crt-fullscreen .terminal-contact-links{
   left:var(--raster-x, 0%);
   top:var(--raster-y, 0%);
   right:auto;
@@ -96,20 +66,60 @@ body.is-crt-fullscreen .tube.is-fallback > #fallback2d{
   transform-origin:0 0;
 }
 
-/* The glass maps were extracted at the tube's own aspect. The shade is a soft
-   vignette and survives a stretch, but the specular streak is a shape: at a
-   16:9 or 9:19 viewport it would smear into a band. Cover-fit it from the
-   corner it is anchored to so the highlight keeps its geometry. */
-body.is-crt-fullscreen .tube__gloss{
-  object-fit:cover; object-position:0 0;
+body.is-crt-fullscreen #article-source,
+body.is-crt-fullscreen #fallback2d{
+  image-rendering:auto;
 }
-/* The soft halo keeps its desk blur (14px, x1.5 by its transform). Scaling
-   the radius with the glass looks right but is paid on every composite:
-   Chrome rasterises filtered layers in device space, so a proportional blur
-   over the full-screen glass is a 44px filter on a 2880x1620 layer per
-   frame, and a quarter-size layer scaled up costs exactly the same. It
-   stalled the software compositor outright and would tax low-end GPUs for a
-   marginal softening. The halo simply reads a little tighter at 3x. */
+body.is-crt-fullscreen .article-reader{
+  padding:calc(34px * var(--document-scale)) max(20px, calc((100% - var(--document-column)) / 2)) calc(var(--fullscreen-bottom) + 48px);
+  font-size:calc(10px * var(--document-scale));
+  line-height:1.5;
+  overflow-anchor:none;
+  scroll-padding-bottom:var(--fullscreen-bottom);
+}
+body.is-crt-fullscreen .document-inline-integrations{
+  clip-path:inset(0 0 calc(var(--fullscreen-bottom) + 32px * var(--document-scale)) 0);
+}
+body.is-crt-fullscreen .document-inline-integration__surface{
+  filter:contrast(1.015) saturate(.98);
+}
+/* Cross-origin embeds cannot enter WebGL; their compositor optics follow the
+   same fine pixel pitch and restrained vignette as the fullscreen canvas. */
+body.is-crt-fullscreen .document-inline-integration::before{
+  background:repeating-linear-gradient(0deg,
+    rgba(0,3,1,.075) 0 var(--crt-pixel),
+    transparent var(--crt-pixel) calc(3 * var(--crt-pixel)));
+}
+body.is-crt-fullscreen .document-inline-integration::after{ opacity:.15; }
+
+/* The desk photograph contains the small curved bezel's specular. It cannot
+   be enlarged to a borderless window: use a quieter edge-anchored reflection
+   here, always lit from upper left and outside the main reading column. */
+body.is-crt-fullscreen .tube__shade,
+body.is-crt-fullscreen .tube__gloss{ display:none; }
+.fullscreen-reflection{ display:none; }
+body.is-crt-fullscreen .fullscreen-reflection{
+  display:block; position:absolute; inset:0; z-index:6; pointer-events:none;
+  background:
+    radial-gradient(ellipse 380px 210px at 0 0, rgba(222,241,234,.13), transparent 75%),
+    linear-gradient(113deg, rgba(209,237,227,.025), transparent 28%);
+  box-shadow:inset 1px 1px 1px rgba(225,247,239,.16);
+}
+.fullscreen-reflection::before{
+  content:""; position:absolute; top:0; left:0;
+  width:min(30vw, 360px); height:min(22vh, 180px);
+  border-top:1px solid rgba(239,255,248,.38);
+  border-left:1px solid rgba(239,255,248,.23);
+  border-top-left-radius:12px;
+  mask-image:radial-gradient(ellipse at 0 0, #000, transparent 74%);
+}
+.fullscreen-reflection::after{
+  content:""; position:absolute; top:-28px; left:-28px;
+  width:clamp(120px, 15vw, 220px); height:clamp(90px, 16vh, 160px);
+  background:radial-gradient(ellipse at 100% 100%, transparent 59%, rgba(234,250,242,.26) 66%, transparent 76%);
+  filter:blur(5px);
+}
+body.is-crt-fullscreen .tube.is-crt-off .fullscreen-reflection{ display:none; }
 
 /* ---------------------------------------------------------------------------
    Softkeys: the last screen line labels the keys, as terminals did.
@@ -124,7 +134,7 @@ body.is-crt-fullscreen .softkeys{
   letter-spacing:.14em; text-transform:uppercase;
   color:#2fd06d;
   text-shadow:0 0 6px rgba(47,208,109,.42);
-  background:linear-gradient(180deg, rgba(1,6,3,0) 0%, rgba(1,6,3,.62) 100%);
+  background:linear-gradient(180deg, rgba(3,16,9,0), rgba(3,16,9,.96) 32%);
   pointer-events:none;
 }
 .softkeys__group{

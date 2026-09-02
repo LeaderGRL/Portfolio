@@ -42,12 +42,15 @@ export class DocumentProgressOverlay {
     const progress = Math.max(0, Math.min(1, scroll / maxScroll))
     const active = this._activeIndex(chapters, scroll)
 
-    const railX = SRC_W - 29.5
+    const width = rasteriser.width || SRC_W
+    const height = rasteriser.readingHeight || SRC_H
+    const railX = width - (width < SRC_W ? 10 : 29.5)
     const top = 35
-    const bottom = SRC_H - 34
+    const bottom = height - 34
     const railH = bottom - top
 
     g.save()
+    g.setTransform(rasteriser.canvas.width / width, 0, 0, rasteriser.canvas.height / (rasteriser.height || SRC_H), 0, 0)
 
     // Keep the rail peripheral: it should provide orientation without competing
     // with project media or prose for the center of the CRT.
@@ -77,12 +80,12 @@ export class DocumentProgressOverlay {
     g.font = '700 7px ui-monospace, "SFMono-Regular", Consolas, monospace'
     g.textAlign = 'right'
     g.fillStyle = '#ffb347'
-    g.fillText(counter, SRC_W - 35, SRC_H - 17)
+    g.fillText(counter, width - 35, height - 17)
 
     const label = String(chapters[active]?.block?.text || '').toUpperCase()
     const compact = label.length > 26 ? `${label.slice(0, 25)}…` : label
     g.fillStyle = 'rgba(107,243,154,.74)'
-    g.fillText(compact, SRC_W - 69, SRC_H - 17)
+    if (width >= SRC_W) g.fillText(compact, width - 69, height - 17)
 
     g.restore()
     return true

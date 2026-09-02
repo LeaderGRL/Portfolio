@@ -35,6 +35,10 @@ export class ArticleRasteriser {
     this.canvas.width = SRC_W
     this.canvas.height = SRC_H
     this.ctx = canvas.getContext('2d', { alpha: false })
+    this.width = SRC_W
+    this.height = SRC_H
+    this.readingHeight = SRC_H
+    this.fullscreen = false
     this.reader = reader
     this.onDirty = onDirty
     this.blockRegistry = options.blockRegistry || null
@@ -55,6 +59,26 @@ export class ArticleRasteriser {
   markDirty() {
     this.dirty = true
     this.onDirty()
+  }
+
+  setViewport(layout) {
+    this.fullscreen = Boolean(layout)
+    const width = layout?.documentWidth || SRC_W
+    const height = layout?.documentHeight || SRC_H
+    const readingHeight = height - (layout?.documentBottom || 0)
+    const pixelsW = layout?.pixelWidth || SRC_W
+    const pixelsH = layout?.pixelHeight || SRC_H
+    if (this.width === width && this.height === height && this.readingHeight === readingHeight && this.canvas.width === pixelsW && this.canvas.height === pixelsH) return false
+    const progress = this.maxScroll ? this.scroll / this.maxScroll : 0
+    this.width = width
+    this.height = height
+    this.readingHeight = readingHeight
+    this.canvas.width = pixelsW
+    this.canvas.height = pixelsH
+    if (this.item) this._layout()
+    this.scroll = progress * this.maxScroll
+    this.markDirty()
+    return true
   }
 
   setItem(item) {
@@ -80,6 +104,19 @@ export class ArticleRasteriser {
     const out = []
     let line = ''
     for (const word of words(stripInline(text))) {
+      // A URL or a long identifier must wrap too on a narrow reading column.
+      if (g.measureText(word).width > width) {
+        if (line) out.push(line)
+        line = ''
+        for (const character of word) {
+          if (line && g.measureText(line + character).width > width) {
+            out.push(line)
+            line = ''
+          }
+          line += character
+        }
+        continue
+      }
       const next = line ? `${line} ${word}` : word
       if (!line || g.measureText(next).width <= width) line = next
       else { out.push(line); line = word }
@@ -94,6 +131,7 @@ export class ArticleRasteriser {
       item: this.item,
       images: this.images,
       colors: COLORS,
+      columnWidth: this.columnWidth,
       loadImage: src => this._loadImage(src),
       drawLines: (...args) => this._drawLines(...args),
       wrap: (text, width, size, weight = 500) => this._measureWrapped(text, width, size, weight),
@@ -102,8 +140,12 @@ export class ArticleRasteriser {
   }
 
   _layout() {
-    const x = 42
-    const width = SRC_W - x * 2
+    this.layout = []
+    const margin = this.width < SRC_W ? 20 : 42
+    const width = Math.min(520, this.width - margin * 2)
+    const x = (this.width - width) / 2
+    this.columnWidth = width
+    this.columnX = x
     let y = 34
     const push = (entry) => {
       this.layout.push({ x, width, ...entry, y })
@@ -154,7 +196,8 @@ export class ArticleRasteriser {
         }
         case 'code': {
           const raw = String(block.body || '').split('\n')
-          const max = 47
+          this._font(8)
+          const max = this.fullscreen ? Math.max(12, Math.floor((width - 18) / this.ctx.measureText('M').width)) : 47
           const lines = raw.flatMap(line => line.length ? line.match(new RegExp(`.{1,${max}}`, 'g')) : [''])
           push({ type: 'code', language: block.language || '', lines, height: 47 + lines.length * 13 })
           break
@@ -183,7 +226,7 @@ export class ArticleRasteriser {
     }
 
     this.documentHeight = y + 42
-    this.maxScroll = Math.max(0, this.documentHeight - SRC_H)
+    this.maxScroll = Math.max(0, this.documentHeight - this.readingHeight)
     this._syncVideos()
   }
 
@@ -200,6 +243,8 @@ export class ArticleRasteriser {
     if (!this.reader) return
     this.videoNodes = [...this.reader.querySelectorAll('video')]
     for (const video of this.videoNodes) {
+      if (video.dataset.rasterBound) continue
+      video.dataset.rasterBound = 'true'
       const dirty = () => this.markDirty()
       video.addEventListener('play', dirty, { passive: true })
       video.addEventListener('pause', dirty, { passive: true })
@@ -224,7 +269,7 @@ export class ArticleRasteriser {
       if (!interactive) continue
       const top = entry.y - this.scroll
       const bottom = top + entry.height
-      const visible = Math.max(0, Math.min(bottom, SRC_H - 20) - Math.max(top, 20))
+      const visible = Math.max(0, Math.min(bottom, this.readingHeight - 20) - Math.max(top, 20))
       if (visible > bestVisible) {
         bestVisible = visible
         best = entry
@@ -343,23 +388,28 @@ export class ArticleRasteriser {
     if (!force && !this.dirty && !playing) return false
 
     const g = this.ctx
+    g.save()
+    g.setTransform(this.canvas.width / this.width, 0, 0, this.canvas.height / this.height, 0, 0)
+    g.imageSmoothingEnabled = true
+    g.imageSmoothingQuality = 'high'
     g.fillStyle = COLORS.bg
-    g.fillRect(0, 0, SRC_W, SRC_H)
-    const glow = g.createRadialGradient(SRC_W * .43, SRC_H * .35, 8, SRC_W * .5, SRC_H * .5, SRC_W * .62)
+    g.fillRect(0, 0, this.width, this.height)
+    const glow = g.createRadialGradient(this.width * .43, this.height * .35, 8, this.width * .5, this.height * .5, this.fullscreen ? Math.max(this.width, this.height) * .7 : SRC_W * .62)
     glow.addColorStop(0, COLORS.glowInner)
     glow.addColorStop(1, COLORS.glowOuter)
     g.fillStyle = glow
-    g.fillRect(0, 0, SRC_W, SRC_H)
+    g.fillRect(0, 0, this.width, this.height)
 
     g.save()
     g.beginPath()
-    g.rect(26, 20, SRC_W - 52, SRC_H - 40)
+    // The chapter footer has its own band; content must stop above its glyphs.
+    g.rect(Math.max(8, this.columnX - 16), 20, this.columnWidth + 32, this.readingHeight - (this.fullscreen ? 52 : 40))
     g.clip()
 
     const env = this._blockEnv()
     for (const entry of this.layout) {
       const y = entry.y - this.scroll
-      if (y + entry.height < 14 || y > SRC_H - 8) continue
+      if (y + entry.height < 14 || y > this.readingHeight - 8) continue
       const x = entry.x
 
       const handler = this.blockRegistry?.get(entry.type)
@@ -422,6 +472,7 @@ export class ArticleRasteriser {
       }
     }
 
+    g.restore()
     g.restore()
     this.dirty = false
     return true

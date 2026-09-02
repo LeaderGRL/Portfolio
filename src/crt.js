@@ -37,12 +37,7 @@ uniform float uCrt;
 uniform float uDegauss;
 uniform float uStatic;
 uniform float uWarm;
-// Where the raster sits on the glass, in output UV: xy origin, zw extent.
-// (0,0,1,1) stretches the picture over the whole canvas as before. Full screen
-// keeps the raster's own aspect and centres it, which is what underscan looks
-// like on a real tube: the unlit phosphor beyond the picture is still glass,
-// still curved, still under the grille, only darker.
-uniform vec4  uRaster;
+uniform float uFullscreen;
 
 // ===========================================================================
 // This shader got considerably smaller in this revision, and that is the
@@ -67,10 +62,8 @@ float noise(vec2 p){
              mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
 }
 
-// Every content sample goes through raster space. The source texture clamps
-// to its edge, so the surround beyond the raster continues the picture's own
-// background instead of switching to a hard black frame; bloom and defocus
-// then bleed across the raster edge the way beam energy really does.
+// Every provider paints the whole glass. Clamping continues its background
+// at the very edge of the shallow curvature, without a second picture border.
 vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }
 
 // Barrel distortion. Real tubes are spherical sections, not planes, and this
@@ -79,7 +72,7 @@ vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }
 vec2 curve(vec2 uv){
   uv = uv * 2.0 - 1.0;
   vec2 o = abs(uv.yx) / vec2(5.4, 4.2);
-  uv += uv * o * o * uCrt;
+  uv += uv * o * o * uCrt * mix(1.0, 0.12, uFullscreen);
   return uv * 0.5 + 0.5;
 }
 
@@ -111,19 +104,17 @@ void main(){
     uv.x += sin(uv.y * 46.0 + uTime * 34.0) * 0.016 * d * d;
     uv.y += cos(uv.x * 31.0 + uTime * 26.0) * 0.010 * d * d;
   }
-  uv.y += sin(uTime * 0.35) * 0.0006 * uCrt;
+  uv.y += sin(uTime * 0.35) * 0.0006 * uCrt * (1.0 - uFullscreen);
 
   vec2 cuv = curve(uv);
 
-  // Glass space (cuv) owns curvature and the surround; raster space (suv)
-  // owns everything that must keep its size relative to a glyph — bloom,
-  // defocus, overshoot, scanline pitch — so the picture looks the same on the
-  // desk and full screen, only larger.
-  vec2 suv = (cuv - uRaster.xy) / uRaster.zw;
+  // The fullscreen source is already laid out at viewport resolution. Its
+  // optics use physical pixels so blur never grows with the window size.
+  vec2 suv = cuv;
 
   // ---- chromatic aberration, stronger toward the edges -------------------
   vec2 off = suv - 0.5;
-  float ab = (0.0015 + dot(off, off) * 0.010) * uCrt;
+  float ab = mix(0.0015 + dot(off, off) * 0.010, 0.35 / max(uOut.x, 1.0), uFullscreen) * uCrt;
   vec3 col;
   col.r = src(suv + off * ab).r;
   col.g = src(suv).g;
@@ -133,7 +124,7 @@ void main(){
   // along the tube radius rather than applying a uniform blur, preserving the
   // crisp centre and avoiding the flat, digitally sharp corners of a canvas.
   float rr = dot(off, off);
-  float defocus = smoothstep(0.05, 0.30, rr) * uCrt;
+  float defocus = smoothstep(0.05, 0.30, rr) * uCrt * (1.0 - uFullscreen);
   if (defocus > 0.001) {
     vec2 dir = normalize(off + vec2(1e-5)) * (0.0022 + rr * 0.006) * defocus;
     vec3 smear = src(suv + dir)
@@ -151,21 +142,30 @@ void main(){
   col -= vec3(0.55, 0.80, 0.62) * max(trail - col.g, 0.0) * 0.16 * uCrt;
 
   // ---- glow --------------------------------------------------------------
-  col += bloom(suv, 0.006 + 0.004 * uCrt) * (0.55 + 0.35 * uCrt);
-  col += bloom(suv, 0.020) * 0.28 * uCrt;
-  col += bloom(suv, 0.055) * vec3(0.30, 0.40, 0.34) * 0.55 * uCrt;
+  if (uFullscreen > 0.5) {
+    // A physical-pixel halo, not a glyph-sized blur. Four neighbouring taps
+    // keep full-viewport rendering affordable without sacrificing the source.
+    vec2 px = 1.2 / uOut;
+    vec3 halo = (src(suv + vec2(px.x, 0.0)) + src(suv - vec2(px.x, 0.0))
+               + src(suv + vec2(0.0, px.y)) + src(suv - vec2(0.0, px.y))) * 0.25;
+    col += max(halo - vec3(0.12), vec3(0.0)) * 0.14 * uCrt;
+  } else {
+    col += bloom(suv, 0.006 + 0.004 * uCrt) * (0.55 + 0.35 * uCrt);
+    col += bloom(suv, 0.020) * 0.28 * uCrt;
+    col += bloom(suv, 0.055) * vec3(0.30, 0.40, 0.34) * 0.55 * uCrt;
+  }
 
   // ---- scanlines locked to the source line count -------------------------
-  float scanWave = 0.5 + 0.5 * cos(suv.y * uSrc.y * 6.2831853);
+  float scanWave = 0.5 + 0.5 * cos(mix(suv.y * uSrc.y, vUv.y * uOut.y / 3.0, uFullscreen) * 6.2831853);
   float scan = pow(scanWave, 7.0);
-  col *= mix(1.0, 1.0 - scan * 0.20, uCrt);
+  col *= mix(1.0, 1.0 - scan * mix(0.20, 0.075, uFullscreen), uCrt);
 
   // ---- aperture grille ---------------------------------------------------
   float m = mod(vUv.x * uOut.x, 3.0);
   vec3 grille = m < 1.0 ? vec3(1.06, 0.72, 0.72)
               : m < 2.0 ? vec3(0.72, 1.06, 0.72)
                         : vec3(0.72, 0.72, 1.06);
-  col *= mix(vec3(1.0), grille, uCrt * 0.32);
+  col *= mix(vec3(1.0), grille, uCrt * mix(0.32, 0.12, uFullscreen));
 
   col *= 1.0 + (sin(uTime * 100.0) * 0.008 + noise(vec2(uTime * 8.0, 0.0)) * 0.02) * uCrt;
 
@@ -175,7 +175,7 @@ void main(){
     col = mix(col, vec3(n) * vec3(0.55, 1.0, 0.7), uStatic * (0.35 + band * 0.5));
   }
 
-  col += (hash(vUv * uOut + uTime) - 0.5) * 0.020 * uCrt;
+  col += (hash(vUv * uOut + uTime) - 0.5) * mix(0.020, 0.004, uFullscreen) * uCrt;
 
   col *= mix(1.6, 1.0, uWarm);
   col = mix(col, col * vec3(0.7, 1.0, 0.8), 1.0 - uWarm);
@@ -187,7 +187,7 @@ void main(){
   // holds its edge value there and the surround reads as unlit phosphor.
   vec2 ruv = clamp(suv, 0.0, 1.0);
   vec2 vg = ruv * (1.0 - ruv.yx);
-  col *= mix(1.0, pow(clamp(vg.x * vg.y * 90.0, 0.0, 1.0), 0.10), 0.35 * uCrt + 0.10);
+  col *= mix(1.0, pow(clamp(vg.x * vg.y * 90.0, 0.0, 1.0), 0.10), (0.35 * uCrt + 0.10) * (1.0 - uFullscreen));
 
   // ---- collapse flash: the line and dot a tube leaves behind --------------
   float lineGlow = (1.0 - vS) * hS * exp(-abs(vUv.y - 0.5) * 220.0) * 1.2;
@@ -201,7 +201,6 @@ export class CRT {
   constructor(canvas, source) {
     this.canvas = canvas;
     this.source = source;
-    this.raster = [0, 0, 1, 1];           // origin x, y and extent w, h in canvas UV
     this.ok = false;
     const gl = canvas.getContext("webgl2", {
       alpha: false, antialias: false, premultipliedAlpha: false,
@@ -271,6 +270,8 @@ export class CRT {
 
     this.a = this._target(SRC_W, SRC_H);
     this.b = this._target(SRC_W, SRC_H);
+    this.sourceWidth = SRC_W;
+    this.sourceHeight = SRC_H;
 
     this.uPersist = {
       cur: gl.getUniformLocation(this.progPersist, "uCur"),
@@ -278,14 +279,9 @@ export class CRT {
       decay: gl.getUniformLocation(this.progPersist, "uDecay"),
     };
     this.u = {};
-    for (const n of ["uTex","uOut","uSrc","uTime","uPower","uCrt","uDegauss","uStatic","uWarm","uRaster"]) {
+    for (const n of ["uTex","uOut","uSrc","uTime","uPower","uCrt","uDegauss","uStatic","uWarm","uFullscreen"]) {
       this.u[n] = gl.getUniformLocation(this.progCrt, n);
     }
-  }
-
-  /** Place the raster on the glass; values are fractions of the canvas. */
-  setRaster(x, y, w, h) {
-    this.raster = [x, y, Math.max(w, 1e-4), Math.max(h, 1e-4)];
   }
 
   resize(cssW, cssH, dpr) {
@@ -299,6 +295,19 @@ export class CRT {
     const gl = this.gl;
     gl.bindVertexArray(this.vao);
 
+    const sw = this.source.width || SRC_W, sh = this.source.height || SRC_H;
+    if (this.sourceWidth !== sw || this.sourceHeight !== sh) {
+      for (const target of [this.a, this.b]) {
+        gl.deleteFramebuffer(target.fb);
+        gl.deleteTexture(target.tex);
+      }
+      this.a = this._target(sw, sh);
+      this.b = this._target(sw, sh);
+      this.sourceWidth = sw;
+      this.sourceHeight = sh;
+      sourceDirty = true;
+    }
+
     if (sourceDirty) {
       gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.source);
@@ -306,13 +315,13 @@ export class CRT {
 
     // --- persistence pass: b = max(src, a * decay) ---
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.b.fb);
-    gl.viewport(0, 0, SRC_W, SRC_H);
+    gl.viewport(0, 0, sw, sh);
     gl.useProgram(this.progPersist);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.a.tex);
     gl.uniform1i(this.uPersist.cur, 0);
     gl.uniform1i(this.uPersist.prev, 1);
-    gl.uniform1f(this.uPersist.decay, state.crt > 0.5 ? 0.72 : 0.0);
+    gl.uniform1f(this.uPersist.decay, state.crt > 0.5 ? (state.fullscreen ? 0.12 : 0.72) : 0.0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     const tmp = this.a; this.a = this.b; this.b = tmp;   // ping-pong
@@ -324,14 +333,14 @@ export class CRT {
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.a.tex);
     gl.uniform1i(this.u.uTex, 0);
     gl.uniform2f(this.u.uOut, this.canvas.width, this.canvas.height);
-    gl.uniform2f(this.u.uSrc, SRC_W, SRC_H);
+    gl.uniform2f(this.u.uSrc, sw, sh);
+    gl.uniform1f(this.u.uFullscreen, state.fullscreen ? 1 : 0);
     gl.uniform1f(this.u.uTime, state.time);
     gl.uniform1f(this.u.uPower, state.power);
     gl.uniform1f(this.u.uCrt, state.crt);
     gl.uniform1f(this.u.uDegauss, state.degauss);
     gl.uniform1f(this.u.uStatic, state.static);
     gl.uniform1f(this.u.uWarm, state.warm);
-    gl.uniform4f(this.u.uRaster, this.raster[0], this.raster[1], this.raster[2], this.raster[3]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 }

@@ -92,9 +92,9 @@ export function createDefaultBlockRegistry({ local3d }) {
   })
 
   registry.register('facts', {
-    measure(_ctx, block) {
+    measure(_ctx, block, env) {
       const items = parsePipeRows(block.body)
-      const columns = Math.max(1, Math.min(3, Number(block.columns) || 2))
+      const columns = env?.columnWidth < 330 ? 1 : Math.max(1, Math.min(3, Number(block.columns) || 2))
       const rows = Math.max(1, Math.ceil(items.length / columns))
       return { height: rows * 58 + 14, meta: { items, columns } }
     },
@@ -124,9 +124,9 @@ export function createDefaultBlockRegistry({ local3d }) {
   })
 
   registry.register('system', {
-    measure(_ctx, block) {
+    measure(_ctx, block, env) {
       const items = parsePipeRows(block.body)
-      const columns = Math.max(1, Math.min(2, Number(block.columns) || 2))
+      const columns = env?.columnWidth < 330 ? 1 : Math.max(1, Math.min(2, Number(block.columns) || 2))
       const rows = Math.max(1, Math.ceil(items.length / columns))
       return { height: rows * 78 + 20, meta: { items, columns } }
     },
@@ -202,9 +202,9 @@ export function createDefaultBlockRegistry({ local3d }) {
   })
 
   registry.register('gallery', {
-    measure(_ctx, block) {
+    measure(_ctx, block, env) {
       const items = parsePipeRows(block.body)
-      const columns = Math.max(1, Math.min(3, Number(block.columns) || 2))
+      const columns = env?.columnWidth < 330 ? 1 : Math.max(1, Math.min(3, Number(block.columns) || 2))
       const rows = Math.max(1, Math.ceil(items.length / columns))
       return { height: rows * 146 + 20, meta: { items, columns } }
     },

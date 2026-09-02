@@ -69,5 +69,43 @@ check(crtBypassCss.includes('#article-source'), 'CRT off exposes document source
 check(crtBypassCss.includes('.tube.is-crt-off .tube__shade'), 'CRT off removes photographic shade')
 check(crtBypassCss.includes('.tube.is-crt-off .tube__gloss'), 'CRT off removes photographic gloss')
 
+// Exercise the actual layout and framebuffer code, not just a CSS declaration:
+// a large source is useless if the persistence pass downsamples it to 480x360.
+globalThis.matchMedia = () => ({ matches: false })
+const { fullscreenLayout } = await import('../src/fullscreen-layout.js')
+const { CRT } = await import('../src/crt.js')
+for (const [width, height, dpr] of [[1920, 1080, 1], [393, 851, 3], [3840, 2160, 2], [7680, 4320, 2]]) {
+  const layout = fullscreenLayout(width, height, dpr, 74)
+  check(layout.pixelWidth * layout.pixelHeight <= 8388608, `${width}x${height}: framebuffer fits pixel budget`)
+  check(Math.max(layout.pixelWidth, layout.pixelHeight) <= 4096, `${width}x${height}: texture dimension is bounded`)
+  check(Math.abs(layout.terminal.width / layout.terminal.height - 4 / 3) < .00001, `${width}x${height}: terminal glyphs stay proportional`)
+  check(layout.terminal.y + layout.terminal.height <= height - layout.bottom + .01, `${width}x${height}: terminal clears navigation`)
+}
+const hd = fullscreenLayout(1920, 1080, 1, 32)
+check(hd.pixelWidth === 1920 && hd.pixelHeight === 1080, '1080p source is rendered at its actual resolution')
+const allocations = []
+const uniforms = {}
+let disposed = 0
+const gl = new Proxy({
+  getShaderParameter: () => true,
+  getProgramParameter: () => true,
+  getUniformLocation: (_program, name) => name,
+  texImage2D: (...args) => { if (args.length === 9) allocations.push([args[3], args[4]]) },
+  uniform2f: (name, x, y) => { uniforms[name] = [x, y] },
+  deleteFramebuffer: () => { disposed++ },
+}, { get: (target, key) => key in target ? target[key] : /^[A-Z0-9_]+$/.test(key) ? key : () => ({}) })
+const source = { width: 1920, height: 1080 }
+const crt = new CRT({ getContext: () => gl, width: 1920, height: 1080 }, source)
+const state = { fullscreen: true, crt: 1, power: 1, time: 0, warm: 1, static: 0, degauss: 0 }
+crt.render(state, true)
+check(allocations.slice(-2).every(([w, h]) => w === 1920 && h === 1080), 'both persistence textures retain full source resolution')
+check(uniforms.uSrc?.join('x') === '1920x1080', 'shader source-pixel optics use the real resolution')
+const count = allocations.length
+crt.render(state, false)
+check(allocations.length === count, 'stable frames do not reallocate persistence textures')
+Object.assign(source, { width: 480, height: 360 })
+crt.render({ ...state, fullscreen: false }, true)
+check(allocations.slice(-2).every(([w, h]) => w === 480 && h === 360) && disposed === 4, 'return to desk releases high-resolution framebuffers')
+
 console.log(failed ? `\n  ${failed} display check(s) FAILED` : '\n  all display checks passed')
 process.exit(failed ? 1 : 0)
