@@ -157,7 +157,17 @@ setTimeout(async()=>{
     if(fullscreenOn()) throw new Error('Escape did not leave full screen')
     if(w.location.pathname!==detail) throw new Error('Escape also navigated back: '+w.location.pathname)
     if(d.getElementById('fullscreen-switch').getAttribute('aria-checked')!=='false') throw new Error('switch did not report OFF')
-    key('Escape'); await tick()
+    // History traversal is asynchronous; wait for its event, not a 20ms
+    // timing assumption that flakes while software-GL tests run alongside it.
+    const navigated=new Promise((resolve,reject)=>{
+      const done=()=>{clearTimeout(timer); resolve()}
+      const timer=setTimeout(()=>{
+        w.removeEventListener('popstate',done)
+        reject(new Error('second Escape did not emit popstate'))
+      },2000)
+      w.addEventListener('popstate',done,{once:true})
+    })
+    key('Escape'); await navigated
     if(w.location.pathname!=='/projects') throw new Error('second Escape did not go back: '+w.location.pathname)
   })
   step('F toggles full screen', ()=>{
@@ -179,6 +189,31 @@ setTimeout(async()=>{
   step('exit softkey', ()=>{
     click(d.querySelector('.softkeys__key--exit'))
     if(fullscreenOn()) throw new Error('EXIT softkey did not leave full screen')
+  })
+  await astep('late native entry is cancelled', async()=>{
+    const root=d.documentElement
+    let resolveRequest, exits=0
+    root.requestFullscreen=()=>new Promise(resolve=>{resolveRequest=resolve})
+    d.exitFullscreen=()=>{exits++; setNativeFullscreen(null); return Promise.resolve()}
+    key('f'); key('f')
+    setNativeFullscreen(root)
+    resolveRequest(); await tick()
+    if(fullscreenOn() || d.fullscreenElement || exits!==1) throw new Error('late native request stranded browser in full screen')
+    delete root.requestFullscreen; delete d.exitFullscreen
+  })
+  step('unowned native full screen is preserved', ()=>{
+    let exits=0
+    setNativeFullscreen(d.createElement('iframe'))
+    d.exitFullscreen=()=>{exits++; return Promise.resolve()}
+    key('f'); key('f')
+    if(exits) throw new Error('CSS mode exited a different native full screen owner')
+    setNativeFullscreen(null); delete d.exitFullscreen
+  })
+  step('modified and repeated F are ignored', ()=>{
+    for(const options of [{ctrlKey:true},{metaKey:true},{altKey:true},{repeat:true},{isComposing:true}]){
+      d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'f',bubbles:true,cancelable:true,...options}))
+      if(fullscreenOn()) throw new Error('modified/repeated F toggled full screen')
+    }
   })
   step('rows are pointer targets in full screen', ()=>{
     key('4'); key('f')

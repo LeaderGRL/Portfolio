@@ -4,6 +4,12 @@ import AxeBuilder from '@axe-core/playwright'
 const isChromiumDesktop = testInfo => testInfo.project.name === 'chromium'
 const isMobile = testInfo => testInfo.project.name === 'mobile-chromium'
 
+async function attachScreenshot(page, testInfo, name) {
+  const path = testInfo.outputPath(`${name}.png`)
+  await page.screenshot({ path })
+  await testInfo.attach(name, { path, contentType: 'image/png' })
+}
+
 async function boot(page, path = '/') {
   await page.goto(path)
   await expect(page.locator('#machine')).toBeVisible()
@@ -56,6 +62,7 @@ test('full screen fills the viewport with glass and keeps the raster at 4:3', as
   const softkeys = page.locator('#softkeys')
   await expect(softkeys).toBeVisible()
   await expect(softkeys.locator('[aria-current="page"]')).toHaveText(/HOME/)
+  await attachScreenshot(page, testInfo, 'full-screen-desktop')
   await softkeys.locator('[data-route="about"]').click()
   await expect(page).toHaveURL(/\/about$/)
   await expect(softkeys.locator('[aria-current="page"]')).toHaveText(/ABOUT/)
@@ -84,6 +91,7 @@ test('escape leaves full screen before it means BACK', async ({ page }, testInfo
 
 test('full screen switch sits on its own tier on the portable panel', async ({ page }, testInfo) => {
   test.skip(!isMobile(testInfo), 'Portable geometry regression only needs the mobile engine')
+  test.setTimeout(60_000) // Full-viewport software GL plus a high-DPR screenshot.
   await boot(page)
 
   const boxes = {}
@@ -108,6 +116,7 @@ test('full screen switch sits on its own tier on the portable panel', async ({ p
   expect(Math.round(surface.width)).toBe(viewport.width)
   expect(Math.round(surface.height)).toBe(Math.round(viewport.width * 3 / 4))
   await expect(page.locator('#softkeys')).toBeVisible()
+  await attachScreenshot(page, testInfo, 'full-screen-portable')
   await page.locator('.softkeys__key--exit').tap()
   await expect(page.locator('body')).not.toHaveClass(/is-crt-fullscreen/)
 })
@@ -123,3 +132,61 @@ test('full screen mode is axe-clean', async ({ page }, testInfo) => {
   const serious = results.violations.filter(violation => ['serious', 'critical'].includes(violation.impact))
   expect(serious).toEqual([])
 })
+
+test('keyboard focus survives full screen entry, navigation and exit', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Keyboard regression only needs one browser engine')
+  await page.setViewportSize(DESKTOP)
+  await boot(page)
+  const toggle = page.locator('#fullscreen-switch')
+  await toggle.focus()
+  await page.keyboard.press('Space')
+  const exit = page.locator('.softkeys__key--exit')
+  await expect(exit).toBeFocused()
+  const projects = page.locator('#softkeys [data-route="projects"]')
+  await projects.focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/projects$/)
+  await expect(projects).toBeFocused()
+  await page.keyboard.press('f')
+  await expect(page.locator('body')).not.toHaveClass(/is-crt-fullscreen/)
+  await expect(toggle).toBeFocused()
+  await expect(page).toHaveURL(/\/projects$/)
+})
+
+for (const mode of ['crt-off', 'no-webgl']) {
+  test(`article fullscreen preserves scroll and geometry with ${mode}`, async ({ page }, testInfo) => {
+    test.skip(!isChromiumDesktop(testInfo), 'Fallback regression only needs one browser engine')
+    await page.setViewportSize(DESKTOP)
+    await page.addInitScript(({ noWebGL }) => {
+      // Exercise the CSS-only mode used when native fullscreen is unavailable.
+      Element.prototype.requestFullscreen = () => Promise.reject(new Error('Test: native fullscreen unavailable'))
+      if (noWebGL) {
+        const original = HTMLCanvasElement.prototype.getContext
+        HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+          return type === 'webgl2' ? null : original.call(this, type, ...args)
+        }
+      }
+    }, { noWebGL: mode === 'no-webgl' })
+    await boot(page, '/articles/01-ecs-entity-management')
+    const reader = page.locator('#article-reader')
+    await expect(reader).toBeVisible()
+    await reader.evaluate(node => { node.scrollTop = 700 })
+    const progress = await reader.evaluate(node => node.scrollTop / (node.scrollHeight - node.clientHeight))
+    if (mode === 'crt-off') await page.locator('#crt-switch').click()
+    await page.locator('#fullscreen-switch').click()
+    await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
+    await expect(page.locator('#tube')).toHaveClass(mode === 'crt-off' ? /is-crt-off/ : /is-fallback/)
+    // Same raster position, allowing at most one native scroll pixel of rounding.
+    const drift = () => reader.evaluate((node, progress) => Math.abs(node.scrollTop - progress * (node.scrollHeight - node.clientHeight)), progress)
+    await expect.poll(drift).toBeLessThanOrEqual(1)
+    const surface = await page.locator('#display-surface').boundingBox()
+    const pixels = await page.locator('#article-source').boundingBox()
+    for (const dimension of ['x', 'y', 'width', 'height']) {
+      expect(Math.abs(surface[dimension] - pixels[dimension])).toBeLessThan(1)
+    }
+    await attachScreenshot(page, testInfo, `article-fullscreen-${mode}`)
+    await page.locator('.softkeys__key--exit').click()
+    await expect.poll(drift).toBeLessThanOrEqual(1)
+    await expect(page).toHaveURL(/\/articles\/01-ecs-entity-management$/)
+  })
+}

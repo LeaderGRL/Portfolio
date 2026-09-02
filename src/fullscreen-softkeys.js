@@ -37,12 +37,12 @@ function makeSoftkey(label, { shortcut = '', cls = '', ariaLabel = '' } = {}) {
   if (ariaLabel) button.setAttribute('aria-label', ariaLabel)
   if (shortcut) button.setAttribute('aria-keyshortcuts', shortcut)
 
-  // Same press feedback as the panel keys, and the same release of DOM focus
-  // afterwards so ArrowUp/ArrowDown keep driving the terminal cursor.
+  // Pointer presses release focus like the panel; keyboard activation keeps
+  // its place in the tab order. App also routes terminal arrows from softkeys.
   button.addEventListener('pointerdown', () => { foley.ensure(); foley.key(true) })
   button.addEventListener('pointerup', () => foley.key(false))
   button.addEventListener('pointercancel', () => foley.key(false))
-  button.addEventListener('click', () => button.blur())
+  button.addEventListener('click', event => { if (event.detail > 0) button.blur() })
   return button
 }
 
@@ -74,7 +74,8 @@ export function installFullscreenSoftkeys(app) {
   }
 
   const actions = group('softkeys__group--actions')
-  const back = makeSoftkey('BACK', { shortcut: 'ESC', cls: 'softkeys__key--back' })
+  const back = makeSoftkey('BACK', { cls: 'softkeys__key--back' })
+  back.setAttribute('aria-keyshortcuts', 'Backspace')
   back.addEventListener('click', () => app.back())
   const enter = makeSoftkey('ENTER', { cls: 'softkeys__key--enter' })
   enter.addEventListener('click', () => app.enter())

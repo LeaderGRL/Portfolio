@@ -117,6 +117,14 @@ never depends on it (iOS Safari has no element full screen and still gets
 the enlarged tube), and leaving native full screen through the browser
 returns the chassis.
 
+Focus moves to EXIT on entry and returns to the triggering control on exit.
+The document retains its normalized reading position across the layout change,
+including CRT-off and WebGL fallback rendering.
+`Backspace` remains BACK within full screen; browser shortcuts such as `Ctrl+F`
+are not intercepted. A refused or delayed native request cannot strand the
+browser in a different layout state. This is a magnification aid, not a
+replacement for a reflowing large-text reader on narrow screens.
+
 ## Display architecture
 
 There is deliberately **one physical CRT**, not a DOM article with a fake CRT

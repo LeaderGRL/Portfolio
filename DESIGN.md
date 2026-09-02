@@ -112,6 +112,12 @@ match the reference hardware legends.
   the DOM; a phosphor-styled softkey row on the last screen line carries the
   sections, BACK, ENTER and EXIT so touch and pointer users are never
   stranded. `Escape` leaves full screen before it means BACK.
+- Entering full screen moves keyboard focus to EXIT; leaving it restores the
+  triggering control. Keyboard softkey activation preserves focus. BACK uses
+  `Backspace`, not `Escape`, while full screen is active; modified shortcuts
+  and text composition remain owned by the browser or native control.
+- Switching display size preserves the document's normalized reading position;
+  native scroll anchoring must not make the article jump during the transition.
 - CRT scanlines stay sub-pixel-thin and restrained. Long-form article content
   receives the same glass, fine scanline, grille and CRT toggle treatment as
   the terminal canvas.

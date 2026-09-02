@@ -60,6 +60,9 @@ export class App {
     // centres it at its own aspect (see _fitRaster).
     this.rasterRect = { x: 0, y: 0, w: 1, h: 1 };
     this.ownsNativeFullscreen = false;
+    this.nativeFullscreenRequest = null;
+    this.fullscreenReturnFocus = null;
+    this.fullscreenFocusFrame = 0;
 
     this._buildKeys();
     this._bindControls();
@@ -161,7 +164,8 @@ export class App {
   _bindKeyboard() {
     addEventListener("keydown", e => {
       const k = e.key;
-      const interactive = e.target instanceof Element && e.target.closest(INTERACTIVE_KEY_TARGET);
+      const interactive = e.target instanceof Element ? e.target.closest(INTERACTIVE_KEY_TARGET) : null;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
 
       // Escape has one job at a time. In full screen it returns the chassis
       // (the browser exits native full screen on the same key, so the two
@@ -180,7 +184,16 @@ export class App {
         this.back();
         return;
       }
-      if (interactive) return;
+      // Mode controls keep focus for keyboard users. F works from those
+      // controls too, but must not hijack text inputs or native media keys.
+      const softkey = interactive?.matches('.softkeys__key');
+      if ((k === 'f' || k === 'F') && (!interactive || softkey || interactive.id === 'fullscreen-switch')) {
+        if (!e.repeat) { e.preventDefault(); this.toggleFullscreen(); }
+        return;
+      }
+      // Enter/Space still activate a focused softkey natively; other terminal
+      // shortcuts can drive the raster without discarding keyboard focus.
+      if (interactive && (!softkey || k === 'Enter' || k === ' ')) return;
 
       const num = "12345".indexOf(k);
       if (num >= 0) { this.navKeys[ROUTES[num + 1].id].tap(); this.go(ROUTES[num + 1].id); return; }
@@ -204,7 +217,6 @@ export class App {
       else if (k === "Enter") { e.preventDefault(); this.enterKey.tap(); this.enter(); }
       else if (k === "p" || k === "P") { document.getElementById("power").click(); }
       else if (k === "c" || k === "C") { document.getElementById("crt-switch").click(); }
-      else if (k === "f" || k === "F") { this.toggleFullscreen(); }
     });
   }
 
@@ -222,12 +234,27 @@ export class App {
   setFullscreen(on) {
     on = Boolean(on);
     if (this.state.fullscreen === on) return false;
+    const readingPosition = this.documentRuntime?.captureReadingPosition?.();
+    if (on) this.fullscreenReturnFocus = document.activeElement;
     this.state.fullscreen = on;
     document.body.classList.toggle("is-crt-fullscreen", on);
     document.getElementById("fullscreen-switch")?.setAttribute("aria-checked", String(on));
     foley.ensure(); foley.clunk(on ? 1.15 : 0.95);
     this._syncNativeFullscreen(on);
     this._fit();
+    this.documentRuntime?.restoreReadingPosition?.(readingPosition);
+    cancelAnimationFrame(this.fullscreenFocusFrame);
+    this.fullscreenFocusFrame = requestAnimationFrame(() => {
+      if (this.state.fullscreen !== on) return;
+      const previous = this.fullscreenReturnFocus;
+      const target = on
+        ? document.querySelector('.softkeys__key--exit')
+        : previous?.isConnected && previous.getClientRects().length && previous !== document.body
+          ? previous
+          : document.getElementById('fullscreen-switch');
+      target?.focus({ preventScroll: true });
+      if (!on) this.fullscreenReturnFocus = null;
+    });
     // The raster re-registers on a different geometry; a short burst of
     // static sells the retrace instead of an instant cut.
     this.state.static = Math.max(this.state.static, 0.55);
@@ -240,15 +267,30 @@ export class App {
     const active = document.fullscreenElement || document.webkitFullscreenElement;
     try {
       if (on) {
-        if (active) return;
+        if (active || this.nativeFullscreenRequest) return;
         const request = root.requestFullscreen || root.webkitRequestFullscreen;
         if (!request) return;
-        Promise.resolve(request.call(root, { navigationUI: "hide" })).catch(() => {});
-      } else if (active) {
+        const token = {};
+        this.nativeFullscreenRequest = token;
+        Promise.resolve(request.call(root, { navigationUI: "hide" })).then(() => {
+          if (this.nativeFullscreenRequest !== token) return;
+          this.nativeFullscreenRequest = null;
+          const current = document.fullscreenElement || document.webkitFullscreenElement;
+          if (current === root) {
+            this.ownsNativeFullscreen = true;
+            // A rapid second press can leave CSS mode before the browser
+            // finishes entering. Undo that late native entry as well.
+            if (!this.state.fullscreen) this._syncNativeFullscreen(false);
+          }
+        }, () => {
+          if (this.nativeFullscreenRequest === token) this.nativeFullscreenRequest = null;
+        });
+      } else if (active === root && (this.ownsNativeFullscreen || this.nativeFullscreenRequest)) {
         const exit = document.exitFullscreen || document.webkitExitFullscreen;
         if (exit) Promise.resolve(exit.call(document)).catch(() => {});
       }
     } catch {
+      this.nativeFullscreenRequest = null;
       // Refused (no user gesture, iframe policy) or unsupported: the CSS
       // layout mode is already applied, which is the part that matters.
     }
@@ -257,7 +299,13 @@ export class App {
   _onNativeFullscreenChange() {
     const root = document.documentElement;
     const active = document.fullscreenElement || document.webkitFullscreenElement;
-    if (active === root) { this.ownsNativeFullscreen = true; return; }
+    if (active === root) {
+      if (this.state.fullscreen || this.nativeFullscreenRequest || this.ownsNativeFullscreen) {
+        this.ownsNativeFullscreen = true;
+        if (!this.state.fullscreen) this._syncNativeFullscreen(false);
+      }
+      return;
+    }
     if (active) return;                     // e.g. an embedded video's own full screen
     // The browser left native full screen on its own (Esc, F11, system UI).
     // Follow it, but only when it was ours: an embed exiting its full screen
@@ -343,11 +391,8 @@ export class App {
       style.setProperty("--raster-base-w", `${baseW.toFixed(3)}px`);
       style.setProperty("--raster-base-h", `${baseH.toFixed(3)}px`);
       style.setProperty("--raster-k", (w / baseW).toFixed(5));
-      // How much larger the glass itself is than on the desk: blur radii in
-      // the glass overlays are authored in desk pixels and follow this.
-      style.setProperty("--glass-k", (vw / baseW).toFixed(4));
     } else {
-      for (const name of ["--raster-x", "--raster-y", "--raster-base-w", "--raster-base-h", "--raster-k", "--glass-k"]) {
+      for (const name of ["--raster-x", "--raster-y", "--raster-base-w", "--raster-base-h", "--raster-k"]) {
         style.removeProperty(name);
       }
     }

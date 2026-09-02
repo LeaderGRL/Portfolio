@@ -127,6 +127,23 @@ class ArticleCRTRuntime {
     return true
   }
 
+  captureReadingPosition() {
+    if (!this.isDocument()) return null
+    const range = Math.max(0, this.reader.scrollHeight - this.reader.clientHeight)
+    return { item: this.app.state.item, progress: range ? this.reader.scrollTop / range : 0 }
+  }
+
+  restoreReadingPosition(position) {
+    if (!position || position.item !== this.app.state.item) return
+    // The visible raster uses a normalized DOM scroll range. Fullscreen can
+    // change the viewport height and trigger native scroll anchoring during
+    // intermediate layout; restoring raw scrollTop would still move its pixels.
+    const range = Math.max(0, this.reader.scrollHeight - this.reader.clientHeight)
+    this.reader.scrollTop = position.progress * range
+    this.documentRaster._syncScrollFromDOM()
+    this.documentRaster.markDirty()
+  }
+
   frame(time) {
     if (this.destroyed || !this.isDocument()) return
 
