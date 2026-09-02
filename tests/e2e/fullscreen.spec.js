@@ -4,6 +4,10 @@ import AxeBuilder from '@axe-core/playwright'
 const isChromiumDesktop = testInfo => testInfo.project.name === 'chromium'
 const isMobile = testInfo => testInfo.project.name === 'mobile-chromium'
 
+// Native fullscreen can use the runner's virtual monitor rather than the
+// requested viewport. Leave time for software-GL captures on parallel CI.
+test.describe.configure({ timeout: 60_000 })
+
 async function attachScreenshot(page, testInfo, name) {
   const path = testInfo.outputPath(`${name}.png`)
   await page.screenshot({ path })
@@ -21,15 +25,24 @@ function overlaps(a, b) {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
 }
 
+async function expectViewportSource(page, selector) {
+  // All tested viewports are below the texture/pixel caps. WebKit on Windows
+  // can report the host's 2x density even with a 1x desktop context; native
+  // fullscreen may also resize Firefox to its virtual screen dimensions.
+  await expect.poll(() => page.locator(selector).evaluate(canvas => {
+    const density = Math.min(devicePixelRatio, 2)
+    return [canvas.width - Math.floor(innerWidth * density), canvas.height - Math.floor(innerHeight * density)]
+  })).toEqual([0, 0])
+}
+
 // A 16:9 viewport that stays light for software-GL runners: the full-screen
 // shader covers the whole viewport, so its cost scales with this size. The
-// desktop scenarios run on one engine for the same reason — every CI project
-// is on SwiftShader, and the mobile device profile multiplies the canvas by
-// its device pixel ratio.
+// cross-browser lifecycle scenarios use this size to bound software-GL cost.
+// The mobile device profile also multiplies the canvas by its pixel density.
 const DESKTOP = { width: 960, height: 540 }
 
 test('full screen fills the viewport with a high-resolution continuous glass surface', async ({ page }, testInfo) => {
-  test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')
+  test.skip(isMobile(testInfo), 'Portrait geometry is covered by the mobile scenario')
   await page.setViewportSize(DESKTOP)
   await boot(page)
 
@@ -41,12 +54,13 @@ test('full screen fills the viewport with a high-resolution continuous glass sur
   await expect(fullscreenSwitch).toHaveAttribute('aria-checked', 'true')
 
   // The whole viewport is glass; the chassis is set aside.
+  const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
   const tube = await page.locator('#tube').boundingBox()
   expect(tube).not.toBeNull()
   expect(Math.round(tube.x)).toBe(0)
   expect(Math.round(tube.y)).toBe(0)
-  expect(Math.round(tube.width)).toBe(DESKTOP.width)
-  expect(Math.round(tube.height)).toBe(DESKTOP.height)
+  expect(Math.round(tube.width)).toBe(viewport.width)
+  expect(Math.round(tube.height)).toBe(viewport.height)
   await expect(page.locator('.panel--left')).toBeHidden()
   await expect(page.locator('.panel--right')).toBeHidden()
 
@@ -54,15 +68,13 @@ test('full screen fills the viewport with a high-resolution continuous glass sur
   // grid remains proportional within that surface, not a 4:3 backing canvas.
   const surface = await page.locator('.display-surface').boundingBox()
   expect(surface).not.toBeNull()
-  expect(Math.round(surface.height)).toBe(DESKTOP.height)
-  expect(Math.round(surface.width)).toBe(DESKTOP.width)
+  expect(Math.round(surface.height)).toBe(viewport.height)
+  expect(Math.round(surface.width)).toBe(viewport.width)
   expect(Math.round(surface.x)).toBe(0)
-  const source = await page.locator('#fallback2d').evaluate(canvas => ({ width: canvas.width, height: canvas.height }))
-  expect(source).toEqual(DESKTOP)
+  await expectViewportSource(page, '#fallback2d')
   await expect(page.locator('.tube__shade')).toBeVisible()
-  await expect(page.locator('.tube__gloss--soft')).toBeVisible()
-  await expect(page.locator('.tube__gloss--core')).toBeVisible()
-  await expect(page.locator('.tube__gloss--core')).toHaveCSS('object-fit', 'cover')
+  await expect(page.locator('.tube__gloss--soft')).toBeHidden()
+  await expect(page.locator('.tube__gloss--core')).toBeHidden()
   await expect(page.locator('.fullscreen-reflection')).toHaveCount(0)
 
   // Navigation stays available on the glass.
@@ -84,7 +96,7 @@ test('full screen fills the viewport with a high-resolution continuous glass sur
 })
 
 test('escape leaves full screen before it means BACK', async ({ page }, testInfo) => {
-  test.skip(!isChromiumDesktop(testInfo), 'Keyboard regression only needs one browser engine')
+  test.skip(isMobile(testInfo), 'Desktop keyboard scenario')
   await page.setViewportSize(DESKTOP)
   await boot(page, '/articles/01-ecs-entity-management')
 
@@ -101,7 +113,7 @@ test('escape leaves full screen before it means BACK', async ({ page }, testInfo
 
 test('full screen switch sits on its own tier on the portable panel', async ({ page }, testInfo) => {
   test.skip(!isMobile(testInfo), 'Portable geometry regression only needs the mobile engine')
-  test.setTimeout(60_000) // Full-viewport software GL plus a high-DPR screenshot.
+  test.setTimeout(120_000) // Full-viewport software GL plus a high-DPR screenshot on parallel CI workers.
   await boot(page)
 
   const boxes = {}
@@ -126,9 +138,12 @@ test('full screen switch sits on its own tier on the portable panel', async ({ p
   expect(Math.round(surface.width)).toBe(viewport.width)
   expect(Math.round(surface.height)).toBe(viewport.height)
   await expect(page.locator('#softkeys')).toBeVisible()
+  await expect(page.locator('.tube__gloss--core')).toBeHidden()
+  await expect(page.locator('.tube__shade')).toBeVisible()
   await attachScreenshot(page, testInfo, 'full-screen-portable')
   await page.locator('.softkeys__key--exit').tap()
   await expect(page.locator('body')).not.toHaveClass(/is-crt-fullscreen/)
+  await expect(page.locator('.tube__gloss--core')).toBeVisible()
 })
 
 test('full screen mode is axe-clean', async ({ page }, testInfo) => {
@@ -144,7 +159,7 @@ test('full screen mode is axe-clean', async ({ page }, testInfo) => {
 })
 
 test('keyboard focus survives full screen entry, navigation and exit', async ({ page }, testInfo) => {
-  test.skip(!isChromiumDesktop(testInfo), 'Keyboard regression only needs one browser engine')
+  test.skip(isMobile(testInfo), 'Desktop keyboard scenario')
   await page.setViewportSize(DESKTOP)
   await boot(page)
   const toggle = page.locator('#fullscreen-switch')
@@ -165,7 +180,7 @@ test('keyboard focus survives full screen entry, navigation and exit', async ({ 
 
 for (const mode of ['crt-off', 'no-webgl']) {
   test(`article fullscreen preserves scroll and geometry with ${mode}`, async ({ page }, testInfo) => {
-    test.skip(!isChromiumDesktop(testInfo), 'Fallback regression only needs one browser engine')
+    test.skip(isMobile(testInfo), 'Fallback scenario is covered on desktop browser engines')
     await page.setViewportSize(DESKTOP)
     await page.addInitScript(({ noWebGL }) => {
       // Exercise the CSS-only mode used when native fullscreen is unavailable.
@@ -194,7 +209,7 @@ for (const mode of ['crt-off', 'no-webgl']) {
     for (const dimension of ['x', 'y', 'width', 'height']) {
       expect(Math.abs(surface[dimension] - pixels[dimension])).toBeLessThan(1)
     }
-    expect(await page.locator('#article-source').evaluate(canvas => ({ width: canvas.width, height: canvas.height }))).toEqual(DESKTOP)
+    await expectViewportSource(page, '#article-source')
     if (mode === 'crt-off') {
       await expect(page.locator('.tube__shade')).toBeHidden()
       await expect(page.locator('.tube__gloss--core')).toBeHidden()
@@ -207,9 +222,11 @@ for (const mode of ['crt-off', 'no-webgl']) {
   })
 }
 
-test('fullscreen article and media retain high-resolution sources and classic glass on desktop and mobile', async ({ page }, testInfo) => {
+test('fullscreen article and media retain high-resolution CRT without specular glare', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo) && !isMobile(testInfo), 'Resolution and touch geometry use Chromium profiles')
-  test.setTimeout(60_000)
+  // Two full-resolution captures, media inspection and reflow are expensive
+  // under software GL. Keep 1080p coverage without relaxing UI assertions.
+  test.setTimeout(120_000)
   if (isChromiumDesktop(testInfo)) await page.setViewportSize({ width: 1920, height: 1080 })
   await page.addInitScript(() => {
     // Chromium disallows setWindowBounds while natively fullscreen. Keep the
@@ -231,7 +248,7 @@ test('fullscreen article and media retain high-resolution sources and classic gl
   expect(dimensions.width).toBe(Math.round(dimensions.viewportWidth * dimensions.dpr))
   expect(dimensions.height).toBe(Math.round(dimensions.viewportHeight * dimensions.dpr))
   expect(dimensions.width).toBeGreaterThan(480)
-  await expect(page.locator('.tube__gloss--core')).toBeVisible()
+  await expect(page.locator('.tube__gloss--core')).toBeHidden()
   await expect(page.locator('.tube__shade')).toBeVisible()
   await attachScreenshot(page, testInfo, 'fullscreen-classic-article')
 
@@ -246,7 +263,7 @@ test('fullscreen article and media retain high-resolution sources and classic gl
   await expect(page.locator('#tube')).toHaveClass(/is-media-inspecting/)
   const inspected = await page.locator('#article-source').evaluate(canvas => ({ width: canvas.width, height: canvas.height }))
   expect(inspected).toEqual({ width: dimensions.width, height: dimensions.height })
-  await expect(page.locator('.tube__gloss--core')).toBeVisible()
+  await expect(page.locator('.tube__gloss--core')).toBeHidden()
   await attachScreenshot(page, testInfo, 'fullscreen-classic-media')
   await page.keyboard.press('Escape')
   await expect(page.locator('#tube')).not.toHaveClass(/is-media-inspecting/)
@@ -260,5 +277,41 @@ test('fullscreen article and media retain high-resolution sources and classic gl
   expect(await page.locator('#article-reader').evaluate(node => node.scrollTop)).toBe(progress)
   await page.locator('.softkeys__key--exit').click()
   expect(await page.locator('#article-source').evaluate(canvas => [canvas.width, canvas.height])).toEqual([480, 360])
+  expect(errors).toEqual([])
+})
+
+test('fullscreen navigation, CRT bypass and power keep their state across routes', async ({ page }, testInfo) => {
+  test.setTimeout(120_000)
+  if (!isMobile(testInfo)) await page.setViewportSize(DESKTOP)
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  await boot(page)
+  await page.locator('#fullscreen-switch').click()
+  const tube = page.locator('#tube')
+  const gloss = page.locator('.tube__gloss--core')
+  const shade = page.locator('.tube__shade')
+  for (const route of ['about', 'resume', 'projects', 'articles', 'contact', 'home']) {
+    await page.locator(`#softkeys [data-route="${route}"]`).click()
+    await expect(page.locator('#softkeys [aria-current="page"]')).toHaveAttribute('data-route', route)
+    await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
+    await expect(gloss).toBeHidden()
+  }
+  await page.keyboard.press('c')
+  await expect(tube).toHaveClass(/is-crt-off/)
+  await expect(shade).toBeHidden()
+  await expect(page.locator('#fallback2d')).toBeVisible()
+  await page.keyboard.press('p')
+  await expect(tube).toHaveClass(/is-powered-off/)
+  await expect(page.locator('#fallback2d')).toBeHidden()
+  await page.keyboard.press('p')
+  await expect(tube).not.toHaveClass(/is-powered-off/)
+  await expect(page.locator('#fallback2d')).toBeVisible()
+  await page.keyboard.press('c')
+  await expect(tube).not.toHaveClass(/is-crt-off/)
+  await expect(shade).toBeVisible()
+  await expect(gloss).toBeHidden()
+  await page.locator('.softkeys__key--exit').click()
+  await expect(gloss).toBeVisible()
+  await expect(shade).toBeVisible()
   expect(errors).toEqual([])
 })
