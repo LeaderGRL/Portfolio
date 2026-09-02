@@ -1,3 +1,4 @@
+import { SRC_H, SRC_W } from './core.js'
 import { CRT } from './crt.js'
 
 /* ========================================================================== *
@@ -40,7 +41,7 @@ export class DisplayPipeline {
     gl.clearColor(0, 0, 0, 1)
     for (const target of [crt.a, crt.b]) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, target.fb)
-      gl.viewport(0, 0, 480, 360)
+      gl.viewport(0, 0, SRC_W, SRC_H)
       gl.clear(gl.COLOR_BUFFER_BIT)
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, previous || null)
@@ -66,19 +67,6 @@ export class DisplayPipeline {
   render(state, sourceDirty = false) {
     if (!this.ok) return false
     this.crt.render(state, sourceDirty)
-    return true
-  }
-
-  async enterFullscreen(target) {
-    const node = target || document.getElementById('screen') || document.querySelector('.screen')
-    if (!node || document.fullscreenElement) return false
-    await node.requestFullscreen?.()
-    return true
-  }
-
-  async exitFullscreen() {
-    if (!document.fullscreenElement) return false
-    await document.exitFullscreen?.()
     return true
   }
 }

@@ -86,6 +86,7 @@ function bindCompactTargetExpansion() {
     const controls = [
       ...document.querySelectorAll('#nav-keys .key'),
       document.getElementById('crt-switch'),
+      document.getElementById('fullscreen-switch'),
       document.getElementById('volume'),
       document.getElementById('power'),
     ].filter(Boolean)
@@ -124,10 +125,13 @@ function bindScreenListingPointer(app) {
   if (!tube || !machine) return () => {}
 
   const starts = new Map()
+  // Rows are direct targets wherever the panel keys are out of reach: the
+  // compact portable, and full screen on any layout (the chassis is hidden).
+  const rowsAreTargets = () => machine.classList.contains('is-compact') || Boolean(app.state?.fullscreen)
 
   const onPointerDown = event => {
     if (!event.isPrimary || event.button > 0) return
-    if (!machine.classList.contains('is-compact')) return
+    if (!rowsAreTargets()) return
     if (closestInteractive(event.target)) return
     starts.set(event.pointerId, { x: event.clientX, y: event.clientY })
   }
@@ -138,7 +142,7 @@ function bindScreenListingPointer(app) {
     const start = starts.get(event.pointerId)
     starts.delete(event.pointerId)
     if (!start || !event.isPrimary || event.button > 0) return
-    if (!machine.classList.contains('is-compact')) return
+    if (!rowsAreTargets()) return
     if (closestInteractive(event.target)) return
 
     const dx = event.clientX - start.x
@@ -149,7 +153,9 @@ function bindScreenListingPointer(app) {
     if ((route !== 'projects' && route !== 'articles') || app.state?.item) return
 
     const items = route === 'projects' ? CONTENT.projects : CONTENT.articles
-    const rect = tube.getBoundingClientRect()
+    // In full screen the raster is underscanned inside the tube, so rows are
+    // measured against the raster rectangle rather than the whole glass.
+    const rect = app.rasterClientRect?.() || tube.getBoundingClientRect()
     if (!rect.width || !rect.height) return
 
     const sourceY = ((event.clientY - rect.top) / rect.height) * SRC_H

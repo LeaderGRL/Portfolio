@@ -98,9 +98,20 @@ match the reference hardware legends.
   own separate row bands; bloom must never be used to excuse textual overlap.
 - The screen, ARIA state, and rocker initialize powered **ON**;
   the first press visibly throws the rocker to OFF.
-- Desktop CRT-effects and volume controls remain large enough to read as
-  deliberate physical hardware. Compact/mobile uses the supplied cream plate
-  full bleed, with no outer device surround or viewport bars.
+- Desktop CRT-effects, full-screen and volume controls remain large enough to
+  read as deliberate physical hardware. Compact/mobile uses the supplied cream
+  plate full bleed, with no outer device surround or viewport bars.
+- FULL SCREEN is a second two-position switch from the same render as CRT
+  EFFECTS, captioned in the same language (OFF/ON). On the desk it sits
+  between CRT EFFECTS and VOLUME, grouping the two display controls; on the
+  portable the CRT / FULL SCREEN / VOLUME tier is one three-column row.
+- Full screen is underscan, not a stretch: the glass fills the viewport and
+  the 480x360 raster keeps its aspect, centred, so every terminal layout and
+  every glyph is the desk picture enlarged. The unlit phosphor around it
+  stays under the same curvature, grille, shade and gloss. The chassis leaves
+  the DOM; a phosphor-styled softkey row on the last screen line carries the
+  sections, BACK, ENTER and EXIT so touch and pointer users are never
+  stranded. `Escape` leaves full screen before it means BACK.
 - CRT scanlines stay sub-pixel-thin and restrained. Long-form article content
   receives the same glass, fine scanline, grille and CRT toggle treatment as
   the terminal canvas.

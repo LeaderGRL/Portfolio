@@ -25,7 +25,7 @@ export class MediaViewer {
 
     this.hiresCanvas = document.createElement('canvas')
     this.hiresCanvas.id = 'media-inspect-hires'
-    this.hiresCanvas.className = 'display-pixel-source'
+    this.hiresCanvas.className = 'display-pixel-source raster-layer'
     this.hiresCanvas.width = 1440
     this.hiresCanvas.height = 1080
     this.hiresCanvas.setAttribute('aria-hidden', 'true')

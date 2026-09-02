@@ -1,7 +1,8 @@
 import { foley } from './audio.js'
 import { articleReaderScroll } from './article-reader.js'
 import { CONTENT } from './content.js'
-import { COLS, REDUCED, ROWS, clamp, lerp, now } from './core.js'
+import { ASSET_META } from './assets.js'
+import { COLS, REDUCED, ROWS, SRC_H, SRC_W, clamp, lerp, now } from './core.js'
 import { CRT } from './crt.js'
 import { syncNavigationHistory, syncNavigationMetadata, resolveNavigation } from './navigation.js'
 import { PAGES } from './pages.js'
@@ -42,6 +43,7 @@ export class App {
       item: null,
       power: 1, powerTarget: 1,
       crt: 1, crtTarget: 1,
+      fullscreen: false,
       degauss: 0, static: 0, warm: 1,
       time: 0,
       clock: "", uptime: "", available: true,
@@ -53,6 +55,11 @@ export class App {
     this.bootAt = now();
     this.lastBlip = 0;
     this.documentRuntime = null;
+    // Where the raster sits inside the tube, as fractions of the tube box.
+    // Normal mode stretches the picture over the whole glass; full screen
+    // centres it at its own aspect (see _fitRaster).
+    this.rasterRect = { x: 0, y: 0, w: 1, h: 1 };
+    this.ownsNativeFullscreen = false;
 
     this._buildKeys();
     this._bindControls();
@@ -62,6 +69,9 @@ export class App {
     this._fit();
     addEventListener("resize", () => this._fit());
     addEventListener("popstate", () => this._restoreNavigation());
+    for (const type of ["fullscreenchange", "webkitfullscreenchange"]) {
+      document.addEventListener(type, () => this._onNativeFullscreenChange());
+    }
 
     this.boot();
     requestAnimationFrame(t => this.frame(t));
@@ -97,6 +107,9 @@ export class App {
       document.getElementById("tube").classList.toggle("is-crt-off", !on);
       foley.ensure(); foley.clunk(1.4);
     });
+
+    const fs = document.getElementById("fullscreen-switch");
+    fs?.addEventListener("click", () => this.toggleFullscreen());
 
     const slider = document.getElementById("volume");
     const thumb = document.getElementById("volume-thumb");
@@ -150,6 +163,15 @@ export class App {
       const k = e.key;
       const interactive = e.target instanceof Element && e.target.closest(INTERACTIVE_KEY_TARGET);
 
+      // Escape has one job at a time. In full screen it returns the chassis
+      // (the browser exits native full screen on the same key, so the two
+      // stay in step); only then does it mean BACK. Otherwise a reader who
+      // just wanted the desk back would also be thrown out of their article.
+      if (k === "Escape" && this.state.fullscreen) {
+        e.preventDefault();
+        this.setFullscreen(false);
+        return;
+      }
       // Back remains a global hardware action even when a native control owns
       // focus. Arrows and Enter still stay local to sliders, links and media.
       if (k === "Escape" || k === "Backspace") {
@@ -182,7 +204,67 @@ export class App {
       else if (k === "Enter") { e.preventDefault(); this.enterKey.tap(); this.enter(); }
       else if (k === "p" || k === "P") { document.getElementById("power").click(); }
       else if (k === "c" || k === "C") { document.getElementById("crt-switch").click(); }
+      else if (k === "f" || k === "F") { this.toggleFullscreen(); }
     });
+  }
+
+  /* ----------------------------------------------------------- full screen
+   * An accessibility mode, not a different product: the glass fills the
+   * viewport and the chassis is set aside so the same 480x360 raster can be
+   * read at three times its size. Native full screen is requested on top when
+   * the browser allows it, but the layout never depends on it — iOS Safari
+   * has no element full screen at all, and it still gets the enlarged tube.
+   */
+  toggleFullscreen() {
+    return this.setFullscreen(!this.state.fullscreen);
+  }
+
+  setFullscreen(on) {
+    on = Boolean(on);
+    if (this.state.fullscreen === on) return false;
+    this.state.fullscreen = on;
+    document.body.classList.toggle("is-crt-fullscreen", on);
+    document.getElementById("fullscreen-switch")?.setAttribute("aria-checked", String(on));
+    foley.ensure(); foley.clunk(on ? 1.15 : 0.95);
+    this._syncNativeFullscreen(on);
+    this._fit();
+    // The raster re-registers on a different geometry; a short burst of
+    // static sells the retrace instead of an instant cut.
+    this.state.static = Math.max(this.state.static, 0.55);
+    this.dirty = true;
+    return true;
+  }
+
+  _syncNativeFullscreen(on) {
+    const root = document.documentElement;
+    const active = document.fullscreenElement || document.webkitFullscreenElement;
+    try {
+      if (on) {
+        if (active) return;
+        const request = root.requestFullscreen || root.webkitRequestFullscreen;
+        if (!request) return;
+        Promise.resolve(request.call(root, { navigationUI: "hide" })).catch(() => {});
+      } else if (active) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) Promise.resolve(exit.call(document)).catch(() => {});
+      }
+    } catch {
+      // Refused (no user gesture, iframe policy) or unsupported: the CSS
+      // layout mode is already applied, which is the part that matters.
+    }
+  }
+
+  _onNativeFullscreenChange() {
+    const root = document.documentElement;
+    const active = document.fullscreenElement || document.webkitFullscreenElement;
+    if (active === root) { this.ownsNativeFullscreen = true; return; }
+    if (active) return;                     // e.g. an embedded video's own full screen
+    // The browser left native full screen on its own (Esc, F11, system UI).
+    // Follow it, but only when it was ours: an embed exiting its full screen
+    // on iOS must not throw the reader out of the enlarged tube.
+    const owned = this.ownsNativeFullscreen;
+    this.ownsNativeFullscreen = false;
+    if (owned && this.state.fullscreen) this.setFullscreen(false);
   }
 
   _fit() {
@@ -224,6 +306,66 @@ export class App {
       this.crt.resize(tube.offsetWidth || 740, tube.offsetHeight || 576,
                       Math.min(devicePixelRatio || 1, 2));
     }
+    this._fitRaster(compact);
+  }
+
+  /**
+   * Places the raster on the glass. On the desk the picture is stretched over
+   * the whole aperture, as it always was. Full screen keeps the 480x360 aspect
+   * and centres it: the shader gets the rectangle as a uniform, and the DOM
+   * layers that must register with the picture (semantic reader, contact
+   * anchors, inline integrations, CRT-off canvases) get the same rectangle as
+   * custom properties. Those layers keep their desk-size layout and are
+   * scaled, so wrapping and hit geometry stay identical to normal mode.
+   */
+  _fitRaster(compact) {
+    const tube = document.getElementById("tube");
+    const style = tube.style;
+    let rect = { x: 0, y: 0, w: 1, h: 1 };
+
+    if (this.state.fullscreen) {
+      const vw = tube.offsetWidth || innerWidth || 1;
+      const vh = tube.offsetHeight || innerHeight || 1;
+      const scale = Math.min(vw / SRC_W, vh / SRC_H);
+      const w = SRC_W * scale, h = SRC_H * scale;
+      rect = { x: (vw - w) / 2 / vw, y: (vh - h) / 2 / vh, w: w / vw, h: h / vh };
+
+      // The desk tube's width, from the same aperture and bleed CSS uses, so
+      // the semantic layers wrap exactly as they do on the desk. Height is
+      // 3:4 of that: the layers must map 1:1 onto the displayed raster.
+      const machine = document.getElementById("machine");
+      const ap = compact ? ASSET_META.mobile_chassis.aperture : ASSET_META.chassis.aperture;
+      const bleed = parseFloat(getComputedStyle(machine).getPropertyValue("--tube-bleed-x")) || 0;
+      const baseW = Math.max(1, (ap[2] - ap[0]) * (compact ? 941 : 1920) + bleed * 2);
+      const baseH = baseW * (SRC_H / SRC_W);
+      style.setProperty("--raster-x", `${(rect.x * 100).toFixed(4)}%`);
+      style.setProperty("--raster-y", `${(rect.y * 100).toFixed(4)}%`);
+      style.setProperty("--raster-base-w", `${baseW.toFixed(3)}px`);
+      style.setProperty("--raster-base-h", `${baseH.toFixed(3)}px`);
+      style.setProperty("--raster-k", (w / baseW).toFixed(5));
+      // How much larger the glass itself is than on the desk: blur radii in
+      // the glass overlays are authored in desk pixels and follow this.
+      style.setProperty("--glass-k", (vw / baseW).toFixed(4));
+    } else {
+      for (const name of ["--raster-x", "--raster-y", "--raster-base-w", "--raster-base-h", "--raster-k", "--glass-k"]) {
+        style.removeProperty(name);
+      }
+    }
+
+    this.rasterRect = rect;
+    this.crt.setRaster?.(rect.x, rect.y, rect.w, rect.h);
+  }
+
+  /** Tube-relative rectangle of the raster in client pixels. */
+  rasterClientRect() {
+    const rect = document.getElementById("tube").getBoundingClientRect();
+    const r = this.rasterRect;
+    return {
+      left: rect.left + rect.width * r.x,
+      top: rect.top + rect.height * r.y,
+      width: rect.width * r.w,
+      height: rect.height * r.h,
+    };
   }
 
   attachDocumentRuntime(runtime) {

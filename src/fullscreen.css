@@ -1,0 +1,176 @@
+/* ============================================================================
+   FULL SCREEN — the glass fills the viewport, the chassis is set aside
+
+   An accessibility mode. The aperture on the desk is ~590x450 CSS px on a
+   1080p display, which puts terminal body text at ~10 px and article prose
+   at about the same; on a phone the same raster lands near 5 px. Full screen
+   scales that raster ~3x on desktop and ~2x on a phone without changing what
+   is on it: the same 480x360 picture, the same layouts, only larger. That is
+   the behaviour of a screen magnifier, and it is what low-vision readers
+   expect — reflowing content into more columns would not make a single
+   glyph bigger, and would push article lines past 90 characters.
+
+   Geometry works like underscan on a real tube. The whole viewport becomes
+   glass (curvature, grille, shade and gloss cover all of it), and the raster
+   sits centred at its own aspect. The shader receives that rectangle as a
+   uniform; every DOM layer that has to register with the picture receives it
+   here as custom properties on the tube (set by App._fitRaster):
+
+     --raster-x / --raster-y      origin of the raster inside the tube
+     --raster-base-w / -base-h    the layer's desk-size layout box (4:3)
+     --raster-k                   uniform scale from that box to the raster
+
+   Those layers keep their desk layout and are scaled rather than re-laid
+   out, so line wrapping, hit targets and the keyboard focus proxy behave
+   exactly as they do on the desk.
+
+   Native full screen is layered on top when the browser allows it; the
+   layout below never depends on it. iOS Safari has no element full screen
+   and still gets the enlarged tube inside its viewport.
+   ========================================================================= */
+
+body.is-crt-fullscreen{
+  background:#030604;
+}
+body.is-crt-fullscreen #stage{
+  perspective:none;
+  background:#030604;
+}
+body.is-crt-fullscreen .machine,
+body.is-crt-fullscreen .machine.is-compact{
+  left:0; top:0;
+  width:100%; height:100%;
+  transform:none;
+  display:block;
+  background:#030604;
+  box-shadow:none;
+}
+/* The physical panel leaves the DOM tree as well as the viewport, so its
+   keys are not tab stops that lead nowhere; the softkeys are the visible,
+   focusable navigation while the desk is away. The nameplate stays for
+   assistive technology only: it carries the page's heading. */
+body.is-crt-fullscreen .machine > :not(.screen):not(.plate-row){
+  display:none !important;
+}
+body.is-crt-fullscreen .plate-row{
+  position:absolute; width:1px; height:1px; overflow:hidden;
+  clip:rect(0 0 0 0); white-space:nowrap; padding:0; margin:-1px;
+}
+body.is-crt-fullscreen .screen,
+body.is-crt-fullscreen .is-compact .screen{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  margin:0; transform:none;
+}
+body.is-crt-fullscreen .hint{ display:none; }
+
+/* The portable's reflected chassis strips have no chassis to extend. */
+body.is-compact-stage.is-crt-fullscreen::before,
+body.is-compact-stage.is-crt-fullscreen::after,
+body.is-compact-stage.is-crt-fullscreen #stage::before,
+body.is-compact-stage.is-crt-fullscreen #stage::after{
+  display:none;
+}
+
+/* ---------------------------------------------------------------------------
+   Raster-registered layers.
+
+   Specificity note: the CRT-off bypass and the 2D fallback address these
+   canvases by id with `inset:0; width:100%; height:100%`, which is right on
+   the desk (the raster is stretched over the whole glass). Full screen has
+   to win against those rules, hence the explicit id selectors below.
+   ------------------------------------------------------------------------ */
+body.is-crt-fullscreen .tube > .raster-layer,
+body.is-crt-fullscreen .tube.is-crt-off > #article-source,
+body.is-crt-fullscreen .tube.is-crt-off > #fallback2d,
+body.is-crt-fullscreen .tube.is-crt-off > #media-inspect-hires,
+body.is-crt-fullscreen .tube.is-fallback > #article-source,
+body.is-crt-fullscreen .tube.is-fallback > #fallback2d{
+  left:var(--raster-x, 0%);
+  top:var(--raster-y, 0%);
+  right:auto;
+  bottom:auto;
+  width:var(--raster-base-w, 100%);
+  height:var(--raster-base-h, 100%);
+  transform:scale(var(--raster-k, 1));
+  transform-origin:0 0;
+}
+
+/* The glass maps were extracted at the tube's own aspect. The shade is a soft
+   vignette and survives a stretch, but the specular streak is a shape: at a
+   16:9 or 9:19 viewport it would smear into a band. Cover-fit it from the
+   corner it is anchored to so the highlight keeps its geometry. */
+body.is-crt-fullscreen .tube__gloss{
+  object-fit:cover; object-position:0 0;
+}
+/* The soft halo keeps its desk blur (14px, x1.5 by its transform). Scaling
+   the radius with the glass looks right but is paid on every composite:
+   Chrome rasterises filtered layers in device space, so a proportional blur
+   over the full-screen glass is a 44px filter on a 2880x1620 layer per
+   frame, and a quarter-size layer scaled up costs exactly the same. It
+   stalled the software compositor outright and would tax low-end GPUs for a
+   marginal softening. The halo simply reads a little tighter at 3x. */
+
+/* ---------------------------------------------------------------------------
+   Softkeys: the last screen line labels the keys, as terminals did.
+   ------------------------------------------------------------------------ */
+.softkeys{ display:none; }
+body.is-crt-fullscreen .softkeys{
+  position:absolute; left:0; right:0; bottom:0; z-index:7;
+  display:flex; flex-wrap:wrap; justify-content:center; align-items:center;
+  gap:0 10px;
+  padding:6px 10px calc(4px + env(safe-area-inset-bottom, 0px));
+  font:600 11px/1 ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  letter-spacing:.14em; text-transform:uppercase;
+  color:#2fd06d;
+  text-shadow:0 0 6px rgba(47,208,109,.42);
+  background:linear-gradient(180deg, rgba(1,6,3,0) 0%, rgba(1,6,3,.62) 100%);
+  pointer-events:none;
+}
+.softkeys__group{
+  display:flex; align-items:center; flex-wrap:wrap; justify-content:center;
+  pointer-events:auto;
+}
+.softkeys__group + .softkeys__group::before{
+  content:"";
+  width:1px; height:14px; margin:0 6px;
+  background:rgba(47,208,109,.36);
+}
+.softkeys__key{
+  appearance:none; border:0; background:none; margin:0;
+  padding:9px 8px; min-height:32px;
+  border-radius:2px;
+  color:inherit; font:inherit; letter-spacing:inherit; text-transform:inherit;
+  text-shadow:inherit; white-space:nowrap;
+  cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+  transition:color .12s ease, background-color .12s ease;
+}
+.softkeys__key kbd{
+  font:inherit; color:#167f45; margin-right:.55em;
+}
+.softkeys__key--exit{ color:#ffb347; text-shadow:0 0 6px rgba(255,179,71,.35); }
+.softkeys__key--exit kbd{ color:rgba(255,179,71,.6); }
+@media (hover:hover) and (pointer:fine){
+  .softkeys__key:hover{ color:#b9ffc9; }
+  .softkeys__key--exit:hover{ color:#ffd58f; }
+}
+.softkeys__key:active{ background:rgba(47,208,109,.18); }
+.softkeys__key.is-on{
+  background:#2fd06d; color:#031009; text-shadow:none;
+}
+.softkeys__key.is-on kbd{ color:rgba(3,16,9,.66); }
+.softkeys__key:focus-visible{
+  outline:1px solid #b9ffc9; outline-offset:1px;
+}
+
+/* Key hints only mean something where there is a keyboard. On touch-first
+   devices they cost the width that keeps the six sections on one row. */
+@media (pointer:coarse){
+  .softkeys__key kbd{ display:none; }
+  body.is-crt-fullscreen .softkeys{ gap:0 4px; }
+  .softkeys__key{ padding:10px 7px; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .softkeys__key{ transition:none; }
+}

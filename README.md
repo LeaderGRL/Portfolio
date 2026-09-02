@@ -66,8 +66,10 @@ src/
   panel.js                  physical controls and chassis behavior
   runtime-controls.js       touch/hit-area behavior
   semantic-focus.js         visible CRT proxy for semantic keyboard focus
+  fullscreen-softkeys.js    on-glass navigation row while the chassis is away
   style.css                 authored desktop/compact panel geometry
   release-fixes.css         full-bleed compact material + focus presentation
+  fullscreen.css            full-screen glass layout and raster registration
 
 assets/src/                 source chassis/component renders
 assets/build/               generated sprites, gitignored
@@ -96,6 +98,24 @@ Back/Forward working. Invalid document IDs fall back to their collection route.
 Keyboard navigation remains available on desktop (`1-5`, arrows, Enter,
 Escape/Backspace), while compact/coarse-pointer layouts can select project and
 article rows directly on the CRT.
+
+## Full screen
+
+The aperture is small by design, so the panel carries a FULL SCREEN switch
+(shortcut `F`) next to CRT EFFECTS. It is an accessibility mode: the glass
+fills the viewport, the chassis is set aside, and the same 480x360 raster is
+shown at its own 4:3 aspect, centred — about 3x larger on a 1080p display,
+2x on a phone — with nothing re-laid out, the way a screen magnifier works.
+The surround beyond the picture is unlit phosphor under the same curvature,
+grille and glass, not a black frame.
+
+While the chassis is away a softkey row along the bottom of the glass carries
+the six sections, BACK, ENTER and EXIT FULL SCREEN, so pointer and touch users
+keep navigating. `Escape` leaves full screen first and only then means BACK.
+Native browser full screen is requested on top when available; the layout
+never depends on it (iOS Safari has no element full screen and still gets
+the enlarged tube), and leaving native full screen through the browser
+returns the chassis.
 
 ## Display architecture
 

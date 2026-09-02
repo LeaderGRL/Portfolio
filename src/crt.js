@@ -37,6 +37,12 @@ uniform float uCrt;
 uniform float uDegauss;
 uniform float uStatic;
 uniform float uWarm;
+// Where the raster sits on the glass, in output UV: xy origin, zw extent.
+// (0,0,1,1) stretches the picture over the whole canvas as before. Full screen
+// keeps the raster's own aspect and centres it, which is what underscan looks
+// like on a real tube: the unlit phosphor beyond the picture is still glass,
+// still curved, still under the grille, only darker.
+uniform vec4  uRaster;
 
 // ===========================================================================
 // This shader got considerably smaller in this revision, and that is the
@@ -61,6 +67,12 @@ float noise(vec2 p){
              mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
 }
 
+// Every content sample goes through raster space. The source texture clamps
+// to its edge, so the surround beyond the raster continues the picture's own
+// background instead of switching to a hard black frame; bloom and defocus
+// then bleed across the raster edge the way beam energy really does.
+vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }
+
 // Barrel distortion. Real tubes are spherical sections, not planes, and this
 // still has to happen here: the glass maps are static, so only the sampling
 // can make the picture follow the bulge.
@@ -71,14 +83,14 @@ vec2 curve(vec2 uv){
   return uv * 0.5 + 0.5;
 }
 
-vec3 bloom(vec2 uv, float r){
+vec3 bloom(vec2 suv, float r){
   vec3 s = vec3(0.0);
   const int N = 10;
   for (int i = 0; i < N; i++){
     float a = (float(i) + 0.5) / float(N) * 6.2831853;
     vec2 d = vec2(cos(a), sin(a));
-    s += texture(uTex, uv + d * r).rgb;
-    s += texture(uTex, uv + d * r * 0.45).rgb;
+    s += src(suv + d * r);
+    s += src(suv + d * r * 0.45);
   }
   return s / float(N * 2);
 }
@@ -103,13 +115,19 @@ void main(){
 
   vec2 cuv = curve(uv);
 
+  // Glass space (cuv) owns curvature and the surround; raster space (suv)
+  // owns everything that must keep its size relative to a glyph — bloom,
+  // defocus, overshoot, scanline pitch — so the picture looks the same on the
+  // desk and full screen, only larger.
+  vec2 suv = (cuv - uRaster.xy) / uRaster.zw;
+
   // ---- chromatic aberration, stronger toward the edges -------------------
-  vec2 off = cuv - 0.5;
+  vec2 off = suv - 0.5;
   float ab = (0.0015 + dot(off, off) * 0.010) * uCrt;
   vec3 col;
-  col.r = texture(uTex, cuv + off * ab).r;
-  col.g = texture(uTex, cuv).g;
-  col.b = texture(uTex, cuv - off * ab).b;
+  col.r = src(suv + off * ab).r;
+  col.g = src(suv).g;
+  col.b = src(suv - off * ab).b;
 
   // A real electron beam loses focus progressively toward the rim. Smear
   // along the tube radius rather than applying a uniform blur, preserving the
@@ -118,27 +136,27 @@ void main(){
   float defocus = smoothstep(0.05, 0.30, rr) * uCrt;
   if (defocus > 0.001) {
     vec2 dir = normalize(off + vec2(1e-5)) * (0.0022 + rr * 0.006) * defocus;
-    vec3 smear = texture(uTex, cuv + dir).rgb
-               + texture(uTex, cuv - dir).rgb
-               + texture(uTex, cuv + dir * 2.0).rgb
-               + texture(uTex, cuv - dir * 2.0).rgb;
+    vec3 smear = src(suv + dir)
+               + src(suv - dir)
+               + src(suv + dir * 2.0)
+               + src(suv - dir * 2.0);
     col = mix(col, smear * 0.25, defocus * 0.62);
   }
 
   // Horizontal overshoot gives bright glyph edges the slight analogue ring
   // produced by the video amplifier without shifting the underlying layout.
-  float lead  = texture(uTex, cuv - vec2(1.35 / uSrc.x, 0.0)).g;
-  float trail = texture(uTex, cuv + vec2(1.35 / uSrc.x, 0.0)).g;
+  float lead  = src(suv - vec2(1.35 / uSrc.x, 0.0)).g;
+  float trail = src(suv + vec2(1.35 / uSrc.x, 0.0)).g;
   col += vec3(0.72, 1.0, 0.82) * (col.g - lead) * 0.30 * uCrt;
   col -= vec3(0.55, 0.80, 0.62) * max(trail - col.g, 0.0) * 0.16 * uCrt;
 
   // ---- glow --------------------------------------------------------------
-  col += bloom(cuv, 0.006 + 0.004 * uCrt) * (0.55 + 0.35 * uCrt);
-  col += bloom(cuv, 0.020) * 0.28 * uCrt;
-  col += bloom(cuv, 0.055) * vec3(0.30, 0.40, 0.34) * 0.55 * uCrt;
+  col += bloom(suv, 0.006 + 0.004 * uCrt) * (0.55 + 0.35 * uCrt);
+  col += bloom(suv, 0.020) * 0.28 * uCrt;
+  col += bloom(suv, 0.055) * vec3(0.30, 0.40, 0.34) * 0.55 * uCrt;
 
   // ---- scanlines locked to the source line count -------------------------
-  float scanWave = 0.5 + 0.5 * cos(cuv.y * uSrc.y * 6.2831853);
+  float scanWave = 0.5 + 0.5 * cos(suv.y * uSrc.y * 6.2831853);
   float scan = pow(scanWave, 7.0);
   col *= mix(1.0, 1.0 - scan * 0.20, uCrt);
 
@@ -164,8 +182,11 @@ void main(){
 
   // Shallow beam falloff only. The glass render's own shading supplies the
   // real edge darkening on the layer above, so doing it again here would
-  // double the vignette and crush the corners.
-  vec2 vg = cuv * (1.0 - cuv.yx);
+  // double the vignette and crush the corners. It follows the raster, not the
+  // glass: beyond the picture the beam never lands, so the falloff simply
+  // holds its edge value there and the surround reads as unlit phosphor.
+  vec2 ruv = clamp(suv, 0.0, 1.0);
+  vec2 vg = ruv * (1.0 - ruv.yx);
   col *= mix(1.0, pow(clamp(vg.x * vg.y * 90.0, 0.0, 1.0), 0.10), 0.35 * uCrt + 0.10);
 
   // ---- collapse flash: the line and dot a tube leaves behind --------------
@@ -180,6 +201,7 @@ export class CRT {
   constructor(canvas, source) {
     this.canvas = canvas;
     this.source = source;
+    this.raster = [0, 0, 1, 1];           // origin x, y and extent w, h in canvas UV
     this.ok = false;
     const gl = canvas.getContext("webgl2", {
       alpha: false, antialias: false, premultipliedAlpha: false,
@@ -256,9 +278,14 @@ export class CRT {
       decay: gl.getUniformLocation(this.progPersist, "uDecay"),
     };
     this.u = {};
-    for (const n of ["uTex","uOut","uSrc","uTime","uPower","uCrt","uDegauss","uStatic","uWarm"]) {
+    for (const n of ["uTex","uOut","uSrc","uTime","uPower","uCrt","uDegauss","uStatic","uWarm","uRaster"]) {
       this.u[n] = gl.getUniformLocation(this.progCrt, n);
     }
+  }
+
+  /** Place the raster on the glass; values are fractions of the canvas. */
+  setRaster(x, y, w, h) {
+    this.raster = [x, y, Math.max(w, 1e-4), Math.max(h, 1e-4)];
   }
 
   resize(cssW, cssH, dpr) {
@@ -304,6 +331,7 @@ export class CRT {
     gl.uniform1f(this.u.uDegauss, state.degauss);
     gl.uniform1f(this.u.uStatic, state.static);
     gl.uniform1f(this.u.uWarm, state.warm);
+    gl.uniform4f(this.u.uRaster, this.raster[0], this.raster[1], this.raster[2], this.raster[3]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 }

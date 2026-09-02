@@ -10,8 +10,10 @@ import './crt-bypass.css'
 import './media-viewer.css'
 import './contact-links.css'
 import './release-fixes.css'
+import './fullscreen.css'
 import { start } from './app.js'
 import { attachArticleCRT } from './article-crt-bridge.js'
+import { installFullscreenSoftkeys } from './fullscreen-softkeys.js'
 import { installRuntimeControls } from './runtime-controls.js'
 import { installSemanticFocusProxy } from './semantic-focus.js'
 
@@ -20,6 +22,7 @@ const boot = () => {
   installRuntimeControls(app)
   attachArticleCRT(app)
   installSemanticFocusProxy()
+  installFullscreenSoftkeys(app)
 }
 
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(boot)

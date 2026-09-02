@@ -20,7 +20,7 @@ export class InlineIntegrationController {
     this._ensureOpticsFilter()
 
     this.layer = document.createElement('div')
-    this.layer.className = 'document-inline-integrations'
+    this.layer.className = 'document-inline-integrations raster-layer'
     this.layer.setAttribute('role', 'group')
     this.layer.setAttribute('aria-label', 'Interactive project integrations')
     this.tube?.append(this.layer)

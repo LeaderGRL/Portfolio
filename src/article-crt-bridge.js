@@ -151,14 +151,6 @@ class ArticleCRTRuntime {
     return true
   }
 
-  enterFullscreen() {
-    return this.pipeline.enterFullscreen(document.getElementById('screen'))
-  }
-
-  exitFullscreen() {
-    return this.pipeline.exitFullscreen()
-  }
-
   destroy() {
     if (this.destroyed) return
     this.destroyed = true
