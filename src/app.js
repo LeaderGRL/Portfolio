@@ -221,8 +221,9 @@ export class App {
 
   /* ----------------------------------------------------------- full screen
    * An accessibility mode, not a different product: the glass fills the
-   * viewport and the chassis is set aside so the same 480x360 raster can be
-   * read at three times its size. Native full screen is requested on top when
+   * viewport and the chassis is set aside. The terminal keeps its proportional
+   * grid; documents reflow and sources render at viewport resolution.
+   * Native full screen is requested on top when
    * the browser allows it, but the layout never depends on it — iOS Safari
    * has no element full screen at all, and it still gets the enlarged tube.
    */

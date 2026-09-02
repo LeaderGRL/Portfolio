@@ -80,11 +80,13 @@ body.is-crt-fullscreen .article-reader{
 body.is-crt-fullscreen .document-inline-integrations{
   clip-path:inset(0 0 calc(var(--fullscreen-bottom) + 32px * var(--document-scale)) 0);
 }
-/* Restore the original photographic shade and two-layer gloss. Cover-fit
-   the specular from its upper-left origin to preserve its shape on both
-   landscape and portrait glass; the source still fills the entire window. */
+/* The photographic streak follows the desk bezel's rounded aperture, not
+   a borderless viewport. Enlarging it floats a false corner over the content
+   (especially portrait articles). Fullscreen keeps the CRT and diffuse shade,
+   but omits this specular rather than cutting the picture to fit the light.
+   The original desk reflection returns automatically when fullscreen ends. */
 body.is-crt-fullscreen .tube__gloss{
-  object-fit:cover; object-position:0 0;
+  display:none;
 }
 
 /* ---------------------------------------------------------------------------

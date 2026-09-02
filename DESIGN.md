@@ -111,10 +111,12 @@ match the reference hardware legends.
   and persistence textures use the actual output resolution (2x density,
   4096-pixel dimension and 8-megapixel caps), including media inspection.
   Fullscreen restores the original CRT profile: bloom, curvature, grille,
-  chromatic separation and phosphor persistence match the desk. The original
-  photographic shade and two-layer upper-left gloss remain active in both
-  modes. Beam count stays independent of source resolution, preserving the
-  CRT character without downsampling article content. No substitute CSS glare.
+  chromatic separation and phosphor persistence match the desk. Diffuse shading
+  stays active, but the photographic gloss is desk-only: its rounded streak
+  does not match a borderless viewport and can obscure portrait article text.
+  Do not round/crop the fullscreen canvas or add a substitute glare to justify
+  that reflection. Beam count stays independent of source resolution,
+  preserving the CRT character without downsampling article content.
   The chassis is hidden; a phosphor-styled softkey row at the bottom carries the
   sections, BACK, ENTER and EXIT so touch and pointer users are never
   stranded. `Escape` leaves full screen before it means BACK.
