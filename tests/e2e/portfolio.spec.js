@@ -10,7 +10,8 @@ async function boot(page, path = '/') {
   await page.goto(path)
   await expect(page.locator('#machine')).toBeVisible()
   await expect(page.locator('#tube')).toBeVisible()
-  await page.waitForTimeout(700)
+  const section = (path.split('/')[1] || 'home').toUpperCase()
+  await expect(page.locator('#nav-keys .key.is-on')).toHaveAttribute('aria-label', section)
 }
 
 async function compactGeometry(page) {
@@ -176,6 +177,9 @@ test('semantic article focus has a visible CRT proxy', async ({ page }, testInfo
 test('generic imported article image alternatives are contextualized', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Semantic content only needs one engine for this assertion')
   await boot(page, '/articles/01-ecs-entity-management')
+  // Article loading is async; collecting immediately can observe an empty
+  // reader when the test runner is faster than the document fetch.
+  await expect(page.locator('.article-reader img').first()).toBeAttached()
   const alts = await page.locator('.article-reader img').evaluateAll(images => images.map(image => image.getAttribute('alt') || ''))
   expect(alts.length).toBeGreaterThan(0)
   expect(alts.some(alt => /^article illustration$/i.test(alt.trim()))).toBe(false)

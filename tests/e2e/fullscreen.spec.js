@@ -5,7 +5,7 @@ const isChromiumDesktop = testInfo => testInfo.project.name === 'chromium'
 const isMobile = testInfo => testInfo.project.name === 'mobile-chromium'
 
 // Native fullscreen can use the runner's virtual monitor rather than the
-// requested viewport. Leave time for software-GL captures on parallel CI.
+// requested viewport. Leave time for software-GL captures on hosted runners.
 test.describe.configure({ timeout: 60_000 })
 
 async function attachScreenshot(page, testInfo, name) {
@@ -18,7 +18,10 @@ async function boot(page, path = '/') {
   await page.goto(path)
   await expect(page.locator('#machine')).toBeVisible()
   await expect(page.locator('#tube')).toBeVisible()
-  await page.waitForTimeout(700)
+  // Visible glass can still be showing the firmware boot sequence. Wait for
+  // navigation restoration before sending keys to the requested route.
+  const section = (path.split('/')[1] || 'home').toUpperCase()
+  await expect(page.locator('#nav-keys .key.is-on')).toHaveAttribute('aria-label', section)
 }
 
 function overlaps(a, b) {
@@ -113,7 +116,7 @@ test('escape leaves full screen before it means BACK', async ({ page }, testInfo
 
 test('full screen switch sits on its own tier on the portable panel', async ({ page }, testInfo) => {
   test.skip(!isMobile(testInfo), 'Portable geometry regression only needs the mobile engine')
-  test.setTimeout(120_000) // Full-viewport software GL plus a high-DPR screenshot on parallel CI workers.
+  test.setTimeout(120_000) // Full-viewport software GL plus a high-DPR screenshot on hosted runners.
   await boot(page)
 
   const boxes = {}
