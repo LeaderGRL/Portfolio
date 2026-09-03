@@ -1,94 +1,80 @@
 ---
 title: ASTRO
-sub: A 2–4 player party game where cooperation lasts exactly as long as it is useful
-status: UNREAL ENGINE · GAME DESIGN · CAMERA PROGRAMMING
-stack: [Unreal Engine, C++, Blueprints, Game Design, Gameplay Programming, Multiplayer]
+sub: A competitive local party game about stealing alien eggs before something much larger notices
+status: UNREAL ENGINE · GAME DESIGN · LOCAL MULTIPLAYER
+stack: [Unreal Engine, C++, Blueprints, Game Design, Local Multiplayer, Audio]
 theme: synthwave
 link: https://github.com/LeaderGRL/A_back
 ---
 
 ::facts{columns=2 label="PROJECT SNAPSHOT"}
-FORMAT | LOCAL PARTY GAME
+ORIGIN | CONFITURE DE JEUX × YNOV 2024
+JAM | 8–10 MARCH 2024
+THEME | ATTENTION AUX APPARENCES
+FORMAT | COMPETITIVE LOCAL PARTY GAME
 PLAYERS | 2–4
 ENGINE | UNREAL ENGINE
-BORN AT | GAME CRÉALAB
 MY ROLE | GAME DESIGNER
-ENGINEERING CONTRIBUTION | CAMERA SYSTEM
+NEXT STEP | GAME CRÉALAB LYON 2024
 ::
 
-## ASTRONAUTS, EGGS AND TEMPORARY FRIENDSHIP
+## IT STARTED AS A GAME JAM
 
-ASTRO started during **Game CréaLab** with a fairly reasonable party-game question: what happens if players need each other, but still really want to win?
+ASTRO began during the **Confiture de Jeux × Ynov 2024** game jam. The event ran over one weekend, from March 8 to March 10, with the theme **"Attention aux apparences"**.
 
-The answer became a colorful 2–4 player game starring animal astronauts — the **Astronimals** — stranded on an alien planet and collecting eggs while gadgets, hazards and the other players keep the plan from staying sensible for very long.
+The jam version already had the part of ASTRO that matters most: a very small ruleset that becomes noisy as soon as several people share the same screen.
 
-During the collection phase, everybody is chasing their own score. Then the boss arrives and suddenly the person you were annoying thirty seconds ago becomes extremely useful. Once the danger is gone, friendship expires and the scoreboard gets the final word.
+You play an animal astronaut on an alien planet. Eggs are scattered around the arena. Pick them up, bring them back to your chest, and reach the target before the other players do.
 
-::media{src="gameplay.webp" label="ASTRO / PLAYABLE BUILD" alt="ASTRO playable build with two Astronimals" fit=contain background=off height=300}
+::media{src="gameplay.webp" label="ASTRO / GAME JAM BUILD" alt="ASTRO local multiplayer gameplay with Astronimals collecting eggs" fit=contain background=off height=300}
 
-## THE GAME IN MOTION
+Movement is simple, there is a dash, and players can push each other around. The result is less about learning a long list of mechanics and more about what happens when several players want the same thing at the same time.
 
-The playable build says more in a few seconds than a page of feature bullets ever could: shared movement, eggs, gadgets, boss pressure and several players trying to understand the same screen at the same time.
+The alien and later boss encounters add another source of pressure to that race. They are **not a cooperation phase**: ASTRO remains competitive.
 
-::video{src="/media/Astro/gameplay.mp4" alt="Full ASTRO gameplay capture from the playable build"}
+## FROM A WEEKEND PROTOTYPE TO A PROJECT
 
-The full capture is kept local to the portfolio. It only starts loading when playback is requested, so a four-minute gameplay video does not get to ambush the initial page load.
+A jam is very good at answering one question: **does the basic loop work at all?** It is much less useful for answering the next fifty questions that appear once you decide to keep the project alive.
 
-## GAME CRÉALAB
+ASTRO continued after the jam instead of being left as a weekend prototype. The public itch.io build still describes the same competitive core: collect eggs, return them to your chest, use movement and timing to get ahead, and deal with whatever interrupts the hunt.
 
-ASTRO was shaped inside **Game CréaLab**, with a small multidisciplinary team working through the game together rather than throwing a finished design document over a wall and hoping for the best.
+That continuity matters. The project did not need a completely different premise after the jam; it needed time to find which parts of the original idea deserved more depth and which ones were only interesting on a whiteboard.
 
-::media{src="game-crealab.webp" label="ASTRO × GAME CRÉALAB" alt="ASTRO project visual made for Game CréaLab" fit=contain background=off height=250}
+## GAME CRÉALAB LYON 2024
 
-That mattered because the game depended on things that are hard to judge in isolation. A mechanic could sound good on paper and immediately become unreadable with four players. A camera setting could feel comfortable with two people and become a hostage situation with four. A boss could encourage cooperation right up until nobody understood what was happening on screen.
+A few months later, ASTRO was selected for **Game Créalab Lyon 2024**, a two-week game-concept residency held at Pôle Pixel in Villeurbanne.
 
-So we built, played, argued politely, changed things, played again and repeated the process.
+Only **4 projects were selected from 38 applications** for that edition. Each selected team received a €2,500 grant for the residency and worked through a programme built around concept development, writing, game design, artistic direction, technical questions, market positioning, coaching and professional feedback.
 
-## FINDING THE ACTUAL GAME
+::media{src="game-crealab.webp" label="ASTRO × GAME CRÉALAB" alt="ASTRO visual used during Game Créalab Lyon 2024" fit=contain background=off height=250}
 
-The early design work was deliberately messy. We explored golden eggs, surprise events, power-ups falling from the sky, weather that could push players around, different scoring rules, more ways to interfere with each other and several versions of the cooperation layer.
+The residency itself was supported through the CNC's video-game funding ecosystem. The CNC's 2024 commission results list **Game Créalab 2024** among the projects receiving support under *aide aux manifestations*.
 
-::media{src="design-board.webp" label="GAME DESIGN / EARLY ITERATION" alt="ASTRO game design board with mechanics and iteration notes" fit=contain height=280}
+For ASTRO, the useful part was the extra development time and external scrutiny: the jam prototype now had to be explained, challenged and presented as an actual game project rather than simply as something that successfully survived a Sunday deadline.
 
-One recurring idea was **surprise**: not randomness for its own sake, but events that force the group to react. An alien dropping in where an egg was expected is useful because everybody can see the situation change. A random punishment with no readable cause is mostly useful for starting an argument with the game.
+## DESIGNING A COMPETITIVE LOOP
 
-The semi-cooperative premise changed too. We did not keep a mechanic simply because it looked good in the pitch. If forced cooperation made the game less fun, it was reduced or moved to moments where it actually created something between players.
+The public pitch is straightforward: **collect more alien eggs than the other players**.
 
-::pipeline{label="THE MATCH, MORE OR LESS"}
-COLLECT | GET EGGS, BUILD A LEAD, PRETEND TO HAVE A PLAN
-CONTEST | OTHER PLAYERS BECOME THE PLAN'S MAIN TECHNICAL ISSUE
-SURPRISE | EVENTS AND GADGETS BREAK ROUTINES
-BOSS | EVERYBODY DISCOVERS TEAMWORK AT THE SAME TIME
-RESULT | THE SCOREBOARD ENDS THE TRUCE
-::
+That simplicity is useful because every extra system has to justify what it adds to the match. The design work around ASTRO explored different ways of creating surprise and changing the rhythm of the egg hunt, but those documents are design history — not a list of features that all ended up in the game.
 
-## FROM SKETCHES TO ASTRONIMALS
+::media{src="design-board.webp" label="GAME DESIGN / EXPLORATION" alt="ASTRO game design board containing mechanics and iteration notes" fit=contain height=280}
 
-The characters went through the same process. We wanted silhouettes that stayed readable from the top-down camera, enough personality to sell the party-game tone, and designs that could survive being quite small on screen.
+One of the clearest ideas in the early notes is the use of **surprise** to keep the match from becoming completely solved. An alien can disturb an expected egg pickup; other ideas were tested on paper before being kept, changed or discarded.
 
-::media{src="characters.webp" label="CHARACTER EXPLORATION" alt="ASTRO Astronimal character concepts" fit=contain background=off height=270}
+That distinction is important for this page: prototypes, discarded ideas and current mechanics are not the same thing. The portfolio should show the reasoning process without pretending every Post-it became a shipped feature.
 
-The result is intentionally playful rather than subtle. This is also a game that considered a banana as a perfectly valid piece of equipment, so restraint had already left the production fairly early.
+## THE ASTRONIMALS
 
-## MY ROLE — GAME DESIGN + CAMERA
+The characters were designed to stay readable from a top-down multiplayer camera while still giving the game a strong visual identity.
 
-My official role on ASTRO was **Game Designer**, with an additional programming contribution around the camera. That overlap ended up being useful because some of the most interesting problems were exactly where design and implementation collided.
+::media{src="characters.webp" label="ASTRONIMAL CHARACTER EXPLORATION" alt="ASTRO character concepts for the animal astronauts" fit=contain background=off height=270}
 
-On the design side, I worked on the semi-cooperative structure, rules, surprise mechanics, scoring ideas and playtest iteration. The team regularly proposed solutions to design problems; I sorted and combined those proposals before we decided what was worth testing.
+The exaggerated shapes and colors make sense for the camera distance and for a game where several characters, eggs and hazards can occupy the same view at once. Readability here is not just an art problem; it directly affects how quickly a player understands what happened.
 
-My main programming contribution was the **camera**, including its gameplay behavior and work around boss / camera transitions. That was a good problem to own because a local multiplayer camera is secretly a game rule wearing a rendering hat.
+## ENGINEERING THE GAME FLOW
 
-::media{src="camera-work.webp" label="CAMERA WORK / PRODUCTION" alt="ASTRO development session while working on the game" fit=contain height=280}
-
-Four local players do not politely remain at the ideal distance from each other. We had to think about group framing, camera distance, movement, what happens when players spread out, and how boss phases can demand a different view. We also explored adaptive solutions such as separating the view when players move too far apart and bringing it back together when the group reunites.
-
-That created a useful loop: change the design, feel the camera problem, change the implementation, playtest it, then discover a new design problem. Very efficient at generating both progress and TODOs.
-
-## ENGINEERING THE PHASE CHANGES
-
-ASTRO changes its rules during a match, so phase management could easily have turned into a collection of booleans with increasingly emotional names.
-
-The Unreal project instead contains a dedicated game-flow state machine. Each state owns an `Enter`, `Manage` and `Exit` lifecycle, while a central manager performs transitions and rebinds delegates. The state requests the transition; the manager keeps ownership of the active phase.
+The current Unreal repository separates the main game, menu and state-machine code into different modules. The game-flow layer uses explicit state actors with `Enter`, `Manage` and `Exit` lifecycle functions, while a manager owns the active state and performs transitions.
 
 ```cpp
 void AGameFlowStateManager::SwitchState(AGameFlowState* SwitchingState)
@@ -107,47 +93,50 @@ void AGameFlowStateManager::SwitchState(AGameFlowState* SwitchingState)
 }
 ```
 
-That separation is useful for ASTRO because collection, boss encounters and results are genuinely different modes of play. Making those transitions explicit is much easier to reason about than asking six unrelated systems whether the boss is "sort of happening right now".
+This is a good fit for a game whose match is made of clearly different moments. The state manager keeps transition ownership in one place instead of turning game flow into a collection of unrelated flags spread across gameplay classes.
 
-## AUDIO WITHOUT BLUEPRINT SPAGHETTI
+It is also the kind of engineering detail worth showing in a portfolio because it answers a concrete question: **how is the game structured so that its phases can change without every system needing to know everything?**
 
-The audio workflow used reusable data assets instead of wiring every sound independently. Gameplay assets map string keys to an `Audio Data` structure; shared Blueprint helpers can play the entry directly or spawn an `Audio Component` when a looping sound needs to be stopped later.
+## DATA-DRIVEN AUDIO
 
-Animation notifies use the same data-asset + key contract. That kept sound replacement cheap for the sound designer and avoided duplicating the same playback logic across gameplay graphs.
+The project also contains a reusable audio workflow based on Data Assets. Gameplay data maps string keys to an `Audio Data` structure, and shared Blueprint helpers can either play the sound directly or return an `Audio Component` when the caller needs control over a looping or stoppable sound.
 
-And because **DOGMA** produced actual music for the project, it would be a little rude to reduce it to five-second previews.
+Animation notifies reuse the same data-asset-and-key contract. That keeps the call sites small and makes sound changes possible without rebuilding the same Blueprint logic in every gameplay object.
 
 ## SOUNDTRACK
 
-These are the **complete tracks**, not excerpts. They are stored as web-optimized MP3 files and use metadata-only preload; the audio payload starts when you press play rather than when the project page opens.
+DOGMA handled sound design for ASTRO. The portfolio currently exposes lightweight web previews while the full production tracks are prepared for streaming delivery.
 
-::audio{src="/media/Astro/menu.mp3" label="MENU" credit="DOGMA · ASTRO SOUNDTRACK · FULL TRACK"}
+::audio{src="/media/Astro/menu-preview.mp3" label="MENU" credit="DOGMA · ASTRO SOUNDTRACK · WEB PREVIEW"}
 
-::audio{src="/media/Astro/in-game.mp3" label="IN GAME" credit="DOGMA · ASTRO SOUNDTRACK · FULL TRACK"}
+::audio{src="/media/Astro/in-game-preview.mp3" label="IN GAME" credit="DOGMA · ASTRO SOUNDTRACK · WEB PREVIEW"}
 
-::audio{src="/media/Astro/volcano.mp3" label="VOLCANO MAP" credit="DOGMA · ASTRO SOUNDTRACK · FULL TRACK"}
+::audio{src="/media/Astro/volcano-preview.mp3" label="VOLCANO MAP" credit="DOGMA · ASTRO SOUNDTRACK · WEB PREVIEW"}
 
-::audio{src="/media/Astro/victory.mp3" label="VICTORY JINGLE" credit="DOGMA · ASTRO SOUNDTRACK · FULL TRACK"}
+::audio{src="/media/Astro/victory-jingle.mp3" label="VICTORY JINGLE" credit="DOGMA · ASTRO SOUNDTRACK"}
 
-## THE PEOPLE BEHIND THE ASTRONIMALS
+## THE TEAM
 
-ASTRO was a team project, and that is part of the story rather than a credit roll hidden at the bottom. A lot of the useful iteration happened with several disciplines in the same room: design could see implementation constraints immediately, programming could ask for clearer rules, and art could tell us when a "small change" was absolutely not a small change.
+The public jam page credits the team as:
 
-::gallery{columns=2 fit=contain}
-team-01.webp | BUILDING THE GAME TOGETHER
-team-03.webp | PLAYTEST / PRODUCTION
-team.webp | TEAM WORK SESSION
-team-trip.webp | ON THE WAY TO GAME CAMP
+::facts{columns=2 label="CREDITS"}
+PAULINE MERCAT | PRODUCER · CHARACTER ARTIST · ANIMATOR
+ALEXANDRE GAULÉ | TECH ARTIST
+ELIOTT GUIGNABAUDET | GAME PROGRAMMER
+JORDAN GRILLY | GAME DESIGNER
+ZOÉ GUIGNABAUDET | ENVIRONMENT ARTIST · UI ARTIST
+DOGMA | SOUND DESIGNER
 ::
 
-::media{src="camera-work.webp" label="DEVELOPMENT SESSION" alt="ASTRO development session with the team working on the game" fit=contain height=260}
+::gallery{columns=2 fit=contain}
+team-01.webp | PRODUCTION
+team-03.webp | WORK SESSION
+team.webp | TEAM
+team-trip.webp | GAME CAMP
+::
 
-The core team was **Pauline Mercat** (Producer), **Zoé Guignabaudet** (Art Director), **Alexandre Gaulé** (3D Artist), **Eliott Guignabaudet** (Gameplay Programmer), **DOGMA** (Sound Designer), and me on **Game Design**, with camera programming as an additional contribution.
+## WHAT THIS PAGE SHOULD EXPLAIN
 
-## WHAT I KEPT FROM ASTRO
+ASTRO is interesting because its history is visible: a competitive local-multiplayer idea built during a jam, kept alive after the deadline, then selected for a professional concept-development residency.
 
-ASTRO taught me that party-game design is mostly about controlling understandable chaos. The mechanic itself can be tiny; what matters is what it makes several people do to each other when the screen gets busy.
-
-It also made the designer-programmer overlap very concrete for me. Camera framing, player freedom, boss readability and game rules were not separate tasks. They kept pushing on each other, which meant I could move from a playtest observation to a design change and then directly into the implementation needed to test it.
-
-That loop is still one of my favorite ways to work: **build something, put it in front of players, discover exactly how wrong the elegant theory was, and make the next version better.**
+The next version of this case study should go deeper into **what I personally designed, what changed after playtests, and which technical systems I personally implemented**. Those details should come from the production history, not from guesses made after reading the repository.
