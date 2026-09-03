@@ -17,6 +17,7 @@ export const BLOCK_DEFINITIONS = Object.freeze({
 
   image: Object.freeze({ kind: 'media', assetFields: ['src'] }),
   video: Object.freeze({ kind: 'media', assetFields: ['src'], interactive: true }),
+  audio: Object.freeze({ kind: 'media', assetFields: ['src'], interactive: true }),
 
   hero: Object.freeze({ kind: 'composition', assetFields: ['media', 'poster'] }),
   media: Object.freeze({ kind: 'composition', assetFields: ['src'], interactive: true }),
@@ -78,5 +79,6 @@ export function normalizeProvider(block) {
   if (!block) return null
   if (block.type === 'model3d') return 'local-3d'
   if (block.type === 'video') return 'video'
+  if (block.type === 'audio') return 'audio'
   return String(block.provider || 'iframe').toLowerCase()
 }
