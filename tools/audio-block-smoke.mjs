@@ -46,8 +46,11 @@ for (const filename of ['gameplay.webp', 'design-board.webp', 'team.webp', 'volc
   check(size > 1000 && size < 100_000, `${filename} is optimized for CRT presentation`)
 }
 
-check(astro.includes('JORDAN GRILLY | GAME DESIGNER'), 'Astro keeps Jordan role attribution explicit')
-check(astro.includes('GAME FLOW AS STATES'), 'Astro documents game-flow engineering')
+check(astro.includes('JORDAN GRILLY | GAME DESIGNER + PROGRAMMER'), 'Astro credits Jordan as designer and programmer')
+check(astro.includes('## MY ROLE — DESIGN + PROGRAMMING'), 'Astro separates Jordan contribution from project architecture')
+check(astro.includes('## PROGRAMMING: CAMERA AS A GAMEPLAY SYSTEM'), 'Astro documents Jordan camera programming focus')
+check(astro.includes('CAMERA / DESIGN LOOP'), 'Astro connects camera implementation to design iteration')
+check(astro.includes('PROJECT ARCHITECTURE: GAME FLOW AS STATES'), 'Astro documents shared game-flow architecture')
 check(astro.includes('DATA-DRIVEN AUDIO'), 'Astro documents audio engineering')
 check(astro.includes('## THE TEAM'), 'Astro documents the multidisciplinary team')
 check(astro.includes('## FROM IDEAS TO RULES'), 'Astro documents the design reasoning process')
