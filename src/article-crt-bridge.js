@@ -87,7 +87,7 @@ class ArticleCRTRuntime {
       if (entry.type !== 'model3d') continue
       const top = entry.y - this.documentRaster.scroll
       const bottom = top + entry.height
-      if (bottom > 1 && top < this.documentCanvas.height - 1) visible.push(entry.block)
+      if (bottom > 1 && top < this.documentRaster.readingHeight - 1) visible.push(entry.block)
     }
     return visible
   }
@@ -105,6 +105,7 @@ class ArticleCRTRuntime {
 
     const nextId = documentItem ? 'document' : 'terminal'
     if (this.pipeline.setSource(nextId)) {
+      this.app._fitRaster()
       this.app.dirty = true
       this.app.state.static = this.mediaViewer.isOpen
         ? 0
@@ -125,6 +126,37 @@ class ArticleCRTRuntime {
     this.documentRaster.paint(true)
     this.progressOverlay.paint(this.documentRaster)
     return true
+  }
+
+  captureReadingPosition() {
+    if (!this.isDocument()) return null
+    const range = Math.max(0, this.reader.scrollHeight - this.reader.clientHeight)
+    return { item: this.app.state.item, progress: range ? this.reader.scrollTop / range : 0 }
+  }
+
+  setViewport(layout) {
+    // A resize event arrives after the browser has already reflowed the DOM.
+    // Its new scroll range cannot describe the old reading position. The
+    // raster still holds the last synchronized progress in the old layout.
+    const { scroll, maxScroll } = this.documentRaster
+    const position = this.isDocument()
+      ? { item: this.app.state.item, progress: maxScroll ? scroll / maxScroll : 0 }
+      : null
+    if (!this.documentRaster.setViewport(layout)) return
+    this.restoreReadingPosition(position)
+    this.inlineIntegrations.clear()
+    this.mediaViewer.resize()
+  }
+
+  restoreReadingPosition(position) {
+    if (!position || position.item !== this.app.state.item) return
+    // The visible raster uses a normalized DOM scroll range. Fullscreen can
+    // change the viewport height and trigger native scroll anchoring during
+    // intermediate layout; restoring raw scrollTop would still move its pixels.
+    const range = Math.max(0, this.reader.scrollHeight - this.reader.clientHeight)
+    this.reader.scrollTop = position.progress * range
+    this.documentRaster._syncScrollFromDOM()
+    this.documentRaster.markDirty()
   }
 
   frame(time) {
@@ -149,14 +181,6 @@ class ArticleCRTRuntime {
     this.syncSource()
     this.app.dirty = true
     return true
-  }
-
-  enterFullscreen() {
-    return this.pipeline.enterFullscreen(document.getElementById('screen'))
-  }
-
-  exitFullscreen() {
-    return this.pipeline.exitFullscreen()
   }
 
   destroy() {

@@ -155,7 +155,7 @@ export const PAGES = {
         t.put(33, 10 + i, "· " + v, "mid");
       });
 
-    footer(t, "PRESS 1-5 OR USE THE LEFT KEYS");
+    footer(t, "PRESS 1-5 OR USE THE MENU KEYS");
   },
 
   /* --------------------------------------------------------------- ABOUT */

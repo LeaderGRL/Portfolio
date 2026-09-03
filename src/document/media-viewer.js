@@ -5,11 +5,13 @@
  *
  * CRT ON deliberately reuses the proven document framebuffer (`article-source`)
  * instead of switching WebGL to a third source. While inspection is open, the
- * document rasteriser is paused and this viewer owns those 480x360 pixels.
+ * document rasteriser is paused and this viewer owns its pixels (480x360 on
+ * the desk, viewport resolution in fullscreen).
  * Closing the viewer simply lets the document repaint at the exact same scroll.
  *
  * CRT OFF uses a separate 1440x1080 canvas so project media can be inspected
- * cleanly at a substantially higher resolution.
+ * cleanly at a substantially higher resolution on the desk. In fullscreen,
+ * both paths use the same high resolution, with no sharpness jump on opening.
  * ========================================================================== */
 export class MediaViewer {
   constructor({ tube, crtCanvas, onChange = () => {} }) {
@@ -25,7 +27,7 @@ export class MediaViewer {
 
     this.hiresCanvas = document.createElement('canvas')
     this.hiresCanvas.id = 'media-inspect-hires'
-    this.hiresCanvas.className = 'display-pixel-source'
+    this.hiresCanvas.className = 'display-pixel-source raster-layer'
     this.hiresCanvas.width = 1440
     this.hiresCanvas.height = 1080
     this.hiresCanvas.setAttribute('aria-hidden', 'true')
@@ -52,6 +54,7 @@ export class MediaViewer {
 
     this.onTubeClick = event => {
       if (!this.isOpen) return
+      if (event.target.closest?.('#softkeys')) return
       event.preventDefault()
       event.stopPropagation()
       this.close()
@@ -76,7 +79,8 @@ export class MediaViewer {
 
   _clear(ctx, width, height) {
     if (!ctx) return
-    ctx.fillStyle = '#010403'
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.fillStyle = document.body.classList.contains('is-crt-fullscreen') ? '#031009' : '#010403'
     ctx.fillRect(0, 0, width, height)
   }
 
@@ -87,13 +91,16 @@ export class MediaViewer {
     const sw = image.naturalWidth || image.width || 1
     const sh = image.naturalHeight || image.height || 1
     const pad = Math.max(3, Math.round(Math.min(width, height) * 0.015))
+    const reserved = document.body.classList.contains('is-crt-fullscreen')
+      ? (document.getElementById('softkeys')?.offsetHeight || 32) * height / Math.max(1, this.tube.offsetHeight) + pad
+      : 0
     const maxW = Math.max(1, width - pad * 2)
-    const maxH = Math.max(1, height - pad * 2)
+    const maxH = Math.max(1, height - pad * 2 - reserved)
     const scale = Math.min(maxW / sw, maxH / sh)
     const dw = Math.max(1, sw * scale)
     const dh = Math.max(1, sh * scale)
     const dx = (width - dw) * 0.5
-    const dy = (height - dh) * 0.5
+    const dy = (height - reserved - dh) * 0.5
 
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
@@ -142,6 +149,17 @@ export class MediaViewer {
       this._paintLoadingState()
     }
     image.src = item.src
+  }
+
+  resize() {
+    const fullscreen = document.body.classList.contains('is-crt-fullscreen')
+    const width = fullscreen ? this.crtCanvas.width : 1440
+    const height = fullscreen ? this.crtCanvas.height : 1080
+    if (this.hiresCanvas.width !== width || this.hiresCanvas.height !== height) {
+      this.hiresCanvas.width = width
+      this.hiresCanvas.height = height
+    }
+    if (this.isOpen) this._renderCurrent()
   }
 
   open(items, index = 0) {

@@ -51,10 +51,10 @@
     <div class="screen" id="screen">
       <div class="tube" id="tube" data-display-mode="terminal">
         <canvas id="gl"></canvas>
-        <canvas id="fallback2d"></canvas>
-        <canvas class="display-pixel-source" id="article-source" aria-hidden="true"></canvas>
+        <canvas class="raster-layer" id="fallback2d"></canvas>
+        <canvas class="display-pixel-source raster-layer" id="article-source" aria-hidden="true"></canvas>
 
-        <div class="display-surface" id="display-surface">
+        <div class="display-surface raster-layer" id="display-surface">
           <article class="article-reader" id="article-reader" tabindex="0" hidden></article>
         </div>
 
@@ -75,6 +75,18 @@
         <div class="control__row">
           <span class="tiny">OFF</span>
           <button class="switch" id="crt-switch" role="switch" aria-checked="true" aria-label="CRT effects">
+            <img class="track" alt="" data-asset="switch-track">
+            <img class="switch__thumb" alt="" data-asset="switch-thumb">
+          </button>
+          <span class="tiny">ON</span>
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="caption">FULL SCREEN</div>
+        <div class="control__row">
+          <span class="tiny">OFF</span>
+          <button class="switch" id="fullscreen-switch" role="switch" aria-checked="false" aria-label="Full screen" aria-keyshortcuts="F">
             <img class="track" alt="" data-asset="switch-track">
             <img class="switch__thumb" alt="" data-asset="switch-thumb">
           </button>
@@ -119,7 +131,7 @@
 
   </div>
 </div>
-<p class="hint" id="hint">1-5 SECTIONS · ↑↓ MOVE · ENTER SELECT · ESC BACK · P POWER</p>
+<p class="hint" id="hint">1-5 SECTIONS · ↑↓ MOVE · ENTER SELECT · ESC BACK · F FULL SCREEN · P POWER</p>
 <div class="sr" id="live" aria-live="polite"></div>
 
 <script type="module" src="/src/main.js"></script>

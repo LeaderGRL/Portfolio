@@ -144,10 +144,14 @@ img{ display:block; -webkit-user-drag:none; user-select:none; pointer-events:non
 .panel--right .rule,
 .panel--right .controls-row,
 .panel--right .bottom-row{ position:absolute; left:calc(50% - 90px); transform:translateX(-50%); }
-.panel--right .stack{ top:129px; }
-.panel--right .rule{ top:305px; width:210px; margin:0; }
-.panel--right .controls-row{ top:343px; }
-.panel--right .bottom-row{ top:505px; }
+/* Three stacked display/audio controls sit under the action keys. The column
+   was balanced on two; the third pushes the grille and rocker down, and the
+   whole column moves up by half that growth so it stays centred on the tube
+   and level with the left rail. */
+.panel--right .stack{ top:77px; }
+.panel--right .rule{ top:253px; width:210px; margin:0; }
+.panel--right .controls-row{ top:291px; }
+.panel--right .bottom-row{ top:521px; }
 .group{ display:flex; flex-direction:column; gap:30px; }
 .stack{ display:flex; flex-direction:column; gap:29px; }
 .rule{
@@ -641,13 +645,18 @@ img{ display:block; -webkit-user-drag:none; user-select:none; pointer-events:non
 .is-compact .key.is-on .key__icon{ color:#315a3e; }
 
 .is-compact .controls-row{
-  display:grid; grid-template-columns:220px 220px; column-gap:80px; align-items:end;
+  display:grid; grid-template-columns:160px 160px 160px; column-gap:20px; align-items:end;
   position:relative;
+  /* The tier used to inherit its offset from the desktop `.control + .control`
+     margin on the second control; with three controls on one row that margin
+     is zeroed below, so the same 22px keeps the tier where it was. */
+  margin-top:22px;
 }
 .is-compact .controls-row::before{
   content:none; display:none;
 }
-.is-compact .control{ width:220px; }
+.is-compact .control{ width:160px; }
+.is-compact .control + .control{ margin-top:0; }
 .is-compact .control__row{ justify-content:center; margin-top:13px; gap:0; }
 .is-compact .control:first-child .caption{ font-size:0; }
 .is-compact .control:first-child .caption::before{ content:"CRT"; font-size:15px; }
@@ -661,7 +670,9 @@ img{ display:block; -webkit-user-drag:none; user-select:none; pointer-events:non
 .is-compact .slider{ width:142px; margin:0; }
 
 .is-compact .bottom-row{
-  display:block; margin-top:54px;
+  /* POWER sits under the middle switch now; a little more air keeps it a
+     distinct tier rather than a third state of FULL SCREEN. */
+  display:block; margin-top:70px;
 }
 .is-compact .grille{ display:none; }
 .is-compact .panel--right .bottom-row .power{ width:max-content; margin:48px auto 0; transform:none; }

@@ -27,7 +27,7 @@ function ensureLayer() {
   let layer = tube.querySelector('.terminal-contact-links')
   if (!layer) {
     layer = document.createElement('nav')
-    layer.className = 'terminal-contact-links'
+    layer.className = 'terminal-contact-links raster-layer'
     layer.setAttribute('aria-label', 'Contact links')
     tube.append(layer)
   }

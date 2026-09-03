@@ -1,3 +1,4 @@
+import { SRC_H, SRC_W } from './core.js'
 import { CRT } from './crt.js'
 
 /* ========================================================================== *
@@ -13,8 +14,9 @@ export class DisplayPipeline {
     const initial = this.activeId ? this.sources.get(this.activeId) : null
     this.crt = crt || (initial && outputCanvas ? new CRT(outputCanvas, initial) : null)
     if (this.crt && initial) this.crt.source = initial
-    this.ok = Boolean(this.crt?.ok)
   }
+
+  get ok() { return Boolean(this.crt?.ok) }
 
   registerSource(id, source) {
     if (!id || !source) return false
@@ -35,12 +37,12 @@ export class DisplayPipeline {
   _clearPersistence() {
     const crt = this.crt
     const gl = crt?.gl
-    if (!gl || !crt.a || !crt.b) return
+    if (!crt?.ok || !gl || !crt.a || !crt.b) return
     const previous = gl.getParameter?.(gl.FRAMEBUFFER_BINDING)
     gl.clearColor(0, 0, 0, 1)
     for (const target of [crt.a, crt.b]) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, target.fb)
-      gl.viewport(0, 0, 480, 360)
+      gl.viewport(0, 0, crt.sourceWidth || SRC_W, crt.sourceHeight || SRC_H)
       gl.clear(gl.COLOR_BUFFER_BIT)
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, previous || null)
@@ -65,20 +67,6 @@ export class DisplayPipeline {
 
   render(state, sourceDirty = false) {
     if (!this.ok) return false
-    this.crt.render(state, sourceDirty)
-    return true
-  }
-
-  async enterFullscreen(target) {
-    const node = target || document.getElementById('screen') || document.querySelector('.screen')
-    if (!node || document.fullscreenElement) return false
-    await node.requestFullscreen?.()
-    return true
-  }
-
-  async exitFullscreen() {
-    if (!document.fullscreenElement) return false
-    await document.exitFullscreen?.()
-    return true
+    return this.crt.render(state, sourceDirty)
   }
 }

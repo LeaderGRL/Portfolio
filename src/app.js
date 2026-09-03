@@ -1,7 +1,8 @@
 import { foley } from './audio.js'
 import { articleReaderScroll } from './article-reader.js'
 import { CONTENT } from './content.js'
-import { COLS, REDUCED, ROWS, clamp, lerp, now } from './core.js'
+import { fullscreenLayout } from './fullscreen-layout.js'
+import { COLS, REDUCED, ROWS, SRC_H, SRC_W, clamp, lerp, now } from './core.js'
 import { CRT } from './crt.js'
 import { syncNavigationHistory, syncNavigationMetadata, resolveNavigation } from './navigation.js'
 import { PAGES } from './pages.js'
@@ -42,6 +43,7 @@ export class App {
       item: null,
       power: 1, powerTarget: 1,
       crt: 1, crtTarget: 1,
+      fullscreen: false,
       degauss: 0, static: 0, warm: 1,
       time: 0,
       clock: "", uptime: "", available: true,
@@ -53,6 +55,13 @@ export class App {
     this.bootAt = now();
     this.lastBlip = 0;
     this.documentRuntime = null;
+    // Terminal-grid hit geometry, as fractions of the tube box. Fullscreen
+    // documents and pixel surfaces cover the entire viewport (see _fitRaster).
+    this.rasterRect = { x: 0, y: 0, w: 1, h: 1 };
+    this.ownsNativeFullscreen = false;
+    this.nativeFullscreenRequest = null;
+    this.fullscreenReturnFocus = null;
+    this.fullscreenFocusFrame = 0;
 
     this._buildKeys();
     this._bindControls();
@@ -62,6 +71,18 @@ export class App {
     this._fit();
     addEventListener("resize", () => this._fit());
     addEventListener("popstate", () => this._restoreNavigation());
+    for (const type of ["fullscreenchange", "webkitfullscreenchange"]) {
+      document.addEventListener(type, () => this._onNativeFullscreenChange());
+    }
+    for (const type of ["fullscreenerror", "webkitfullscreenerror"]) {
+      document.addEventListener(type, event => {
+        // A video's fullscreen error may bubble here while our root request
+        // is still pending. Only settle errors belonging to this request.
+        if (event.target === document || event.target === document.documentElement) {
+          this.nativeFullscreenRequest = null;
+        }
+      });
+    }
 
     this.boot();
     requestAnimationFrame(t => this.frame(t));
@@ -97,6 +118,9 @@ export class App {
       document.getElementById("tube").classList.toggle("is-crt-off", !on);
       foley.ensure(); foley.clunk(1.4);
     });
+
+    const fs = document.getElementById("fullscreen-switch");
+    fs?.addEventListener("click", () => this.toggleFullscreen());
 
     const slider = document.getElementById("volume");
     const thumb = document.getElementById("volume-thumb");
@@ -148,8 +172,18 @@ export class App {
   _bindKeyboard() {
     addEventListener("keydown", e => {
       const k = e.key;
-      const interactive = e.target instanceof Element && e.target.closest(INTERACTIVE_KEY_TARGET);
+      const interactive = e.target instanceof Element ? e.target.closest(INTERACTIVE_KEY_TARGET) : null;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
 
+      // Escape has one job at a time. In full screen it returns the chassis
+      // (the browser exits native full screen on the same key, so the two
+      // stay in step); only then does it mean BACK. Otherwise a reader who
+      // just wanted the desk back would also be thrown out of their article.
+      if (k === "Escape" && this.state.fullscreen) {
+        e.preventDefault();
+        this.setFullscreen(false);
+        return;
+      }
       // Back remains a global hardware action even when a native control owns
       // focus. Arrows and Enter still stay local to sliders, links and media.
       if (k === "Escape" || k === "Backspace") {
@@ -158,7 +192,16 @@ export class App {
         this.back();
         return;
       }
-      if (interactive) return;
+      // Mode controls keep focus for keyboard users. F works from those
+      // controls too, but must not hijack text inputs or native media keys.
+      const softkey = interactive?.matches('.softkeys__key');
+      if ((k === 'f' || k === 'F') && (!interactive || softkey || interactive.id === 'fullscreen-switch')) {
+        if (!e.repeat) { e.preventDefault(); this.toggleFullscreen(); }
+        return;
+      }
+      // Enter/Space still activate a focused softkey natively; other terminal
+      // shortcuts can drive the raster without discarding keyboard focus.
+      if (interactive && (!softkey || k === 'Enter' || k === ' ')) return;
 
       const num = "12345".indexOf(k);
       if (num >= 0) { this.navKeys[ROUTES[num + 1].id].tap(); this.go(ROUTES[num + 1].id); return; }
@@ -183,6 +226,107 @@ export class App {
       else if (k === "p" || k === "P") { document.getElementById("power").click(); }
       else if (k === "c" || k === "C") { document.getElementById("crt-switch").click(); }
     });
+  }
+
+  /* ----------------------------------------------------------- full screen
+   * An accessibility mode, not a different product: the glass fills the
+   * viewport and the chassis is set aside. The terminal keeps its proportional
+   * grid; documents reflow and sources render at viewport resolution.
+   * Native full screen is requested on top when
+   * the browser allows it, but the layout never depends on it — iOS Safari
+   * has no element full screen at all, and it still gets the enlarged tube.
+   */
+  toggleFullscreen() {
+    return this.setFullscreen(!this.state.fullscreen);
+  }
+
+  setFullscreen(on) {
+    on = Boolean(on);
+    if (this.state.fullscreen === on) return false;
+    const readingPosition = this.documentRuntime?.captureReadingPosition?.();
+    if (on) this.fullscreenReturnFocus = document.activeElement;
+    this.state.fullscreen = on;
+    document.body.classList.toggle("is-crt-fullscreen", on);
+    document.getElementById("fullscreen-switch")?.setAttribute("aria-checked", String(on));
+    foley.ensure(); foley.clunk(on ? 1.15 : 0.95);
+    this._syncNativeFullscreen(on);
+    this._fit();
+    this.documentRuntime?.restoreReadingPosition?.(readingPosition);
+    cancelAnimationFrame(this.fullscreenFocusFrame);
+    this.fullscreenFocusFrame = requestAnimationFrame(() => {
+      if (this.state.fullscreen !== on) return;
+      const previous = this.fullscreenReturnFocus;
+      const target = on
+        ? document.querySelector('.softkeys__key--exit')
+        : previous?.isConnected && previous.getClientRects().length && previous !== document.body
+          ? previous
+          : document.getElementById('fullscreen-switch');
+      target?.focus({ preventScroll: true });
+      if (!on) this.fullscreenReturnFocus = null;
+    });
+    // The raster re-registers on a different geometry; a short burst of
+    // static sells the retrace instead of an instant cut.
+    this.state.static = Math.max(this.state.static, 0.55);
+    this.dirty = true;
+    return true;
+  }
+
+  _syncNativeFullscreen(on) {
+    const root = document.documentElement;
+    const active = document.fullscreenElement || document.webkitFullscreenElement;
+    try {
+      if (on) {
+        if (active || this.nativeFullscreenRequest) return;
+        const request = root.requestFullscreen || root.webkitRequestFullscreen;
+        if (!request) return;
+        const token = {};
+        this.nativeFullscreenRequest = token;
+        const pending = request.call(root, { navigationUI: "hide" });
+        // Older WebKit returns void: only its change/error event settles the
+        // request. Resolving undefined here would forget a late native entry.
+        if (!pending?.then) return;
+        pending.then(() => {
+          if (this.nativeFullscreenRequest !== token) return;
+          const current = document.fullscreenElement || document.webkitFullscreenElement;
+          if (current === root) {
+            this.nativeFullscreenRequest = null;
+            this.ownsNativeFullscreen = true;
+            // A rapid second press can leave CSS mode before the browser
+            // finishes entering. Undo that late native entry as well.
+            if (!this.state.fullscreen) this._syncNativeFullscreen(false);
+          }
+        }, () => {
+          if (this.nativeFullscreenRequest === token) this.nativeFullscreenRequest = null;
+        });
+      } else if (active === root && (this.ownsNativeFullscreen || this.nativeFullscreenRequest)) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) Promise.resolve(exit.call(document)).catch(() => {});
+      }
+    } catch {
+      this.nativeFullscreenRequest = null;
+      // Refused (no user gesture, iframe policy) or unsupported: the CSS
+      // layout mode is already applied, which is the part that matters.
+    }
+  }
+
+  _onNativeFullscreenChange() {
+    const root = document.documentElement;
+    const active = document.fullscreenElement || document.webkitFullscreenElement;
+    if (active === root) {
+      if (this.state.fullscreen || this.nativeFullscreenRequest || this.ownsNativeFullscreen) {
+        this.nativeFullscreenRequest = null;
+        this.ownsNativeFullscreen = true;
+        if (!this.state.fullscreen) this._syncNativeFullscreen(false);
+      }
+      return;
+    }
+    if (active) return;                     // e.g. an embedded video's own full screen
+    // The browser left native full screen on its own (Esc, F11, system UI).
+    // Follow it, but only when it was ours: an embed exiting its full screen
+    // on iOS must not throw the reader out of the enlarged tube.
+    const owned = this.ownsNativeFullscreen;
+    this.ownsNativeFullscreen = false;
+    if (owned && this.state.fullscreen) this.setFullscreen(false);
   }
 
   _fit() {
@@ -219,11 +363,64 @@ export class App {
       root.removeProperty("--compact-gap-y");
     }
 
-    if (this.crt.ok) {
+    // Fullscreen owns its bounded resolution below. Do not allocate an
+    // uncapped intermediate buffer (e.g. 8K at devicePixelRatio 2) first.
+    if (this.crt.ok && !this.state.fullscreen) {
       const tube = document.getElementById("tube");
       this.crt.resize(tube.offsetWidth || 740, tube.offsetHeight || 576,
                       Math.min(devicePixelRatio || 1, 2));
     }
+    this._fitRaster();
+  }
+
+  // Fullscreen providers paint the complete viewport. Only the terminal's
+  // fixed grid is centred; documents reflow and media retain their own aspect.
+  _fitRaster() {
+    const tube = document.getElementById("tube");
+    const style = tube.style;
+    let rect = { x: 0, y: 0, w: 1, h: 1 };
+
+    if (this.state.fullscreen) {
+      const vw = tube.offsetWidth || innerWidth || 1;
+      const vh = tube.offsetHeight || innerHeight || 1;
+      const layout = fullscreenLayout(vw, vh, devicePixelRatio || 1, document.getElementById('softkeys')?.offsetHeight || 0, this.crt.maxDimension);
+      const picture = layout.terminal;
+      const documentMode = Boolean(this.state.item);
+      if (!documentMode) rect = { x: picture.x / vw, y: picture.y / vh, w: picture.width / vw, h: picture.height / vh };
+      this.raster.setViewport(layout);
+      this.crt.resize(layout.pixelWidth, layout.pixelHeight, 1);
+      style.setProperty("--raster-x", `${(rect.x * 100).toFixed(4)}%`);
+      style.setProperty("--raster-y", `${(rect.y * 100).toFixed(4)}%`);
+      style.setProperty("--raster-base-w", `${SRC_W}px`);
+      style.setProperty("--raster-base-h", `${SRC_H}px`);
+      style.setProperty("--raster-k", (picture.width / SRC_W).toFixed(5));
+      style.setProperty('--fullscreen-bottom', `${layout.bottom}px`);
+      style.setProperty('--document-column', `${Math.min(520, layout.documentWidth - (layout.documentWidth < SRC_W ? 40 : 84)) * layout.textScale}px`);
+      style.setProperty('--document-scale', layout.textScale);
+      // Restore reading progress only after all DOM geometry is published.
+      this.documentRuntime?.setViewport?.(layout);
+    } else {
+      this.raster.setViewport(null);
+      for (const name of ["--raster-x", "--raster-y", "--raster-base-w", "--raster-base-h", "--raster-k", '--fullscreen-bottom', '--document-column', '--document-scale']) {
+        style.removeProperty(name);
+      }
+      this.documentRuntime?.setViewport?.(null);
+    }
+
+    this.rasterRect = rect;
+    this.dirty = true;
+  }
+
+  /** Tube-relative rectangle of the raster in client pixels. */
+  rasterClientRect() {
+    const rect = document.getElementById("tube").getBoundingClientRect();
+    const r = this.rasterRect;
+    return {
+      left: rect.left + rect.width * r.x,
+      top: rect.top + rect.height * r.y,
+      width: rect.width * r.w,
+      height: rect.height * r.h,
+    };
   }
 
   attachDocumentRuntime(runtime) {
@@ -482,7 +679,12 @@ export class App {
     // CRT owns the visible WebGL canvas and composites every frame for
     // persistence, scanlines, degauss/static and power-collapse animation.
     // `sourceDirty` only controls whether the active source texture is uploaded.
-    if (this.crt.ok) this.crt.render(st, sourceDirty);
+    if (this.crt.ok) {
+      this.crt.render(st, sourceDirty);
+      // Allocation can fail after startup (large viewport or GPU pressure).
+      // Keep the live source readable instead of leaving a black GL canvas.
+      if (!this.crt.ok) document.getElementById('tube').classList.add('is-fallback');
+    }
     this.dirty = false;
 
     requestAnimationFrame(n => this.frame(n));

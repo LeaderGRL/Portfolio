@@ -1,4 +1,4 @@
-import { SRC_H, SRC_W, clamp, now } from './core.js'
+import { SRC_H, SRC_W } from './core.js'
 
 /* ==========================================================================
  * 6. CRT — WebGL2 phosphor persistence + composite
@@ -37,6 +37,7 @@ uniform float uCrt;
 uniform float uDegauss;
 uniform float uStatic;
 uniform float uWarm;
+uniform float uScanlines;
 
 // ===========================================================================
 // This shader got considerably smaller in this revision, and that is the
@@ -61,6 +62,10 @@ float noise(vec2 p){
              mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
 }
 
+// Every provider paints the whole glass. Clamping continues its background
+// at the very edge of the curvature, without a second picture border.
+vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }
+
 // Barrel distortion. Real tubes are spherical sections, not planes, and this
 // still has to happen here: the glass maps are static, so only the sampling
 // can make the picture follow the bulge.
@@ -71,14 +76,14 @@ vec2 curve(vec2 uv){
   return uv * 0.5 + 0.5;
 }
 
-vec3 bloom(vec2 uv, float r){
+vec3 bloom(vec2 suv, float r){
   vec3 s = vec3(0.0);
   const int N = 10;
   for (int i = 0; i < N; i++){
     float a = (float(i) + 0.5) / float(N) * 6.2831853;
     vec2 d = vec2(cos(a), sin(a));
-    s += texture(uTex, uv + d * r).rgb;
-    s += texture(uTex, uv + d * r * 0.45).rgb;
+    s += src(suv + d * r);
+    s += src(suv + d * r * 0.45);
   }
   return s / float(N * 2);
 }
@@ -103,13 +108,17 @@ void main(){
 
   vec2 cuv = curve(uv);
 
+  // The source fills the viewport in fullscreen, but the physical tube keeps
+  // its original optics. No underscan mapping or separate picture border.
+  vec2 suv = cuv;
+
   // ---- chromatic aberration, stronger toward the edges -------------------
-  vec2 off = cuv - 0.5;
+  vec2 off = suv - 0.5;
   float ab = (0.0015 + dot(off, off) * 0.010) * uCrt;
   vec3 col;
-  col.r = texture(uTex, cuv + off * ab).r;
-  col.g = texture(uTex, cuv).g;
-  col.b = texture(uTex, cuv - off * ab).b;
+  col.r = src(suv + off * ab).r;
+  col.g = src(suv).g;
+  col.b = src(suv - off * ab).b;
 
   // A real electron beam loses focus progressively toward the rim. Smear
   // along the tube radius rather than applying a uniform blur, preserving the
@@ -118,27 +127,28 @@ void main(){
   float defocus = smoothstep(0.05, 0.30, rr) * uCrt;
   if (defocus > 0.001) {
     vec2 dir = normalize(off + vec2(1e-5)) * (0.0022 + rr * 0.006) * defocus;
-    vec3 smear = texture(uTex, cuv + dir).rgb
-               + texture(uTex, cuv - dir).rgb
-               + texture(uTex, cuv + dir * 2.0).rgb
-               + texture(uTex, cuv - dir * 2.0).rgb;
+    vec3 smear = src(suv + dir)
+               + src(suv - dir)
+               + src(suv + dir * 2.0)
+               + src(suv - dir * 2.0);
     col = mix(col, smear * 0.25, defocus * 0.62);
   }
 
   // Horizontal overshoot gives bright glyph edges the slight analogue ring
   // produced by the video amplifier without shifting the underlying layout.
-  float lead  = texture(uTex, cuv - vec2(1.35 / uSrc.x, 0.0)).g;
-  float trail = texture(uTex, cuv + vec2(1.35 / uSrc.x, 0.0)).g;
+  float lead  = src(suv - vec2(1.35 / uSrc.x, 0.0)).g;
+  float trail = src(suv + vec2(1.35 / uSrc.x, 0.0)).g;
   col += vec3(0.72, 1.0, 0.82) * (col.g - lead) * 0.30 * uCrt;
   col -= vec3(0.55, 0.80, 0.62) * max(trail - col.g, 0.0) * 0.16 * uCrt;
 
   // ---- glow --------------------------------------------------------------
-  col += bloom(cuv, 0.006 + 0.004 * uCrt) * (0.55 + 0.35 * uCrt);
-  col += bloom(cuv, 0.020) * 0.28 * uCrt;
-  col += bloom(cuv, 0.055) * vec3(0.30, 0.40, 0.34) * 0.55 * uCrt;
+  col += bloom(suv, 0.006 + 0.004 * uCrt) * (0.55 + 0.35 * uCrt);
+  col += bloom(suv, 0.020) * 0.28 * uCrt;
+  col += bloom(suv, 0.055) * vec3(0.30, 0.40, 0.34) * 0.55 * uCrt;
 
-  // ---- scanlines locked to the source line count -------------------------
-  float scanWave = 0.5 + 0.5 * cos(cuv.y * uSrc.y * 6.2831853);
+  // Keep the original tube's beam count independently of source resolution:
+  // high-resolution articles must not make its scanlines disappear.
+  float scanWave = 0.5 + 0.5 * cos(suv.y * uScanlines * 6.2831853);
   float scan = pow(scanWave, 7.0);
   col *= mix(1.0, 1.0 - scan * 0.20, uCrt);
 
@@ -164,8 +174,11 @@ void main(){
 
   // Shallow beam falloff only. The glass render's own shading supplies the
   // real edge darkening on the layer above, so doing it again here would
-  // double the vignette and crush the corners.
-  vec2 vg = cuv * (1.0 - cuv.yx);
+  // double the vignette and crush the corners. It follows the raster, not the
+  // glass: beyond the picture the beam never lands, so the falloff simply
+  // holds its edge value there and the surround reads as unlit phosphor.
+  vec2 ruv = clamp(suv, 0.0, 1.0);
+  vec2 vg = ruv * (1.0 - ruv.yx);
   col *= mix(1.0, pow(clamp(vg.x * vg.y * 90.0, 0.0, 1.0), 0.10), 0.35 * uCrt + 0.10);
 
   // ---- collapse flash: the line and dot a tube leaves behind --------------
@@ -181,46 +194,102 @@ export class CRT {
     this.canvas = canvas;
     this.source = source;
     this.ok = false;
+    this.maxDimension = 4096; // Canvas-only fallback keeps the application cap.
     const gl = canvas.getContext("webgl2", {
       alpha: false, antialias: false, premultipliedAlpha: false,
       powerPreference: "high-performance",
     });
     if (!gl) return;
     this.gl = gl;
-    try { this._init(); this.ok = true; } catch (e) { console.warn("CRT init failed", e); }
+    try {
+      const limit = value => Number.isFinite(value) && value > 0 ? value : 2048;
+      const viewport = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+      this.maxDimension = Math.min(4096,
+        limit(gl.getParameter(gl.MAX_TEXTURE_SIZE)),
+        limit(gl.getParameter(gl.MAX_RENDERBUFFER_SIZE)),
+        limit(viewport?.[0]), limit(viewport?.[1]));
+      this._init();
+      this.ok = true;
+    } catch (e) { this._fail(e); }
+  }
+
+  _fail(error) {
+    this.ok = false;
+    const gl = this.gl;
+    for (const target of [this.a, this.b]) this._deleteTarget(target);
+    this.a = this.b = null;
+    if (this.srcTex) gl.deleteTexture(this.srcTex);
+    if (this.buf) gl.deleteBuffer(this.buf);
+    if (this.vao) gl.deleteVertexArray(this.vao);
+    if (this.progPersist) gl.deleteProgram(this.progPersist);
+    if (this.progCrt) gl.deleteProgram(this.progCrt);
+    console.warn('CRT unavailable; using the live 2D source', error);
+  }
+
+  _deleteTarget(target) {
+    if (!target) return;
+    this.gl.deleteFramebuffer(target.fb);
+    this.gl.deleteTexture(target.tex);
   }
 
   _compile(type, src) {
     const gl = this.gl, s = gl.createShader(type);
     gl.shaderSource(s, src); gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      const message = gl.getShaderInfoLog(s);
+      gl.deleteShader(s);
+      throw new Error(message);
+    }
     return s;
   }
 
   _program(vs, fs) {
     const gl = this.gl, p = gl.createProgram();
-    gl.attachShader(p, this._compile(gl.VERTEX_SHADER, vs));
-    gl.attachShader(p, this._compile(gl.FRAGMENT_SHADER, fs));
-    gl.bindAttribLocation(p, 0, "aPos");
-    gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    return p;
+    const shaders = [];
+    try {
+      shaders.push(this._compile(gl.VERTEX_SHADER, vs));
+      shaders.push(this._compile(gl.FRAGMENT_SHADER, fs));
+      for (const shader of shaders) gl.attachShader(p, shader);
+      gl.bindAttribLocation(p, 0, "aPos");
+      gl.linkProgram(p);
+      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+      return p;
+    } catch (error) {
+      gl.deleteProgram(p);
+      throw error;
+    } finally {
+      for (const shader of shaders) gl.deleteShader(shader);
+    }
   }
 
   _target(w, h) {
     const gl = this.gl;
+    if (w > this.maxDimension || h > this.maxDimension) throw new Error('CRT texture exceeds GPU limit');
     const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    const fb = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    return { tex, fb };
+    if (!tex) throw new Error('CRT texture allocation failed');
+    let fb;
+    try {
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      fb = gl.createFramebuffer();
+      if (!fb) throw new Error('CRT framebuffer allocation failed');
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE || gl.getError() !== gl.NO_ERROR) {
+        throw new Error('CRT framebuffer is incomplete');
+      }
+      return { tex, fb };
+    } catch (error) {
+      if (fb) gl.deleteFramebuffer(fb);
+      gl.deleteTexture(tex);
+      throw error;
+    } finally {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
   }
 
   _init() {
@@ -232,6 +301,7 @@ export class CRT {
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const buf = gl.createBuffer();
+    this.buf = buf;
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
@@ -249,6 +319,9 @@ export class CRT {
 
     this.a = this._target(SRC_W, SRC_H);
     this.b = this._target(SRC_W, SRC_H);
+    this.sourceWidth = SRC_W;
+    this.sourceHeight = SRC_H;
+    this.sourceUploaded = false;
 
     this.uPersist = {
       cur: gl.getUniformLocation(this.progPersist, "uCur"),
@@ -256,30 +329,58 @@ export class CRT {
       decay: gl.getUniformLocation(this.progPersist, "uDecay"),
     };
     this.u = {};
-    for (const n of ["uTex","uOut","uSrc","uTime","uPower","uCrt","uDegauss","uStatic","uWarm"]) {
+    for (const n of ["uTex","uOut","uSrc","uTime","uPower","uCrt","uDegauss","uStatic","uWarm","uScanlines"]) {
       this.u[n] = gl.getUniformLocation(this.progCrt, n);
     }
   }
 
   resize(cssW, cssH, dpr) {
-    const w = Math.max(1, Math.round(cssW * dpr));
-    const h = Math.max(1, Math.round(cssH * dpr));
+    const density = Math.min(dpr, this.maxDimension / Math.max(cssW, cssH));
+    const w = Math.max(1, Math.floor(cssW * density));
+    const h = Math.max(1, Math.floor(cssH * density));
     if (this.canvas.width === w && this.canvas.height === h) return;
     this.canvas.width = w; this.canvas.height = h;
   }
 
   render(state, sourceDirty) {
+    if (!this.ok) return false;
     const gl = this.gl;
     gl.bindVertexArray(this.vao);
 
-    if (sourceDirty) {
-      gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.source);
+    const sw = this.source.width || SRC_W, sh = this.source.height || SRC_H;
+    const resized = this.sourceWidth !== sw || this.sourceHeight !== sh;
+    try {
+      if (resized) {
+        const a = this._target(sw, sh);
+        let b;
+        try { b = this._target(sw, sh); }
+        catch (error) { this._deleteTarget(a); throw error; }
+        this._deleteTarget(this.a);
+        this._deleteTarget(this.b);
+        this.a = a;
+        this.b = b;
+        this.sourceWidth = sw;
+        this.sourceHeight = sh;
+        sourceDirty = true;
+      }
+
+      if (sourceDirty || !this.sourceUploaded) {
+        gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.source);
+        // Check actual allocation, not every video frame (getError can stall).
+        if ((resized || !this.sourceUploaded) && gl.getError() !== gl.NO_ERROR) {
+          throw new Error('CRT source texture allocation failed');
+        }
+        this.sourceUploaded = true;
+      }
+    } catch (error) {
+      this._fail(error);
+      return false;
     }
 
     // --- persistence pass: b = max(src, a * decay) ---
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.b.fb);
-    gl.viewport(0, 0, SRC_W, SRC_H);
+    gl.viewport(0, 0, sw, sh);
     gl.useProgram(this.progPersist);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.a.tex);
@@ -297,7 +398,8 @@ export class CRT {
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.a.tex);
     gl.uniform1i(this.u.uTex, 0);
     gl.uniform2f(this.u.uOut, this.canvas.width, this.canvas.height);
-    gl.uniform2f(this.u.uSrc, SRC_W, SRC_H);
+    gl.uniform2f(this.u.uSrc, sw, sh);
+    gl.uniform1f(this.u.uScanlines, SRC_H);
     gl.uniform1f(this.u.uTime, state.time);
     gl.uniform1f(this.u.uPower, state.power);
     gl.uniform1f(this.u.uCrt, state.crt);
@@ -305,5 +407,6 @@ export class CRT {
     gl.uniform1f(this.u.uStatic, state.static);
     gl.uniform1f(this.u.uWarm, state.warm);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    return true;
   }
 }

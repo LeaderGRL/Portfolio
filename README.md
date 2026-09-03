@@ -66,8 +66,10 @@ src/
   panel.js                  physical controls and chassis behavior
   runtime-controls.js       touch/hit-area behavior
   semantic-focus.js         visible CRT proxy for semantic keyboard focus
+  fullscreen-softkeys.js    on-glass navigation row while the chassis is away
   style.css                 authored desktop/compact panel geometry
   release-fixes.css         full-bleed compact material + focus presentation
+  fullscreen.css            full-screen glass layout and raster registration
 
 assets/src/                 source chassis/component renders
 assets/build/               generated sprites, gitignored
@@ -96,6 +98,46 @@ Back/Forward working. Invalid document IDs fall back to their collection route.
 Keyboard navigation remains available on desktop (`1-5`, arrows, Enter,
 Escape/Backspace), while compact/coarse-pointer layouts can select project and
 article rows directly on the CRT.
+
+## Full screen
+
+The aperture is small by design, so the panel carries a FULL SCREEN switch
+(shortcut `F`) next to CRT EFFECTS. It is an accessibility mode: the glass
+fills the viewport and the chassis is set aside. The terminal keeps a proportional
+cell grid on a continuous phosphor surface, without a 4:3 backing rectangle or
+black bands. Articles and projects reflow into a readable column (15–20 CSS px
+body text); images retain their aspect ratio. Canvas sources and persistence
+textures render at viewport resolution rather than enlarging 480x360 pixels.
+Density is capped at 2x, 4096 pixels per dimension and 8 megapixels to bound GPU
+memory, and reduced further when the active GPU reports a smaller texture,
+renderbuffer or viewport limit. Framebuffer/source allocation is checked;
+failure releases the GL resources and exposes the live 2D canvas instead of a
+black screen. Fullscreen uses the original CRT bloom, curvature, grille, phosphor
+persistence and diffuse shading. The photographic reflection is hidden only
+in fullscreen: its curved streak belongs to the physical bezel, not a
+borderless viewport, and would obscure article headings on portrait screens.
+Scanlines retain the tube's beam count independently of the sharper source;
+the desk optics stay intact, and CRT OFF still provides a neutral display.
+
+While the chassis is away a softkey row along the bottom of the glass carries
+the six sections, BACK, ENTER and EXIT FULL SCREEN, so pointer and touch users
+keep navigating. `Escape` leaves full screen first and only then means BACK.
+Native browser full screen is requested on top when available; the layout
+never depends on it (iOS Safari has no element full screen and still gets
+the enlarged tube), and leaving native full screen through the browser
+returns the chassis.
+
+Focus moves to EXIT on entry and returns to the triggering control on exit.
+The document retains its normalized reading position across entry, exit,
+window resizing and orientation changes, including CRT-off and WebGL fallback
+rendering. Reflow restores progress from the previous raster geometry, not an
+old pixel offset divided by the browser's already-updated scroll range.
+`Backspace` remains BACK within full screen; browser shortcuts such as `Ctrl+F`
+are not intercepted. A refused or delayed native request cannot strand the
+browser in a different layout state; legacy WebKit's void-returning request
+settles on its change/error event. Navigation and the progress footer each
+reserve space below the document so they cannot cover its last visible lines.
+Media inspection uses the same high-resolution source as the fullscreen article.
 
 ## Display architecture
 

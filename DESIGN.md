@@ -98,9 +98,41 @@ match the reference hardware legends.
   own separate row bands; bloom must never be used to excuse textual overlap.
 - The screen, ARIA state, and rocker initialize powered **ON**;
   the first press visibly throws the rocker to OFF.
-- Desktop CRT-effects and volume controls remain large enough to read as
-  deliberate physical hardware. Compact/mobile uses the supplied cream plate
-  full bleed, with no outer device surround or viewport bars.
+- Desktop CRT-effects, full-screen and volume controls remain large enough to
+  read as deliberate physical hardware. Compact/mobile uses the supplied cream
+  plate full bleed, with no outer device surround or viewport bars.
+- FULL SCREEN is a second two-position switch from the same render as CRT
+  EFFECTS, captioned in the same language (OFF/ON). On the desk it sits
+  between CRT EFFECTS and VOLUME, grouping the two display controls; on the
+  portable the CRT / FULL SCREEN / VOLUME tier is one three-column row.
+- Full screen uses a continuous, viewport-filling phosphor surface with no
+  4:3 backing rectangle or black bars. The terminal grid stays proportional;
+  documents reflow into a readable column with 15–20 CSS px body text. Sources
+  and persistence textures use the actual output resolution (2x density,
+  4096-pixel dimension and 8-megapixel caps), including media inspection.
+  The active GPU's texture, renderbuffer and viewport limits can lower this
+  cap; allocation failure falls back to the live 2D source, never a black screen.
+  Fullscreen restores the original CRT profile: bloom, curvature, grille,
+  chromatic separation and phosphor persistence match the desk. Diffuse shading
+  stays active, but the photographic gloss is desk-only: its rounded streak
+  does not match a borderless viewport and can obscure portrait article text.
+  Do not round/crop the fullscreen canvas or add a substitute glare to justify
+  that reflection. Beam count stays independent of source resolution,
+  preserving the CRT character without downsampling article content.
+  The chassis is hidden; a phosphor-styled softkey row at the bottom carries the
+  sections, BACK, ENTER and EXIT so touch and pointer users are never
+  stranded. `Escape` leaves full screen before it means BACK.
+- Fullscreen reserves separate document, progress-footer and navigation bands.
+  Images preserve their proportions; narrow-column media frames scale down
+  rather than introducing large empty vertical gaps.
+- Entering full screen moves keyboard focus to EXIT; leaving it restores the
+  triggering control. Keyboard softkey activation preserves focus. BACK uses
+  `Backspace`, not `Escape`, while full screen is active; modified shortcuts
+  and text composition remain owned by the browser or native control.
+- Switching display size preserves the document's normalized reading position;
+  native scroll anchoring must not make the article jump during the transition.
+  Window resizing and orientation changes restore the last raster progress
+  after publishing the final DOM geometry, including CRT OFF and 2D fallback.
 - CRT scanlines stay sub-pixel-thin and restrained. Long-form article content
   receives the same glass, fine scanline, grille and CRT toggle treatment as
   the terminal canvas.
