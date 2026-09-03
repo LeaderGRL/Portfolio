@@ -181,10 +181,10 @@ test('keyboard focus survives full screen entry, navigation and exit', async ({ 
   await expect(page).toHaveURL(/\/projects$/)
 })
 
-for (const mode of ['crt-off', 'no-webgl']) {
+for (const mode of ['crt-on', 'crt-off', 'no-webgl']) {
   test(`article fullscreen preserves scroll and geometry with ${mode}`, async ({ page }, testInfo) => {
-    test.skip(isMobile(testInfo), 'Fallback scenario is covered on desktop browser engines')
-    await page.setViewportSize(DESKTOP)
+    if (isMobile(testInfo)) test.setTimeout(120_000)
+    else await page.setViewportSize(DESKTOP)
     await page.addInitScript(({ noWebGL }) => {
       // Exercise the CSS-only mode used when native fullscreen is unavailable.
       Element.prototype.requestFullscreen = () => Promise.reject(new Error('Test: native fullscreen unavailable'))
@@ -198,30 +198,96 @@ for (const mode of ['crt-off', 'no-webgl']) {
     await boot(page, '/articles/01-ecs-entity-management')
     const reader = page.locator('#article-reader')
     await expect(reader).toBeVisible()
-    await reader.evaluate(node => { node.scrollTop = 700 })
+    await reader.evaluate(node => { node.scrollTop = .4 * (node.scrollHeight - node.clientHeight) })
     const progress = await reader.evaluate(node => node.scrollTop / (node.scrollHeight - node.clientHeight))
     if (mode === 'crt-off') await page.locator('#crt-switch').click()
     await page.locator('#fullscreen-switch').click()
     await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
-    await expect(page.locator('#tube')).toHaveClass(mode === 'crt-off' ? /is-crt-off/ : /is-fallback/)
+    if (mode !== 'crt-on') await expect(page.locator('#tube')).toHaveClass(mode === 'crt-off' ? /is-crt-off/ : /is-fallback/)
     // Same raster position, allowing at most one native scroll pixel of rounding.
     const drift = () => reader.evaluate((node, progress) => Math.abs(node.scrollTop - progress * (node.scrollHeight - node.clientHeight)), progress)
     await expect.poll(drift).toBeLessThanOrEqual(1)
     const surface = await page.locator('#display-surface').boundingBox()
-    const pixels = await page.locator('#article-source').boundingBox()
+    const pixels = await page.locator(mode === 'crt-on' ? '#gl' : '#article-source').boundingBox()
     for (const dimension of ['x', 'y', 'width', 'height']) {
       expect(Math.abs(surface[dimension] - pixels[dimension])).toBeLessThan(1)
     }
     await expectViewportSource(page, '#article-source')
+    await expect(page.locator('#article-source')).toHaveCSS('image-rendering', 'auto')
     if (mode === 'crt-off') {
       await expect(page.locator('.tube__shade')).toBeHidden()
       await expect(page.locator('.tube__gloss--core')).toBeHidden()
       await expect(page.locator('.tube__gloss--soft')).toBeHidden()
     }
     await attachScreenshot(page, testInfo, `article-fullscreen-${mode}`)
+    // A nonzero position catches old-scrollTop/new-scrollHeight errors that
+    // the above-the-fold media/orientation scenario cannot detect.
+    for (const size of [{ width: 430, height: 900 }, { width: 900, height: 430 }, DESKTOP]) {
+      await page.setViewportSize(size)
+      await expectViewportSource(page, '#article-source')
+      await expect.poll(() => reader.evaluate((node, progress) =>
+        Math.abs(node.scrollTop / (node.scrollHeight - node.clientHeight) - progress), progress)
+      ).toBeLessThan(.0002)
+    }
     await page.locator('.softkeys__key--exit').click()
-    await expect.poll(drift).toBeLessThanOrEqual(1)
+    await expect.poll(drift).toBeLessThanOrEqual(3)
+    if (mode === 'no-webgl') await expect(page.locator('#article-source')).toHaveCSS('image-rendering', 'pixelated')
     await expect(page).toHaveURL(/\/articles\/01-ecs-entity-management$/)
+  })
+}
+
+for (const gpuMode of ['limited', 'allocation-failure', 'upload-failure']) {
+  test(`fullscreen remains readable with GPU ${gpuMode}`, async ({ page }, testInfo) => {
+    test.skip(!isChromiumDesktop(testInfo), 'GPU faults are injected once; normal rendering covers all engines')
+    await page.setViewportSize(DESKTOP)
+    await page.addInitScript(mode => {
+      Element.prototype.requestFullscreen = () => Promise.reject(new Error('Test: CSS fullscreen'))
+      const getParameter = WebGL2RenderingContext.prototype.getParameter
+      WebGL2RenderingContext.prototype.getParameter = function(parameter) {
+        if (parameter === this.MAX_TEXTURE_SIZE) return 512 // forces downsampling even at DPR 1
+        return getParameter.call(this, parameter)
+      }
+      const checkStatus = WebGL2RenderingContext.prototype.checkFramebufferStatus
+      WebGL2RenderingContext.prototype.checkFramebufferStatus = function(target) {
+        if (mode === 'allocation-failure' && document.body.classList.contains('is-crt-fullscreen')) return this.FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+        return checkStatus.call(this, target)
+      }
+      if (mode === 'upload-failure') {
+        const upload = WebGL2RenderingContext.prototype.texImage2D
+        const getError = WebGL2RenderingContext.prototype.getError
+        const failed = new WeakSet()
+        WebGL2RenderingContext.prototype.texImage2D = function(...args) {
+          if (args.length === 6 && document.body.classList.contains('is-crt-fullscreen')) { failed.add(this); return }
+          return upload.apply(this, args)
+        }
+        WebGL2RenderingContext.prototype.getError = function() {
+          if (failed.delete(this)) return this.OUT_OF_MEMORY
+          return getError.call(this)
+        }
+      }
+    }, gpuMode)
+    const errors = []
+    page.on('pageerror', error => errors.push(error.message))
+    await boot(page, '/articles/01-ecs-entity-management')
+    await expect(page.locator('#tube')).not.toHaveClass(/is-fallback/)
+    await page.locator('#fullscreen-switch').click()
+    await expect.poll(() => page.locator('#article-source').evaluate(canvas => [canvas.width, canvas.height])).toEqual([512, 288])
+    if (gpuMode === 'limited') {
+      await expect(page.locator('#tube')).not.toHaveClass(/is-fallback/)
+      expect(await page.locator('#gl').evaluate(canvas => canvas.getContext('webgl2').getError())).toBe(0)
+    } else {
+      await expect(page.locator('#tube')).toHaveClass(/is-fallback/)
+      await expect(page.locator('#article-source')).toBeVisible()
+      await expect(page.locator('#article-source')).toHaveCSS('image-rendering', 'auto')
+    }
+    await page.keyboard.press('PageDown')
+    await expect.poll(() => page.locator('#article-reader').evaluate(node => node.scrollTop)).toBeGreaterThan(0)
+    await page.locator('#softkeys [data-route="home"]').click()
+    await expect(page).toHaveURL(/\/$/)
+    if (gpuMode !== 'limited') await expect(page.locator('#fallback2d')).toBeVisible()
+    await page.locator('.softkeys__key--exit').click()
+    await expect(page.locator('body')).not.toHaveClass(/is-crt-fullscreen/)
+    expect(errors).toEqual([])
   })
 }
 

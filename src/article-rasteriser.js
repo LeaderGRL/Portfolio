@@ -195,7 +195,7 @@ export class ArticleRasteriser {
           break
         }
         case 'code': {
-          const raw = String(block.body || '').split('\n')
+          const raw = String(block.body || '').replace(/\r\n?/g, '\n').split('\n')
           this._font(8)
           const max = this.fullscreen ? Math.max(12, Math.floor((width - 18) / this.ctx.measureText('M').width)) : 47
           const lines = raw.flatMap(line => line.length ? line.match(new RegExp(`.{1,${max}}`, 'g')) : [''])

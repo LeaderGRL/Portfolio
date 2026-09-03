@@ -110,6 +110,8 @@ match the reference hardware legends.
   documents reflow into a readable column with 15–20 CSS px body text. Sources
   and persistence textures use the actual output resolution (2x density,
   4096-pixel dimension and 8-megapixel caps), including media inspection.
+  The active GPU's texture, renderbuffer and viewport limits can lower this
+  cap; allocation failure falls back to the live 2D source, never a black screen.
   Fullscreen restores the original CRT profile: bloom, curvature, grille,
   chromatic separation and phosphor persistence match the desk. Diffuse shading
   stays active, but the photographic gloss is desk-only: its rounded streak
@@ -129,6 +131,8 @@ match the reference hardware legends.
   and text composition remain owned by the browser or native control.
 - Switching display size preserves the document's normalized reading position;
   native scroll anchoring must not make the article jump during the transition.
+  Window resizing and orientation changes restore the last raster progress
+  after publishing the final DOM geometry, including CRT OFF and 2D fallback.
 - CRT scanlines stay sub-pixel-thin and restrained. Long-form article content
   receives the same glass, fine scanline, grille and CRT toggle treatment as
   the terminal canvas.

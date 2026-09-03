@@ -1,4 +1,4 @@
-import { SRC_H, SRC_W, clamp, now } from './core.js'
+import { SRC_H, SRC_W } from './core.js'
 
 /* ==========================================================================
  * 6. CRT — WebGL2 phosphor persistence + composite
@@ -194,46 +194,102 @@ export class CRT {
     this.canvas = canvas;
     this.source = source;
     this.ok = false;
+    this.maxDimension = 4096; // Canvas-only fallback keeps the application cap.
     const gl = canvas.getContext("webgl2", {
       alpha: false, antialias: false, premultipliedAlpha: false,
       powerPreference: "high-performance",
     });
     if (!gl) return;
     this.gl = gl;
-    try { this._init(); this.ok = true; } catch (e) { console.warn("CRT init failed", e); }
+    try {
+      const limit = value => Number.isFinite(value) && value > 0 ? value : 2048;
+      const viewport = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+      this.maxDimension = Math.min(4096,
+        limit(gl.getParameter(gl.MAX_TEXTURE_SIZE)),
+        limit(gl.getParameter(gl.MAX_RENDERBUFFER_SIZE)),
+        limit(viewport?.[0]), limit(viewport?.[1]));
+      this._init();
+      this.ok = true;
+    } catch (e) { this._fail(e); }
+  }
+
+  _fail(error) {
+    this.ok = false;
+    const gl = this.gl;
+    for (const target of [this.a, this.b]) this._deleteTarget(target);
+    this.a = this.b = null;
+    if (this.srcTex) gl.deleteTexture(this.srcTex);
+    if (this.buf) gl.deleteBuffer(this.buf);
+    if (this.vao) gl.deleteVertexArray(this.vao);
+    if (this.progPersist) gl.deleteProgram(this.progPersist);
+    if (this.progCrt) gl.deleteProgram(this.progCrt);
+    console.warn('CRT unavailable; using the live 2D source', error);
+  }
+
+  _deleteTarget(target) {
+    if (!target) return;
+    this.gl.deleteFramebuffer(target.fb);
+    this.gl.deleteTexture(target.tex);
   }
 
   _compile(type, src) {
     const gl = this.gl, s = gl.createShader(type);
     gl.shaderSource(s, src); gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      const message = gl.getShaderInfoLog(s);
+      gl.deleteShader(s);
+      throw new Error(message);
+    }
     return s;
   }
 
   _program(vs, fs) {
     const gl = this.gl, p = gl.createProgram();
-    gl.attachShader(p, this._compile(gl.VERTEX_SHADER, vs));
-    gl.attachShader(p, this._compile(gl.FRAGMENT_SHADER, fs));
-    gl.bindAttribLocation(p, 0, "aPos");
-    gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    return p;
+    const shaders = [];
+    try {
+      shaders.push(this._compile(gl.VERTEX_SHADER, vs));
+      shaders.push(this._compile(gl.FRAGMENT_SHADER, fs));
+      for (const shader of shaders) gl.attachShader(p, shader);
+      gl.bindAttribLocation(p, 0, "aPos");
+      gl.linkProgram(p);
+      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+      return p;
+    } catch (error) {
+      gl.deleteProgram(p);
+      throw error;
+    } finally {
+      for (const shader of shaders) gl.deleteShader(shader);
+    }
   }
 
   _target(w, h) {
     const gl = this.gl;
+    if (w > this.maxDimension || h > this.maxDimension) throw new Error('CRT texture exceeds GPU limit');
     const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    const fb = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    return { tex, fb };
+    if (!tex) throw new Error('CRT texture allocation failed');
+    let fb;
+    try {
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      fb = gl.createFramebuffer();
+      if (!fb) throw new Error('CRT framebuffer allocation failed');
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE || gl.getError() !== gl.NO_ERROR) {
+        throw new Error('CRT framebuffer is incomplete');
+      }
+      return { tex, fb };
+    } catch (error) {
+      if (fb) gl.deleteFramebuffer(fb);
+      gl.deleteTexture(tex);
+      throw error;
+    } finally {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
   }
 
   _init() {
@@ -245,6 +301,7 @@ export class CRT {
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const buf = gl.createBuffer();
+    this.buf = buf;
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
@@ -264,6 +321,7 @@ export class CRT {
     this.b = this._target(SRC_W, SRC_H);
     this.sourceWidth = SRC_W;
     this.sourceHeight = SRC_H;
+    this.sourceUploaded = false;
 
     this.uPersist = {
       cur: gl.getUniformLocation(this.progPersist, "uCur"),
@@ -277,32 +335,47 @@ export class CRT {
   }
 
   resize(cssW, cssH, dpr) {
-    const w = Math.max(1, Math.round(cssW * dpr));
-    const h = Math.max(1, Math.round(cssH * dpr));
+    const density = Math.min(dpr, this.maxDimension / Math.max(cssW, cssH));
+    const w = Math.max(1, Math.floor(cssW * density));
+    const h = Math.max(1, Math.floor(cssH * density));
     if (this.canvas.width === w && this.canvas.height === h) return;
     this.canvas.width = w; this.canvas.height = h;
   }
 
   render(state, sourceDirty) {
+    if (!this.ok) return false;
     const gl = this.gl;
     gl.bindVertexArray(this.vao);
 
     const sw = this.source.width || SRC_W, sh = this.source.height || SRC_H;
-    if (this.sourceWidth !== sw || this.sourceHeight !== sh) {
-      for (const target of [this.a, this.b]) {
-        gl.deleteFramebuffer(target.fb);
-        gl.deleteTexture(target.tex);
+    const resized = this.sourceWidth !== sw || this.sourceHeight !== sh;
+    try {
+      if (resized) {
+        const a = this._target(sw, sh);
+        let b;
+        try { b = this._target(sw, sh); }
+        catch (error) { this._deleteTarget(a); throw error; }
+        this._deleteTarget(this.a);
+        this._deleteTarget(this.b);
+        this.a = a;
+        this.b = b;
+        this.sourceWidth = sw;
+        this.sourceHeight = sh;
+        sourceDirty = true;
       }
-      this.a = this._target(sw, sh);
-      this.b = this._target(sw, sh);
-      this.sourceWidth = sw;
-      this.sourceHeight = sh;
-      sourceDirty = true;
-    }
 
-    if (sourceDirty) {
-      gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.source);
+      if (sourceDirty || !this.sourceUploaded) {
+        gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.source);
+        // Check actual allocation, not every video frame (getError can stall).
+        if ((resized || !this.sourceUploaded) && gl.getError() !== gl.NO_ERROR) {
+          throw new Error('CRT source texture allocation failed');
+        }
+        this.sourceUploaded = true;
+      }
+    } catch (error) {
+      this._fail(error);
+      return false;
     }
 
     // --- persistence pass: b = max(src, a * decay) ---
@@ -334,5 +407,6 @@ export class CRT {
     gl.uniform1f(this.u.uStatic, state.static);
     gl.uniform1f(this.u.uWarm, state.warm);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    return true;
   }
 }

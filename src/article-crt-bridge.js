@@ -135,7 +135,13 @@ class ArticleCRTRuntime {
   }
 
   setViewport(layout) {
-    const position = this.captureReadingPosition()
+    // A resize event arrives after the browser has already reflowed the DOM.
+    // Its new scroll range cannot describe the old reading position. The
+    // raster still holds the last synchronized progress in the old layout.
+    const { scroll, maxScroll } = this.documentRaster
+    const position = this.isDocument()
+      ? { item: this.app.state.item, progress: maxScroll ? scroll / maxScroll : 0 }
+      : null
     if (!this.documentRaster.setViewport(layout)) return
     this.restoreReadingPosition(position)
     this.inlineIntegrations.clear()

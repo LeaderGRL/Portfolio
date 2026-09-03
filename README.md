@@ -109,7 +109,10 @@ black bands. Articles and projects reflow into a readable column (15–20 CSS px
 body text); images retain their aspect ratio. Canvas sources and persistence
 textures render at viewport resolution rather than enlarging 480x360 pixels.
 Density is capped at 2x, 4096 pixels per dimension and 8 megapixels to bound GPU
-memory. Fullscreen uses the original CRT bloom, curvature, grille, phosphor
+memory, and reduced further when the active GPU reports a smaller texture,
+renderbuffer or viewport limit. Framebuffer/source allocation is checked;
+failure releases the GL resources and exposes the live 2D canvas instead of a
+black screen. Fullscreen uses the original CRT bloom, curvature, grille, phosphor
 persistence and diffuse shading. The photographic reflection is hidden only
 in fullscreen: its curved streak belongs to the physical bezel, not a
 borderless viewport, and would obscure article headings on portrait screens.
@@ -125,11 +128,14 @@ the enlarged tube), and leaving native full screen through the browser
 returns the chassis.
 
 Focus moves to EXIT on entry and returns to the triggering control on exit.
-The document retains its normalized reading position across the layout change,
-including CRT-off and WebGL fallback rendering.
+The document retains its normalized reading position across entry, exit,
+window resizing and orientation changes, including CRT-off and WebGL fallback
+rendering. Reflow restores progress from the previous raster geometry, not an
+old pixel offset divided by the browser's already-updated scroll range.
 `Backspace` remains BACK within full screen; browser shortcuts such as `Ctrl+F`
 are not intercepted. A refused or delayed native request cannot strand the
-browser in a different layout state. Navigation and the progress footer each
+browser in a different layout state; legacy WebKit's void-returning request
+settles on its change/error event. Navigation and the progress footer each
 reserve space below the document so they cannot cover its last visible lines.
 Media inspection uses the same high-resolution source as the fullscreen article.
 

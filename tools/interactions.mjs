@@ -34,6 +34,7 @@ const gl=new Proxy({FRAMEBUFFER_COMPLETE:36053,createShader:()=>obj('s'),createP
  createBuffer:()=>obj('b'),createTexture:()=>obj('t'),createFramebuffer:()=>obj('f'),createVertexArray:()=>obj('v'),
  getShaderParameter:()=>true,getProgramParameter:()=>true,checkFramebufferStatus:()=>36053,
  getShaderInfoLog:()=>'',getProgramInfoLog:()=>'',getUniformLocation:(_,n)=>({n}),getAttribLocation:()=>0,
+ NO_ERROR:0,getError:()=>0,
  getExtension:()=>null,getParameter:()=>4096},
  {get:(t,k)=>k in t?t[k]:(typeof k==='string'&&/^[A-Z0-9_]+$/.test(k)?1:()=>{})})
 w.HTMLCanvasElement.prototype.getContext=function(t){
@@ -200,6 +201,47 @@ setTimeout(async()=>{
     resolveRequest(); await tick()
     if(fullscreenOn() || d.fullscreenElement || exits!==1) throw new Error('late native request stranded browser in full screen')
     delete root.requestFullscreen; delete d.exitFullscreen
+  })
+  await astep('void WebKit late entry is cancelled', async()=>{
+    const root=d.documentElement
+    let exits=0
+    const setWebKit=el=>{
+      Object.defineProperty(d,'webkitFullscreenElement',{value:el,configurable:true})
+      d.dispatchEvent(new w.Event('webkitfullscreenchange'))
+    }
+    root.webkitRequestFullscreen=()=>undefined
+    d.webkitExitFullscreen=()=>{exits++; setWebKit(null)}
+    key('f')
+    await tick() // A void API must not settle in the Promise microtask queue.
+    key('f')
+    setWebKit(root)
+    if(fullscreenOn() || d.webkitFullscreenElement || exits!==1) throw new Error('void WebKit request stranded native full screen')
+    delete root.webkitRequestFullscreen; delete d.webkitExitFullscreen
+  })
+  await astep('void WebKit succeeds and follows exit', async()=>{
+    const root=d.documentElement
+    root.webkitRequestFullscreen=()=>undefined
+    key('f'); await tick()
+    Object.defineProperty(d,'webkitFullscreenElement',{value:root,configurable:true})
+    d.dispatchEvent(new w.Event('webkitfullscreenchange'))
+    if(!fullscreenOn()) throw new Error('WebKit success exited CSS mode')
+    Object.defineProperty(d,'webkitFullscreenElement',{value:null,configurable:true})
+    d.dispatchEvent(new w.Event('webkitfullscreenchange'))
+    if(fullscreenOn()) throw new Error('WebKit system exit left CSS mode active')
+    delete root.webkitRequestFullscreen
+  })
+  await astep('void WebKit error allows retry', async()=>{
+    const root=d.documentElement
+    let requests=0
+    root.webkitRequestFullscreen=()=>{requests++}
+    key('f'); await tick()
+    d.dispatchEvent(new w.Event('webkitfullscreenerror'))
+    if(!fullscreenOn()) throw new Error('native denial removed the accessible CSS layout')
+    key('f'); key('f')
+    if(requests!==2) throw new Error('WebKit failure prevented retry')
+    d.dispatchEvent(new w.Event('webkitfullscreenerror'))
+    key('f')
+    delete root.webkitRequestFullscreen
   })
   step('unowned native full screen is preserved', ()=>{
     let exits=0

@@ -74,6 +74,9 @@ export class App {
     for (const type of ["fullscreenchange", "webkitfullscreenchange"]) {
       document.addEventListener(type, () => this._onNativeFullscreenChange());
     }
+    for (const type of ["fullscreenerror", "webkitfullscreenerror"]) {
+      document.addEventListener(type, () => { this.nativeFullscreenRequest = null; });
+    }
 
     this.boot();
     requestAnimationFrame(t => this.frame(t));
@@ -272,11 +275,15 @@ export class App {
         if (!request) return;
         const token = {};
         this.nativeFullscreenRequest = token;
-        Promise.resolve(request.call(root, { navigationUI: "hide" })).then(() => {
+        const pending = request.call(root, { navigationUI: "hide" });
+        // Older WebKit returns void: only its change/error event settles the
+        // request. Resolving undefined here would forget a late native entry.
+        if (!pending?.then) return;
+        pending.then(() => {
           if (this.nativeFullscreenRequest !== token) return;
-          this.nativeFullscreenRequest = null;
           const current = document.fullscreenElement || document.webkitFullscreenElement;
           if (current === root) {
+            this.nativeFullscreenRequest = null;
             this.ownsNativeFullscreen = true;
             // A rapid second press can leave CSS mode before the browser
             // finishes entering. Undo that late native entry as well.
@@ -301,6 +308,7 @@ export class App {
     const active = document.fullscreenElement || document.webkitFullscreenElement;
     if (active === root) {
       if (this.state.fullscreen || this.nativeFullscreenRequest || this.ownsNativeFullscreen) {
+        this.nativeFullscreenRequest = null;
         this.ownsNativeFullscreen = true;
         if (!this.state.fullscreen) this._syncNativeFullscreen(false);
       }
@@ -369,12 +377,11 @@ export class App {
     if (this.state.fullscreen) {
       const vw = tube.offsetWidth || innerWidth || 1;
       const vh = tube.offsetHeight || innerHeight || 1;
-      const layout = fullscreenLayout(vw, vh, devicePixelRatio || 1, document.getElementById('softkeys')?.offsetHeight || 0);
+      const layout = fullscreenLayout(vw, vh, devicePixelRatio || 1, document.getElementById('softkeys')?.offsetHeight || 0, this.crt.maxDimension);
       const picture = layout.terminal;
       const documentMode = Boolean(this.state.item);
       if (!documentMode) rect = { x: picture.x / vw, y: picture.y / vh, w: picture.width / vw, h: picture.height / vh };
       this.raster.setViewport(layout);
-      this.documentRuntime?.setViewport?.(layout);
       this.crt.resize(layout.pixelWidth, layout.pixelHeight, 1);
       style.setProperty("--raster-x", `${(rect.x * 100).toFixed(4)}%`);
       style.setProperty("--raster-y", `${(rect.y * 100).toFixed(4)}%`);
@@ -384,12 +391,14 @@ export class App {
       style.setProperty('--fullscreen-bottom', `${layout.bottom}px`);
       style.setProperty('--document-column', `${Math.min(520, layout.documentWidth - (layout.documentWidth < SRC_W ? 40 : 84)) * layout.textScale}px`);
       style.setProperty('--document-scale', layout.textScale);
+      // Restore reading progress only after all DOM geometry is published.
+      this.documentRuntime?.setViewport?.(layout);
     } else {
       this.raster.setViewport(null);
-      this.documentRuntime?.setViewport?.(null);
       for (const name of ["--raster-x", "--raster-y", "--raster-base-w", "--raster-base-h", "--raster-k", '--fullscreen-bottom', '--document-column', '--document-scale']) {
         style.removeProperty(name);
       }
+      this.documentRuntime?.setViewport?.(null);
     }
 
     this.rasterRect = rect;
@@ -664,7 +673,12 @@ export class App {
     // CRT owns the visible WebGL canvas and composites every frame for
     // persistence, scanlines, degauss/static and power-collapse animation.
     // `sourceDirty` only controls whether the active source texture is uploaded.
-    if (this.crt.ok) this.crt.render(st, sourceDirty);
+    if (this.crt.ok) {
+      this.crt.render(st, sourceDirty);
+      // Allocation can fail after startup (large viewport or GPU pressure).
+      // Keep the live source readable instead of leaving a black GL canvas.
+      if (!this.crt.ok) document.getElementById('tube').classList.add('is-fallback');
+    }
     this.dirty = false;
 
     requestAnimationFrame(n => this.frame(n));

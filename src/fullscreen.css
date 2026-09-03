@@ -67,6 +67,7 @@ body.is-crt-fullscreen .terminal-contact-links{
 }
 
 body.is-crt-fullscreen #article-source,
+body.is-crt-fullscreen .tube.is-fallback[data-display-mode="article"] #article-source,
 body.is-crt-fullscreen #fallback2d{
   image-rendering:auto;
 }

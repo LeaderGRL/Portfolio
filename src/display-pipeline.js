@@ -14,8 +14,9 @@ export class DisplayPipeline {
     const initial = this.activeId ? this.sources.get(this.activeId) : null
     this.crt = crt || (initial && outputCanvas ? new CRT(outputCanvas, initial) : null)
     if (this.crt && initial) this.crt.source = initial
-    this.ok = Boolean(this.crt?.ok)
   }
+
+  get ok() { return Boolean(this.crt?.ok) }
 
   registerSource(id, source) {
     if (!id || !source) return false
@@ -36,7 +37,7 @@ export class DisplayPipeline {
   _clearPersistence() {
     const crt = this.crt
     const gl = crt?.gl
-    if (!gl || !crt.a || !crt.b) return
+    if (!crt?.ok || !gl || !crt.a || !crt.b) return
     const previous = gl.getParameter?.(gl.FRAMEBUFFER_BINDING)
     gl.clearColor(0, 0, 0, 1)
     for (const target of [crt.a, crt.b]) {
@@ -66,7 +67,6 @@ export class DisplayPipeline {
 
   render(state, sourceDirty = false) {
     if (!this.ok) return false
-    this.crt.render(state, sourceDirty)
-    return true
+    return this.crt.render(state, sourceDirty)
   }
 }

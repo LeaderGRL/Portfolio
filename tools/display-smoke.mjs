@@ -74,6 +74,19 @@ check(crtBypassCss.includes('.tube.is-crt-off .tube__gloss'), 'CRT off removes p
 globalThis.matchMedia = () => ({ matches: false })
 const { fullscreenLayout } = await import('../src/fullscreen-layout.js')
 const { CRT } = await import('../src/crt.js')
+const { DisplayPipeline } = await import('../src/display-pipeline.js')
+const { ArticleRasteriser } = await import('../src/article-rasteriser.js')
+const codeContext = { measureText: text => ({ width: String(text).length * 6 }) }
+const codeRaster = new ArticleRasteriser({ getContext: () => codeContext }, article)
+const expectedCode = ['let id = 42;', '', '// blank lines stay blank', '']
+for (const ending of ['\n', '\r\n', '\r']) {
+  codeRaster.setItem({ id: `code-${JSON.stringify(ending)}`, blocks: [{ type: 'code', body: expectedCode.join(ending) }] })
+  for (const layout of [null, fullscreenLayout(960, 540)]) {
+    codeRaster.setViewport(layout)
+    check(JSON.stringify(codeRaster.layout.find(entry => entry.type === 'code').lines) === JSON.stringify(expectedCode),
+      `${JSON.stringify(ending)} code keeps empty lines in ${layout ? 'fullscreen' : 'desk'}`)
+  }
+}
 for (const [width, height, dpr] of [[1920, 1080, 1], [393, 851, 3], [3840, 2160, 2], [7680, 4320, 2]]) {
   const layout = fullscreenLayout(width, height, dpr, 74)
   check(layout.pixelWidth * layout.pixelHeight <= 8388608, `${width}x${height}: framebuffer fits pixel budget`)
@@ -86,11 +99,22 @@ check(hd.pixelWidth === 1920 && hd.pixelHeight === 1080, '1080p source is render
 const allocations = []
 const uniforms = {}
 let disposed = 0
+let maxTexture = 4096
+let framebufferComplete = true
+let uploadFails = false
+let gpuError = 0
 const gl = new Proxy({
+  NO_ERROR: 0,
+  getParameter: key => key === 'MAX_VIEWPORT_DIMS' ? [4096, 4096] : key === 'MAX_TEXTURE_SIZE' ? maxTexture : 4096,
+  checkFramebufferStatus: () => framebufferComplete ? 'FRAMEBUFFER_COMPLETE' : 'FRAMEBUFFER_INCOMPLETE_ATTACHMENT',
+  getError: () => { const error = gpuError; gpuError = 0; return error },
   getShaderParameter: () => true,
   getProgramParameter: () => true,
   getUniformLocation: (_program, name) => name,
-  texImage2D: (...args) => { if (args.length === 9) allocations.push([args[3], args[4]]) },
+  texImage2D: (...args) => {
+    if (args.length === 9) allocations.push([args[3], args[4]])
+    else if (uploadFails) gpuError = 1285 // OUT_OF_MEMORY is a GL status, not a JS exception.
+  },
   uniform2f: (name, x, y) => { uniforms[name] = [x, y] },
   uniform1f: (name, value) => { uniforms[name] = value },
   deleteFramebuffer: () => { disposed++ },
@@ -112,6 +136,39 @@ check(allocations.slice(-2).every(([w, h]) => w === 480 && h === 360) && dispose
 check(uniforms.uScanlines === 360 && uniforms.uDecay === 0.72, 'desk and fullscreen share the same CRT profile')
 crt.render({ ...state, crt: 0 }, false)
 check(uniforms.uDecay === 0, 'CRT OFF still disables phosphor persistence')
+
+maxTexture = 2048
+const limitedSource = { width: 480, height: 360 }
+const limited = new CRT({ getContext: () => gl, width: 480, height: 360 }, limitedSource)
+check(limited.maxDimension === 2048, 'real GPU capability bounds the shared resolution contract')
+for (const [width, height] of [[1920, 1080], [1080, 1920], [3840, 2160]]) {
+  const layout = fullscreenLayout(width, height, 2, 44, limited.maxDimension)
+  check(Math.max(layout.pixelWidth, layout.pixelHeight) <= 2048, `${width}x${height}: fits a 2048px GPU`)
+  Object.assign(limitedSource, { width: layout.pixelWidth, height: layout.pixelHeight })
+  check(limited.render(state, true), 'bounded fullscreen source is accepted by the CRT')
+}
+limited.resize(1920, 1080, 2)
+check(limited.canvas.width === 2048 && limited.canvas.height === 1152, 'output drawing buffer respects the same GPU limit')
+
+const warnings = []
+const warn = console.warn
+console.warn = (...args) => warnings.push(args)
+try {
+  const pipeline = new DisplayPipeline({ crt: limited, sources: { document: limitedSource } })
+  framebufferComplete = false
+  limitedSource.width = 1024
+  const before = disposed
+  check(!pipeline.render(state, true) && !pipeline.ok, 'incomplete framebuffer disables the live GL pipeline')
+  check(!limited.a && !limited.b && disposed === before + 3, 'failed allocation and old history buffers are released')
+  check(!pipeline.render(state, true) && warnings.length === 1, 'failed GL does not retry or flood warnings every frame')
+
+  framebufferComplete = true
+  const uploadSource = { width: 480, height: 360 }
+  const uploadCRT = new CRT({ getContext: () => gl }, uploadSource)
+  uploadFails = true
+  check(!uploadCRT.render(state, true) && !uploadCRT.ok, 'source upload OUT_OF_MEMORY activates fallback')
+  check(!uploadCRT.a && !uploadCRT.b, 'source upload failure releases both history buffers')
+} finally { console.warn = warn }
 
 console.log(failed ? `\n  ${failed} display check(s) FAILED` : '\n  all display checks passed')
 process.exit(failed ? 1 : 0)

@@ -52,6 +52,8 @@ function makeGL () {
     getAttribLocation: () => 0,
     getExtension: () => null,
     getParameter: () => 4096,
+    NO_ERROR: 0,
+    getError: () => 0,
   }, {
     get: (target, key) => {
       if (key in target) return target[key]
