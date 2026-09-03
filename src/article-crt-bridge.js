@@ -3,6 +3,7 @@ import { ArticleRasteriser } from './article-rasteriser.js'
 import { DisplayPipeline } from './display-pipeline.js'
 import { createDefaultBlockRegistry } from './document/default-blocks.js'
 import { createDefaultIntegrationRegistry } from './document/default-integrations.js'
+import { enhanceAudioBlocks, registerAudioIntegration } from './document/audio-blocks.js'
 import { InlineIntegrationController } from './document/inline-integrations.js'
 import { SafeLocal3DManager } from './document/safe-local-3d.js'
 import { enhanceModel3DFallback } from './document/model3d-fallback.js'
@@ -51,13 +52,15 @@ class ArticleCRTRuntime {
       this.documentRaster?.markDirty?.()
     })
 
-    this.blockRegistry = enhanceMediaBlocks(
-      enhanceModel3DFallback(createDefaultBlockRegistry({ local3d: this.local3d }), this.local3d),
+    this.blockRegistry = enhanceAudioBlocks(
+      enhanceMediaBlocks(
+        enhanceModel3DFallback(createDefaultBlockRegistry({ local3d: this.local3d }), this.local3d),
+      ),
     )
-    this.integrations = createDefaultIntegrationRegistry({
+    this.integrations = registerAudioIntegration(createDefaultIntegrationRegistry({
       local3d: this.local3d,
       mediaViewer: this.mediaViewer,
-    })
+    }))
 
     this.documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
       app.dirty = true
