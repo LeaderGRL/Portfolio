@@ -40,10 +40,10 @@ check(integrations.includes("viewer.open([{ src: block.src"), 'media click opens
 
 for (const filename of ['menu-preview.mp3', 'in-game-preview.mp3', 'volcano-preview.mp3', 'victory-jingle.mp3']) {
   const path = `public/media/Astro/${filename}`
-  check(fs.existsSync(path), `${filename} exists while full tracks are pending`)
+  check(fs.existsSync(path), `${filename} fallback asset exists`)
   const size = fs.existsSync(path) ? fs.statSync(path).size : 0
-  check(size > 1000 && size < 250_000, `${filename} remains a valid web fallback`)
-  check(astro.includes(`/media/Astro/${filename}`), `${filename} fallback is referenced by Astro`)
+  check(size > 1000 && size < 250_000, `${filename} fallback remains web-sized`)
+  check(!astro.includes(`/media/Astro/${filename}`), `${filename} preview is not presented as final soundtrack`)
 }
 
 for (const filename of [
