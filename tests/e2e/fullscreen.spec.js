@@ -208,7 +208,13 @@ for (const mode of ['crt-on', 'crt-off', 'no-webgl']) {
     const drift = () => reader.evaluate((node, progress) => Math.abs(node.scrollTop - progress * (node.scrollHeight - node.clientHeight)), progress)
     await expect.poll(drift).toBeLessThanOrEqual(1)
     const surface = await page.locator('#display-surface').boundingBox()
-    const pixels = await page.locator(mode === 'crt-on' ? '#gl' : '#article-source').boundingBox()
+    // CRT ON is the requested mode, not a promise that this runner has WebGL.
+    // Headless Firefox on Linux may use the supported live 2D fallback.
+    const visiblePixels = page.locator('#gl:visible, #article-source:visible')
+    await expect(visiblePixels).toHaveCount(1)
+    const pixels = await visiblePixels.boundingBox()
+    expect(surface).not.toBeNull()
+    expect(pixels).not.toBeNull()
     for (const dimension of ['x', 'y', 'width', 'height']) {
       expect(Math.abs(surface[dimension] - pixels[dimension])).toBeLessThan(1)
     }
