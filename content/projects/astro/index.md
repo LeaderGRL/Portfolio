@@ -1,8 +1,8 @@
 ---
 title: ASTRO
-sub: A 2–4 player party game built around readable chaos, shifting alliances and a cooperative boss fight
-status: UNREAL ENGINE · GAME DESIGN · PROGRAMMING
-stack: [Unreal Engine, C++, Blueprints, Game Design, Gameplay Programming, Multiplayer, Audio]
+sub: A 2–4 player party game where cooperation lasts exactly as long as it is useful
+status: UNREAL ENGINE · GAME DESIGN · CAMERA PROGRAMMING
+stack: [Unreal Engine, C++, Blueprints, Game Design, Gameplay Programming, Multiplayer]
 theme: synthwave
 link: https://github.com/LeaderGRL/A_back
 ---
@@ -11,118 +11,84 @@ link: https://github.com/LeaderGRL/A_back
 FORMAT | LOCAL PARTY GAME
 PLAYERS | 2–4
 ENGINE | UNREAL ENGINE
-CORE STRUCTURE | COMPETE → COOPERATE → COMPARE SCORES
-JORDAN GRILLY | GAME DESIGN + PROGRAMMING
-PROGRAMMING FOCUS | CAMERA + PHASE TRANSITIONS
-PRODUCTION | MULTIDISCIPLINARY TEAM
-AUDIO | DOGMA / SOUND DESIGN
-SOURCE | PUBLIC GAME REPOSITORY
+BORN AT | GAME CRÉALAB
+MY ROLE | GAME DESIGNER
+ENGINEERING CONTRIBUTION | CAMERA SYSTEM
 ::
 
-## THE GAME
+## ASTRONAUTS, EGGS AND TEMPORARY FRIENDSHIP
 
-ASTRO is a colorful 2–4 player party game about creating tension between individual success and collective survival. The first part of a match lets players compete for resources and advantages; the pressure then changes when everyone has to face the same boss together. Cooperation becomes necessary, but the final comparison still gives every player a reason to protect their own score.
+ASTRO started during **Game CréaLab** with a fairly reasonable party-game question: what happens if players need each other, but still really want to win?
 
-The design target was not complexity for its own sake. The project repeatedly comes back to three constraints: rules that can be understood quickly, enough uncertainty to create social reactions, and systems that remain readable when several players act at once.
+The answer became a colorful 2–4 player game starring animal astronauts — the **Astronimals** — stranded on an alien planet and collecting eggs while gadgets, hazards and the other players keep the plan from staying sensible for very long.
 
-::hero{media="gameplay.webp" eyebrow="ASTRO / PLAYABLE BUILD" title="COMPETE. ADAPT. SURVIVE TOGETHER." subtitle="A party-game loop designed around temporary cooperation without removing individual ambition." height=242 alt="ASTRO gameplay showing the colorful multiplayer game arena"}
+During the collection phase, everybody is chasing their own score. Then the boss arrives and suddenly the person you were annoying thirty seconds ago becomes extremely useful. Once the danger is gone, friendship expires and the scoreboard gets the final word.
 
-## MY ROLE — DESIGN + PROGRAMMING
+::media{src="gameplay.webp" label="ASTRO / PLAYABLE BUILD" alt="ASTRO playable build with two Astronimals" fit=contain background=off height=300}
 
-I worked on ASTRO as both a **Game Designer and Programmer**. That overlap was useful because several design problems were inseparable from implementation: how far players can move away from each other, what the shared camera should prioritize, how a boss phase changes framing, and how quickly playtest feedback can become a concrete revision.
+## THE GAME IN MOTION
 
-Production notes explicitly assigned me the **camera** work as preproduction moved into development. I also worked with Eliott on the boss / camera transition, while continuing to own design synthesis: the team proposed solutions to identified design problems, I sorted and assembled those proposals, and disagreements were resolved collectively.
+The playable build says more in a few seconds than a page of feature bullets ever could: shared movement, eggs, gadgets, boss pressure and several players trying to understand the same screen at the same time.
 
-::system{columns=2 label="MY CONTRIBUTION"}
-GAME DESIGN | SEMI-COOPERATIVE STRUCTURE, RULES AND PLAYTEST ITERATION
-DESIGN SYNTHESIS | SORTING + ASSEMBLING TEAM PROPOSALS BEFORE DECISIONS
-CAMERA PROGRAMMING | SHARED CAMERA, FRAMING, MOVEMENT AND ITERATION
-BOSS TRANSITION | BOSS / CAMERA TRANSITION WORK WITH ELIOTT
-CAMERA DESIGN | TOP-DOWN READABILITY + PHASE-SPECIFIC REFRAMING
-FEEDBACK LOOP | TURN PLAYER OBSERVATIONS INTO DESIGN + IMPLEMENTATION TASKS
+::video{src="/media/Astro/gameplay.mp4" alt="Full ASTRO gameplay capture from the playable build"}
+
+The full capture is kept local to the portfolio. It only starts loading when playback is requested, so a four-minute gameplay video does not get to ambush the initial page load.
+
+## GAME CRÉALAB
+
+ASTRO was shaped inside **Game CréaLab**, with a small multidisciplinary team working through the game together rather than throwing a finished design document over a wall and hoping for the best.
+
+::media{src="game-crealab.webp" label="ASTRO × GAME CRÉALAB" alt="ASTRO project visual made for Game CréaLab" fit=contain background=off height=250}
+
+That mattered because the game depended on things that are hard to judge in isolation. A mechanic could sound good on paper and immediately become unreadable with four players. A camera setting could feel comfortable with two people and become a hostage situation with four. A boss could encourage cooperation right up until nobody understood what was happening on screen.
+
+So we built, played, argued politely, changed things, played again and repeated the process.
+
+## FINDING THE ACTUAL GAME
+
+The early design work was deliberately messy. We explored golden eggs, surprise events, power-ups falling from the sky, weather that could push players around, different scoring rules, more ways to interfere with each other and several versions of the cooperation layer.
+
+::media{src="design-board.webp" label="GAME DESIGN / EARLY ITERATION" alt="ASTRO game design board with mechanics and iteration notes" fit=contain height=280}
+
+One recurring idea was **surprise**: not randomness for its own sake, but events that force the group to react. An alien dropping in where an egg was expected is useful because everybody can see the situation change. A random punishment with no readable cause is mostly useful for starting an argument with the game.
+
+The semi-cooperative premise changed too. We did not keep a mechanic simply because it looked good in the pitch. If forced cooperation made the game less fun, it was reduced or moved to moments where it actually created something between players.
+
+::pipeline{label="THE MATCH, MORE OR LESS"}
+COLLECT | GET EGGS, BUILD A LEAD, PRETEND TO HAVE A PLAN
+CONTEST | OTHER PLAYERS BECOME THE PLAN'S MAIN TECHNICAL ISSUE
+SURPRISE | EVENTS AND GADGETS BREAK ROUTINES
+BOSS | EVERYBODY DISCOVERS TEAMWORK AT THE SAME TIME
+RESULT | THE SCOREBOARD ENDS THE TRUCE
 ::
 
-The interesting part of this double role was the iteration loop rather than the title itself: **define an intended player experience → implement the system that constrains it → playtest → adjust both the rule and the code**.
+## FROM SKETCHES TO ASTRONIMALS
 
-## DESIGN QUESTION
+The characters went through the same process. We wanted silhouettes that stayed readable from the top-down camera, enough personality to sell the party-game tone, and designs that could survive being quite small on screen.
 
-The central question was simple: **how do we make players need each other without removing the pleasure of trying to beat each other?**
+::media{src="characters.webp" label="CHARACTER EXPLORATION" alt="ASTRO Astronimal character concepts" fit=contain background=off height=270}
 
-A fully competitive game made every interaction easy to understand, but the social arc stayed flat. A fully cooperative game created a common objective, but reduced the tension produced by personal scoring. ASTRO therefore explored a structure where the relationship between players changes during the same match.
+The result is intentionally playful rather than subtle. This is also a game that considered a banana as a perfectly valid piece of equipment, so restraint had already left the production fairly early.
 
-::pipeline{label="MATCH TENSION"}
-COLLECT | PLAYERS BUILD THEIR OWN ADVANTAGE
-CONTEST | MOVEMENT AND RESOURCES CREATE DIRECT COMPETITION
-SURPRISE | EVENTS AND POWER-UPS DISRUPT A SOLVED ROUTE
-BOSS | THE GROUP NOW SHARES A SURVIVAL PROBLEM
-COOPERATE | INDIVIDUAL PLAYERS HAVE TO SUPPORT THE TEAM
-RESULT | PERSONAL PERFORMANCE STILL MATTERS AT THE END
-::
+## MY ROLE — GAME DESIGN + CAMERA
 
-The documents also show that this premise was challenged rather than protected at all costs. Mandatory cooperation was debated and at one point deliberately reduced when it no longer seemed necessary to preserve the game's identity. That is an important part of the process: the USP was treated as a hypothesis to test, not a feature that had to survive because it had been written first.
+My official role on ASTRO was **Game Designer**, with an additional programming contribution around the camera. That overlap ended up being useful because some of the most interesting problems were exactly where design and implementation collided.
 
-## FROM IDEAS TO RULES
+On the design side, I worked on the semi-cooperative structure, rules, surprise mechanics, scoring ideas and playtest iteration. The team regularly proposed solutions to design problems; I sorted and combined those proposals before we decided what was worth testing.
 
-The design process was intentionally broad before it became selective. Working documents explored a golden egg, surprise mechanics, power-ups, weather events, scoring variants, multiplayer interactions and animation feedback. These were not treated as a checklist of features to ship. They were ways to test what actually strengthened the social loop.
+My main programming contribution was the **camera**, including its gameplay behavior and work around boss / camera transitions. That was a good problem to own because a local multiplayer camera is secretly a game rule wearing a rendering hat.
 
-::media{src="design-board.webp" label="GAME DESIGN REFLECTION" alt="ASTRO game design reflection board with gameplay ideas and iteration notes" height=264}
+::media{src="camera-work.webp" label="CAMERA WORK / PRODUCTION" alt="ASTRO development session while working on the game" fit=contain height=280}
 
-The useful question for every idea became: **does this create a decision or a reaction between players?** A mechanic that only added content but did not change a player's choice, timing or relationship to the others was a candidate for simplification or removal.
+Four local players do not politely remain at the ideal distance from each other. We had to think about group framing, camera distance, movement, what happens when players spread out, and how boss phases can demand a different view. We also explored adaptive solutions such as separating the view when players move too far apart and bringing it back together when the group reunites.
 
-That filter also helped with scope. Party games are especially vulnerable to accumulating isolated mini-features; ASTRO's design work instead tried to keep additions attached to a small number of readable verbs and shared situations.
+That created a useful loop: change the design, feel the camera problem, change the implementation, playtest it, then discover a new design problem. Very efficient at generating both progress and TODOs.
 
-## READABLE CHAOS
+## ENGINEERING THE PHASE CHANGES
 
-Surprise was important, but randomness alone is not a design solution. An event has to be legible enough for players to understand why the match changed and what they can do next. The same applies to power-ups: the strongest social moments come from effects players can anticipate, react to and blame on each other in a playful way.
+ASTRO changes its rules during a match, so phase management could easily have turned into a collection of booleans with increasingly emotional names.
 
-::system{columns=2 label="DESIGN PRINCIPLES"}
-FAST READ | THE RULE SHOULD BE UNDERSTANDABLE WHILE PLAYING
-VISIBLE CAUSE | PLAYERS SHOULD KNOW WHAT CHANGED THE SITUATION
-COUNTERPLAY | A SURPRISE SHOULD CREATE A RESPONSE, NOT ONLY A PUNISHMENT
-SOCIAL VALUE | SYSTEMS SHOULD CREATE HELP, RIVALRY OR NEGOTIATION
-COMEBACK SPACE | THE MATCH SHOULD NOT FEEL DECIDED TOO EARLY
-SCOPE VALUE | EVERY FEATURE MUST EARN ITS PRODUCTION COST
-::
-
-## WORLD AND BLOCKOUT
-
-Environment production followed the same readability constraint. The volcano map blockout is useful because it shows the level before visual polish: routes, distances and encounter space can be evaluated before art makes the scene expensive to change.
-
-::media{src="volcano-blockout.webp" label="VOLCANO MAP BLOCKOUT" alt="ASTRO volcano level blockout used to evaluate multiplayer routes and spacing" height=250}
-
-For a multiplayer party game, this stage is not only level art preparation. Camera framing, player density, collision, traversal time and the amount of simultaneous information all affect whether the rules remain understandable.
-
-## PROGRAMMING: CAMERA AS A GAMEPLAY SYSTEM
-
-The camera was not just presentation work. In a local multiplayer game it determines how much freedom players have, when the group feels physically connected and how much information can remain readable on one screen.
-
-The camera design used a **top-down 3/4 view** as the main shared perspective. Design documents then explored adaptive behavior for cases where the normal framing stops being sufficient: dynamic split-screen when local players move too far apart, reunification when they come back together, and temporary reframing for boss phases whose mechanics need a different spatial read.
-
-::pipeline{label="CAMERA / DESIGN LOOP"}
-DESIGN INTENT | KEEP 2–4 PLAYERS READABLE WITHOUT OVER-CONSTRAINING MOVEMENT
-SHARED CAMERA | FRAME THE GROUP IN THE DEFAULT TOP-DOWN 3/4 VIEW
-EDGE CASE | PLAYERS SEPARATE OR A BOSS PHASE CHANGES THE SPATIAL RULES
-ADAPT | CHANGE FRAMING / TRANSITION BEHAVIOR FOR THE CURRENT SITUATION
-PLAYTEST | WATCH FOR CAMERA DISTANCE, MOVEMENT AND READABILITY PROBLEMS
-ITERATE | FEED RESULTS BACK INTO CAMERA PARAMETERS + GAME DESIGN
-::
-
-The production archive contains repeated camera feedback — camera distance, movement, boss transitions and the desired feeling of the framing — rather than treating the first implementation as finished. That is representative of my role on the project: implementation and Game Design were part of the same iteration cycle.
-
-## PROJECT ARCHITECTURE: GAME FLOW AS STATES
-
-The public Unreal project separates the core game, menu and state-machine code into distinct modules. The game-flow layer uses explicit state actors rather than scattering phase changes across unrelated gameplay classes.
-
-::system{columns=2 label="GAME FLOW ARCHITECTURE"}
-STATE OBJECT | EACH GAME PHASE OWNS ITS ENTER / MANAGE / EXIT LIFECYCLE
-STATE MANAGER | HOLDS THE CURRENT STATE AND DRIVES ITS UPDATE
-NEXT STATE | A STATE MAY DECLARE AN EXPLICIT SUCCESSOR
-DELEGATES | STATES REQUEST TRANSITIONS WITHOUT OWNING THE MANAGER
-BLUEPRINT BRIDGE | DYNAMIC MULTICAST DELEGATES KEEP FLOW USABLE FROM UE TOOLS
-MODULE BOUNDARY | STATE MACHINE IS SEPARATED FROM ASTRO AND MENU MODULES
-::
-
-The `GameFlowStateManager` initializes the default state, calls its `Enter`, updates the current state's `Manage` function and performs an `Exit → switch → Enter` sequence on transition. Delegates are rebound when the state changes, which keeps the transition request on the state side while centralizing ownership of the active phase.
+The Unreal project instead contains a dedicated game-flow state machine. Each state owns an `Enter`, `Manage` and `Exit` lifecycle, while a central manager performs transitions and rebinds delegates. The state requests the transition; the manager keeps ownership of the active phase.
 
 ```cpp
 void AGameFlowStateManager::SwitchState(AGameFlowState* SwitchingState)
@@ -141,60 +107,47 @@ void AGameFlowStateManager::SwitchState(AGameFlowState* SwitchingState)
 }
 ```
 
-That architecture is particularly appropriate for ASTRO because the design itself changes mode during a match. Collection, transitions, boss phases and results can remain explicit states instead of becoming a growing set of booleans spread through gameplay code.
+That separation is useful for ASTRO because collection, boss encounters and results are genuinely different modes of play. Making those transitions explicit is much easier to reason about than asking six unrelated systems whether the boss is "sort of happening right now".
 
-## ENGINEERING: DATA-DRIVEN AUDIO
+## AUDIO WITHOUT BLUEPRINT SPAGHETTI
 
-Audio integration was also designed around reusable data rather than one-off Blueprint graphs. Each gameplay data asset can expose a map from a string key to an `Audio Data` structure. Shared Function Library helpers then resolve that key and either play the sound directly or spawn an `Audio Component` when the caller needs a persistent reference for looping and stopping.
+The audio workflow used reusable data assets instead of wiring every sound independently. Gameplay assets map string keys to an `Audio Data` structure; shared Blueprint helpers can play the entry directly or spawn an `Audio Component` when a looping sound needs to be stopped later.
 
-::pipeline{label="AUDIO DATA FLOW"}
-DATA ASSET | GAMEPLAY OBJECT OWNS A MAP OF NAMED AUDIO ENTRIES
-AUDIO DATA | ENTRY STORES THE PARAMETERS REQUIRED TO PLAY THE SOUND
-FUNCTION LIBRARY | COMMON PLAY / SPAWN FUNCTIONS REMOVE DUPLICATED BLUEPRINT LOGIC
-AUDIO COMPONENT | SPAWN PATH RETURNS A HANDLE FOR LOOPED OR STOPPABLE AUDIO
-ANIM NOTIFY | ANIMATION EVENTS REUSE THE SAME DATA ASSET + KEY CONTRACT
-ITERATE | SOUND CAN CHANGE IN DATA WITHOUT REWIRING EVERY CALL SITE
-::
+Animation notifies use the same data-asset + key contract. That kept sound replacement cheap for the sound designer and avoided duplicating the same playback logic across gameplay graphs.
 
-This is a small system, but it is a useful engineering decision: designers and sound production can change assets and parameters without rewriting the gameplay path that asks for a sound.
+And because **DOGMA** produced actual music for the project, it would be a little rude to reduce it to five-second previews.
 
 ## SOUNDTRACK
 
-The soundtrack supports different layers of the experience rather than using one continuous musical mood. The portfolio uses short web previews for the longer tracks so the project page stays lightweight; the victory jingle is included in full.
+These are the **complete tracks**, not excerpts. They are stored as web-optimized MP3 files and use metadata-only preload; the audio payload starts when you press play rather than when the project page opens.
 
-::audio{src="/media/Astro/menu-preview.mp3" label="MENU" credit="DOGMA · ASTRO SOUNDTRACK · 5 S WEB PREVIEW"}
+::audio{src="/media/Astro/menu.mp3" label="MENU" credit="DOGMA · ASTRO SOUNDTRACK · FULL TRACK"}
 
-::audio{src="/media/Astro/in-game-preview.mp3" label="IN GAME" credit="DOGMA · ASTRO SOUNDTRACK · 5 S WEB PREVIEW"}
+::audio{src="/media/Astro/in-game.mp3" label="IN GAME" credit="DOGMA · ASTRO SOUNDTRACK · FULL TRACK"}
 
-::audio{src="/media/Astro/volcano-preview.mp3" label="MAP VOLCANO" credit="DOGMA · ASTRO SOUNDTRACK · 5 S WEB PREVIEW"}
+::audio{src="/media/Astro/volcano.mp3" label="VOLCANO MAP" credit="DOGMA · ASTRO SOUNDTRACK · FULL TRACK"}
 
-::audio{src="/media/Astro/victory-jingle.mp3" label="VICTORY JINGLE" credit="DOGMA · ASTRO SOUNDTRACK · COMPLETE JINGLE"}
+::audio{src="/media/Astro/victory.mp3" label="VICTORY JINGLE" credit="DOGMA · ASTRO SOUNDTRACK · FULL TRACK"}
 
-## THE TEAM
+## THE PEOPLE BEHIND THE ASTRONIMALS
 
-ASTRO was built as a multidisciplinary project, so design decisions had immediate consequences for production. Rules had to survive contact with animation, environment constraints, programming, interface readability and sound rather than existing only in a design document.
+ASTRO was a team project, and that is part of the story rather than a credit roll hidden at the bottom. A lot of the useful iteration happened with several disciplines in the same room: design could see implementation constraints immediately, programming could ask for clearer rules, and art could tell us when a "small change" was absolutely not a small change.
 
-::media{src="team.webp" label="TEAM / WORK SESSION" alt="ASTRO development team working together during production" height=248}
-
-::facts{columns=2 label="CREDITS"}
-PAULINE MERCAT | PRODUCER
-ZOÉ GUIGNABAUDET | ART DIRECTOR
-ALEXANDRE GAULÉ | 3D ARTIST
-JORDAN GRILLY | GAME DESIGNER + PROGRAMMER
-ELIOTT GUIGNABAUDET | GAMEPLAY PROGRAMMER
-DOGMA | SOUND DESIGNER
+::gallery{columns=2 fit=contain}
+team-01.webp | BUILDING THE GAME TOGETHER
+team-03.webp | PLAYTEST / PRODUCTION
+team.webp | TEAM WORK SESSION
+team-trip.webp | ON THE WAY TO GAME CAMP
 ::
 
-The value of that setup was the feedback loop. A feature could be interesting on paper and still be wrong if it required too much art, produced unreadable multiplayer feedback, complicated implementation disproportionately or did not justify new audio and animation work.
+::media{src="camera-work.webp" label="DEVELOPMENT SESSION" alt="ASTRO development session with the team working on the game" fit=contain height=260}
 
-## PRODUCTION TAKEAWAY
+The core team was **Pauline Mercat** (Producer), **Zoé Guignabaudet** (Art Director), **Alexandre Gaulé** (3D Artist), **Eliott Guignabaudet** (Gameplay Programmer), **DOGMA** (Sound Designer), and me on **Game Design**, with camera programming as an additional contribution.
 
-ASTRO is a good example of design as constraint management rather than idea accumulation. The early reflection material contains many possible mechanics; the project becomes more coherent when those ideas are judged against player readability, social value and production cost.
+## WHAT I KEPT FROM ASTRO
 
-My designer-programmer role added another constraint to that loop: a design direction also had to survive implementation. Camera work made that very concrete. Framing, player freedom, boss readability and transitions were not separate design and code problems; changing one immediately changed the others.
+ASTRO taught me that party-game design is mostly about controlling understandable chaos. The mechanic itself can be tiny; what matters is what it makes several people do to each other when the screen gets busy.
 
-The broader engineering architecture follows the same principle. Explicit game-flow states reduce phase-management ambiguity, while data-driven audio reduces repeated integration work. Both systems make iteration cheaper — which matters because a party game's quality is discovered by repeatedly putting rules in front of several players and watching where the intended social behavior actually appears.
+It also made the designer-programmer overlap very concrete for me. Camera framing, player freedom, boss readability and game rules were not separate tasks. They kept pushing on each other, which meant I could move from a playtest observation to a design change and then directly into the implementation needed to test it.
 
-::note
-ASTRO'S CORE LESSON — A PARTY GAME DOES NOT NEED THE MOST MECHANICS. IT NEEDS A SMALL SET OF RULES THAT KEEP CHANGING WHAT PLAYERS WANT FROM EACH OTHER — AND IMPLEMENTATION THAT CAN KEEP UP WITH THOSE CHANGES.
-::
+That loop is still one of my favorite ways to work: **build something, put it in front of players, discover exactly how wrong the elegant theory was, and make the next version better.**
