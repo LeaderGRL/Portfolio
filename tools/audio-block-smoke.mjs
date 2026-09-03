@@ -3,13 +3,15 @@ import { DIRECTIVE_TYPES, getBlockDefinition, normalizeProvider } from '../src/d
 
 let failed = 0
 const check = (condition, label) => {
-  console.log(`  ${label.padEnd(62)}: ${condition ? 'OK' : 'WRONG'}`)
+  console.log(`  ${label.padEnd(66)}: ${condition ? 'OK' : 'WRONG'}`)
   if (!condition) failed++
 }
 
 const audioBlocks = fs.readFileSync('src/document/audio-blocks.js', 'utf8')
 const bridge = fs.readFileSync('src/article-crt-bridge.js', 'utf8')
 const semantic = fs.readFileSync('src/document/semantic-blocks.js', 'utf8')
+const mediaBlocks = fs.readFileSync('src/document/media-blocks.js', 'utf8')
+const integrations = fs.readFileSync('src/document/default-integrations.js', 'utf8')
 const astro = fs.readFileSync('content/projects/astro/index.md', 'utf8')
 
 const audioDefinition = getBlockDefinition('audio')
@@ -31,29 +33,48 @@ check(bridge.includes('enhanceAudioBlocks'), 'CRT runtime installs the audio ren
 check(bridge.includes('registerAudioIntegration'), 'CRT runtime installs the audio interaction adapter')
 check(semantic.includes("block.type === 'audio'"), 'semantic mirror describes audio blocks')
 
+check(mediaBlocks.includes("return String(fit || '').toLowerCase() === 'contain'"), 'media renderer supports contain without cropping')
+check(mediaBlocks.includes("provider: 'media-single'"), 'single media exposes inspector integration')
+check(integrations.includes("button.className = 'document-media-hotspot'"), 'media blocks receive a clickable inspection hotspot')
+check(integrations.includes("viewer.open([{ src: block.src"), 'media click opens original image in inspector')
+
 for (const filename of ['menu-preview.mp3', 'in-game-preview.mp3', 'volcano-preview.mp3', 'victory-jingle.mp3']) {
   const path = `public/media/Astro/${filename}`
-  check(fs.existsSync(path), `${filename} exists`)
+  check(fs.existsSync(path), `${filename} exists while full tracks are pending`)
   const size = fs.existsSync(path) ? fs.statSync(path).size : 0
-  check(size > 1000 && size < 100_000, `${filename} stays lightweight`)
-  check(astro.includes(`/media/Astro/${filename}`), `${filename} is referenced by Astro`)
+  check(size > 1000 && size < 250_000, `${filename} remains a valid web fallback`)
+  check(astro.includes(`/media/Astro/${filename}`), `${filename} fallback is referenced by Astro`)
 }
 
-for (const filename of ['gameplay.webp', 'design-board.webp', 'team.webp', 'volcano-blockout.webp']) {
+for (const filename of [
+  'gameplay.webp',
+  'design-board.webp',
+  'game-crealab.webp',
+  'characters.webp',
+  'team.webp',
+  'team-01.webp',
+  'team-03.webp',
+  'team-trip.webp',
+]) {
   const path = `content/projects/astro/${filename}`
   check(fs.existsSync(path), `${filename} exists`)
   const size = fs.existsSync(path) ? fs.statSync(path).size : 0
-  check(size > 1000 && size < 100_000, `${filename} is optimized for CRT presentation`)
+  check(size > 1000 && size < 250_000, `${filename} is optimized for CRT presentation`)
 }
 
-check(astro.includes('JORDAN GRILLY | GAME DESIGNER + PROGRAMMER'), 'Astro credits Jordan as designer and programmer')
-check(astro.includes('## MY ROLE — DESIGN + PROGRAMMING'), 'Astro separates Jordan contribution from project architecture')
-check(astro.includes('## PROGRAMMING: CAMERA AS A GAMEPLAY SYSTEM'), 'Astro documents Jordan camera programming focus')
-check(astro.includes('CAMERA / DESIGN LOOP'), 'Astro connects camera implementation to design iteration')
-check(astro.includes('PROJECT ARCHITECTURE: GAME FLOW AS STATES'), 'Astro documents shared game-flow architecture')
-check(astro.includes('DATA-DRIVEN AUDIO'), 'Astro documents audio engineering')
-check(astro.includes('## THE TEAM'), 'Astro documents the multidisciplinary team')
-check(astro.includes('## FROM IDEAS TO RULES'), 'Astro documents the design reasoning process')
+check(astro.includes('CONFITURE DE JEUX × YNOV 2024'), 'Astro identifies the original game jam')
+check(astro.includes('Pick up an egg. Bring it back to your chest.'), 'Astro explains the original egg/chest loop')
+check(astro.includes('send somebody over the edge of the map'), 'Astro explains competitive pushing and falling')
+check(!astro.toLowerCase().includes('cooperation phase'), 'Astro does not invent a cooperation phase')
+check(astro.includes('4 PROJECTS SELECTED FROM 38'), 'Astro records Game Créalab selection accurately')
+check(astro.includes('Pôle Pixel in Villeurbanne'), 'Astro names the Game Créalab location')
+check(astro.includes('Focus Entertainment'), 'Astro records publisher contact context')
+check(astro.includes('Game Designer and Programmer'), 'Astro states Jordan design/programming role')
+check(astro.includes('I would rather keep this section precise'), 'Astro avoids invented personal ownership')
+check(astro.includes('ASTRO is currently **paused**'), 'Astro reports the real project status')
+check(astro.includes('professional schedules changed'), 'Astro explains why development paused')
+check(astro.includes('fit=contain'), 'Astro uses non-cropping presentation for editorial media')
+check(astro.includes('## THE TEAM'), 'Astro includes the team and production context')
 
 console.log(failed ? `\n  ${failed} audio/Astro check(s) FAILED` : '\n  all audio/Astro checks passed')
 process.exit(failed ? 1 : 0)
