@@ -75,7 +75,13 @@ export class App {
       document.addEventListener(type, () => this._onNativeFullscreenChange());
     }
     for (const type of ["fullscreenerror", "webkitfullscreenerror"]) {
-      document.addEventListener(type, () => { this.nativeFullscreenRequest = null; });
+      document.addEventListener(type, event => {
+        // A video's fullscreen error may bubble here while our root request
+        // is still pending. Only settle errors belonging to this request.
+        if (event.target === document || event.target === document.documentElement) {
+          this.nativeFullscreenRequest = null;
+        }
+      });
     }
 
     this.boot();

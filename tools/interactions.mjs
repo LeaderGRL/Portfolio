@@ -213,6 +213,10 @@ setTimeout(async()=>{
     d.webkitExitFullscreen=()=>{exits++; setWebKit(null)}
     key('f')
     await tick() // A void API must not settle in the Promise microtask queue.
+    const video=d.createElement('video')
+    d.body.appendChild(video)
+    video.dispatchEvent(new w.Event('webkitfullscreenerror',{bubbles:true}))
+    video.remove() // An unrelated media request must not settle ours.
     key('f')
     setWebKit(root)
     if(fullscreenOn() || d.webkitFullscreenElement || exits!==1) throw new Error('void WebKit request stranded native full screen')
