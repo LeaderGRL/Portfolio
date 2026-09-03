@@ -62,6 +62,13 @@ for (const filename of [
   check(size > 1000 && size < 250_000, `${filename} is optimized for CRT presentation`)
 }
 
+const astroMediaDirectives = astro.match(/^::media\{[^\n]+\}$/gm) || []
+check(astroMediaDirectives.length >= 4, 'Astro keeps several editorial images in the story')
+check(astroMediaDirectives.every(line => /\bfit=contain\b/.test(line)), 'every Astro editorial image opts out of cropping')
+check(!astro.includes('::hero{'), 'Astro does not use a cropping hero block')
+check(!astro.includes('::system{'), 'Astro avoids decorative system-card grids')
+check(!astro.includes('::pipeline{'), 'Astro avoids decorative pipeline blocks')
+
 check(astro.includes('CONFITURE DE JEUX × YNOV 2024'), 'Astro identifies the original game jam')
 check(astro.includes('Pick up an egg. Bring it back to your chest.'), 'Astro explains the original egg/chest loop')
 check(astro.includes('send somebody over the edge of the map'), 'Astro explains competitive pushing and falling')
@@ -73,7 +80,6 @@ check(astro.includes('Game Designer and Programmer'), 'Astro states Jordan desig
 check(astro.includes('I would rather keep this section precise'), 'Astro avoids invented personal ownership')
 check(astro.includes('ASTRO is currently **paused**'), 'Astro reports the real project status')
 check(astro.includes('professional schedules changed'), 'Astro explains why development paused')
-check(astro.includes('fit=contain'), 'Astro uses non-cropping presentation for editorial media')
 check(astro.includes('## THE TEAM'), 'Astro includes the team and production context')
 
 console.log(failed ? `\n  ${failed} audio/Astro check(s) FAILED` : '\n  all audio/Astro checks passed')
