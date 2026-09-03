@@ -2,6 +2,7 @@
 title: ASTRO
 sub: A competitive local party game that started with eggs, a chest and permission to throw your friends into space
 status: PAUSED · GAME JAM → GAME CRÉALAB 2024
+year: 2024
 stack: [Unreal Engine, C++, Blueprints, Game Design, Programming, Local Multiplayer]
 theme: synthwave
 link: https://github.com/LeaderGRL/A_back
@@ -13,6 +14,7 @@ PLAYERS | 2–4
 ENGINE | UNREAL ENGINE
 ORIGIN | CONFITURE DE JEUX × YNOV 2024
 GAME CRÉALAB | 4 PROJECTS SELECTED FROM 38
+RESIDENCY | PÔLE PIXEL · VILLEURBANNE
 MY ROLE | GAME DESIGNER + PROGRAMMER
 STATUS | PAUSED
 ::
@@ -32,6 +34,8 @@ That was essentially the game.
 Players could knock each other away from an egg, interrupt a return to the chest, or simply send somebody over the edge of the map and let gravity finish the discussion.
 
 There was no boss structure, no long list of modes and no elaborate metagame behind it. The jam prototype was about making one competitive interaction work with several people on the same screen.
+
+The [original jam build](https://awelyaa.itch.io/astro) is still public. I like keeping it accessible because it shows the game before later production work had time to make everything look more intentional than it actually was after one weekend.
 
 And it worked well enough that we did not want to leave it in the usual post-jam folder graveyard.
 
@@ -57,7 +61,9 @@ The residency ran from September 16 to September 28 at **Pôle Pixel in Villeurb
 
 The programme was not about sitting in a room and adding features for fifteen days. We worked on the concept with daily coaching, professional speakers and masterclasses covering game design, artistic direction, technical questions, positioning and how to present the project outside the team.
 
-Game Créalab 2024 itself received support from the **CNC** through its *aide aux manifestations*. For the Lyon residency, the programme also included sessions with publishers. One of them was **Yves Le Yaouanq, Chief Content Officer at Focus Entertainment**.
+The residency also included two publisher work sessions. **Yves Le Yaouanq from Focus Entertainment** and **Simon Bachelier from Firesquid** reviewed the selected projects' artistic propositions and market positioning.
+
+The [official Game Créalab page](https://gamecrealab.com/residence/lyon-2024/) still lists ASTRO among the four selected projects. The CNC's 2024 FAJV results also list **Game Créalab 2024** among the supported events.
 
 That changed the context around ASTRO. During the jam, the important question was whether the game was fun by Sunday. At Game Créalab, we also had to explain why the concept deserved to exist after Sunday.
 
@@ -123,6 +129,8 @@ ASTRO also gave us opportunities to present the project outside the team, get pr
 ASTRO is currently **paused**.
 
 There is no dramatic postmortem behind that status. As everyone's professional schedules changed, keeping the whole team available at the same time became increasingly difficult, and development eventually stopped being practical.
+
+In the end, scheduling became the boss we did not beat.
 
 The project still has planned directions, including additional modes and boss encounters, but I prefer to call those plans what they are instead of presenting a roadmap as shipped content.
 
