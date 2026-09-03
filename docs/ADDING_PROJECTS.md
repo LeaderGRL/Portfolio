@@ -1,15 +1,19 @@
-# Adding a rich project
+# Adding rich projects
 
-The project engine is designed so a new portfolio project should require content and assets, not runtime JavaScript or project-specific CSS.
+Rich projects live under `content/projects/<slug>/index.md` and use the shared document block vocabulary. The project runtime must never special-case a project id.
 
-## Recommended structure
+Recommended layout:
 
 ```text
-content/projects/my-project/index.md
+content/projects/my-project/
+├── index.md
+└── assets/
+    └── small-inline-image.webp
+
 public/media/my-project/
 ├── hero.webp
 ├── gameplay.mp4
-├── soundtrack-preview.mp3
+├── soundtrack.mp3
 ├── screenshot-01.webp
 └── model.glb
 ```
@@ -21,123 +25,53 @@ Use `content/projects/<slug>/assets/` only for small document-local images that 
 ```md
 ---
 title: MY PROJECT
-sub: One sentence explaining why it matters
-status: UNITY · C#
-year: 2026
-stack: [Unity, C#]
+sub: One-line project description
+status: COMPLETE
+stack: [C++, Unreal Engine]
+theme: synthwave
+link: https://example.com
 ---
-
-::facts{columns=2 label="PROJECT SNAPSHOT"}
-TYPE | GAME / TOOL / SYSTEM
-ENGINE | UNITY
-ROLE | GAMEPLAY + SYSTEMS
-YEAR | 2026
-::
 
 ## THE PROJECT
 
-Explain the problem, your contribution and the interesting engineering decisions.
+A concise introduction.
 ```
 
-If you are about to create `src/my-project.js`, stop and ask whether the missing behavior belongs in a reusable block or provider adapter.
-
-## Blocks
-
-### Project facts
-
-```md
-::facts{columns=2 label="PROJECT SNAPSHOT"}
-ENGINE | UNITY
-ROLE | PROJECT LEAD + GAMEPLAY
-PLATFORM | CUSTOM HARDWARE
-PERIOD | 2021 — 2023
-::
-```
-
-Use `facts` for compact metadata and measured facts.
-
-### System overview
-
-```md
-::system{columns=2 label="AI SYSTEM"}
-DIRECTOR AI | MONITORS PACING AND GLOBAL PRESSURE
-CREATURE AI | OWNS LOCAL PERCEPTION AND DECISIONS
-PERCEPTION | HEARING, SIGHT AND PLAYER EVIDENCE
-SEARCH STATE | INVESTIGATES WITHOUT PERFECT INFORMATION
-::
-```
-
-Use `system` when items coexist. Avoid decorative flowcharts: arrows imply causality or sequence.
-
-### Sequential pipeline
-
-```md
-::pipeline{label="INPUT LOOP"}
-PHYSICAL INPUT | BUTTONS + ROTARY ENCODERS
-INPUT BRIDGE | HARDWARE SIGNAL
-GAME STATE | UNITY INPUT SYSTEM
-PLAYER FEEDBACK | SLIDER + CAMERA RESPONSE
-::
-```
-
-Use `pipeline` only when ordering is meaningful. If rows can be rearranged without changing the meaning, use `system`, `facts` or prose instead.
-
-### Hero
-
-```md
-::hero{media=/media/my-project/hero.webp eyebrow="SYSTEM" title="PROJECT TITLE" subtitle="Short pitch"}
-```
-
-Only use a hero when there is useful visual media.
+## Editorial media
 
 ### Image
 
 ```md
-::image{src=/media/my-project/screenshot.webp alt="Gameplay screenshot"}
+::media{src="screenshot.webp" label="GAMEPLAY" alt="Gameplay screenshot" fit=contain height=280}
 ```
 
-### Full-width media
+Use `fit=contain` whenever cropping would remove meaningful information. `media` blocks are inspectable: clicking or focusing their transparent interaction surface opens the source image in the CRT media viewer.
 
-`media` is the preferred editorial block for a large screenshot, plan, waveform or key visual. It is clickable and opens in the CRT media inspector.
-
-```md
-::media{src=/media/my-project/editor.webp label="LEVEL EDITOR" fit=contain height=286}
-```
-
-Options:
-
-- `fit=cover` fills the media well and may crop;
-- `fit=contain` preserves the whole image;
-- `height=150..340` controls the visual height;
-- `gap=12..48` controls breathing room after the block;
-- `background=on` is the default near-black media well;
-- `background=off` removes that well for imagery that should sit directly on the document background.
-
-Use `background=off` deliberately; technical plans and narrow images are usually easier to read with the dark well enabled.
+`background=off` removes the editorial panel behind transparent or poster-like artwork.
 
 ### Gallery
 
 ```md
 ::gallery{columns=2 fit=contain}
-/media/my-project/shot-01.webp | Prototype
-/media/my-project/shot-02.webp | Final result
+screenshot-01.webp | First view
+screenshot-02.webp | Second view
 ::
 ```
 
-Gallery cells are also inspectable inside the CRT. `background=off` is available but the dark well is the default.
+Gallery cells use the same media inspector and can be browsed as one set.
 
-### Before / after
+### Compare
 
 ```md
-::compare{before=/media/my-project/old.webp after=/media/my-project/final.webp beforeLabel="PROTOTYPE" afterLabel="FINAL" fit=contain}
+::compare{before="before.webp" after="after.webp" beforeLabel="BEFORE" afterLabel="AFTER" fit=contain}
 ```
+
+## Interactive media
 
 ### Local video
 
-Prefer local video when you own the source because its frames are copied into `article-source` and therefore receive the real CRT shader.
-
 ```md
-::video{src="/media/my-project/gameplay.mp4" alt="Gameplay demo"}
+::video{src="/media/my-project/gameplay.mp4" label="GAMEPLAY"}
 ```
 
 Interaction contract:
@@ -155,10 +89,10 @@ User-started local videos use `preload="none"`; the browser begins loading when 
 
 ### Local audio
 
-Use `audio` for a soundtrack excerpt, music cue or sound-design example that should remain directly playable inside the CRT document.
+Use `audio` for a soundtrack, music cue or sound-design example that should remain directly playable inside the CRT document.
 
 ```md
-::audio{src="/media/my-project/theme-preview.mp3" label="MAIN THEME" credit="SOUND DESIGNER · 12 S WEB PREVIEW"}
+::audio{src="/media/my-project/theme.mp3" label="MAIN THEME" credit="SOUND DESIGNER · FULL TRACK"}
 ```
 
 Interaction contract:
@@ -171,7 +105,9 @@ browser tab hidden      pauses active audio
 block leaves viewport   releases its playback surface
 ```
 
-The player is a generic document capability, not project-specific UI. Keep soundtrack previews deliberately small: enough material to communicate the musical identity, but not an uncompressed archive of full production masters.
+The player is a generic document capability, not project-specific UI. Full-length tracks are acceptable when they are web-compressed and intentionally published with the project. Audio starts with metadata-only preload, so several full tracks may appear in one document without eagerly downloading every payload. Prefer a short excerpt only when licensing, bandwidth or editorial intent requires one; do not truncate a track merely to satisfy the document renderer.
+
+Do not ship uncompressed production masters such as large WAV exports when a high-quality web MP3/Opus encode communicates the same work. The runtime lifecycle is a safety net, not an excuse to ignore media size.
 
 ### YouTube
 
@@ -240,20 +176,21 @@ Rich documents can become expensive quickly. Follow these rules:
 1. Put substantial binary media under `public/media/<slug>/` so Vite serves it independently from the JS bundle.
 2. Large `media`, `gallery` and `compare` images are loaded on their first visible CRT paint rather than during full-document layout.
 3. Local user-started videos use `preload="none"` and never continue playing after POWER OFF, document replacement or browser backgrounding.
-4. Local audio uses metadata-first loading, pauses competing tracks and releases its source when the inline surface is destroyed.
+4. Local audio uses metadata-first loading, pauses competing tracks and releases its source when the inline surface is destroyed. Full tracks are fine when compressed for the web.
 5. Cross-origin iframes use browser lazy loading and are mounted only while their block is visible.
 6. Three.js animation only ticks while the model block is visible; runtime teardown disposes GPU resources explicitly.
-7. Keep exported screenshots/WebP, compressed audio previews and GLB sizes appropriate for portfolio presentation; runtime lazy loading is not a substitute for asset optimization.
+7. Keep exported screenshots/WebP, web audio, video and GLB sizes appropriate for portfolio presentation; runtime lazy loading is not a substitute for asset optimization.
 
 ## Content rules
 
 1. Curate from the exhaustive source material; do not dump an archive into the CRT.
-2. Explain your contribution, decisions and trade-offs. Visuals support the engineering story.
+2. Explain the project, verified contribution, decisions and trade-offs. Do not turn planning documents into claims about shipped features.
 3. Prefer local raster/video/audio/3D when practical because the portfolio can control their lifecycle and presentation directly.
 4. Keep filenames descriptive and asset ownership explicit.
 5. Never add project-specific rendering/loading code. If behavior is reusable, implement it as a shared block or provider adapter.
 6. Keep input predictable: ordinary wheel input must continue to scroll the project.
 7. Validate both CRT ON and CRT OFF because they use different presentation paths.
+8. For team projects, distinguish project architecture from personal authorship unless ownership is explicitly known.
 
 ## Validation rule
 
