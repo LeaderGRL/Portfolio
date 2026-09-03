@@ -9,11 +9,12 @@ content/projects/my-project/index.md
 public/media/my-project/
 ├── hero.webp
 ├── gameplay.mp4
+├── soundtrack-preview.mp3
 ├── screenshot-01.webp
 └── model.glb
 ```
 
-Use `content/projects/<slug>/assets/` only for small document-local images that benefit from build-time inlining. Use `public/media/<slug>/` for streamed or substantial assets: video, GLB, large GIFs and large image collections.
+Use `content/projects/<slug>/assets/` only for small document-local images that benefit from build-time inlining. Use `public/media/<slug>/` for streamed or substantial assets: video, audio, GLB, large GIFs and large image collections.
 
 ## Minimal project
 
@@ -152,6 +153,26 @@ return to page           does not auto-resume
 
 User-started local videos use `preload="none"`; the browser begins loading when playback is explicitly requested. Autoplay loop media is the exception and may request eager loading while remaining muted.
 
+### Local audio
+
+Use `audio` for a soundtrack excerpt, music cue or sound-design example that should remain directly playable inside the CRT document.
+
+```md
+::audio{src="/media/my-project/theme-preview.mp3" label="MAIN THEME" credit="SOUND DESIGNER · 12 S WEB PREVIEW"}
+```
+
+Interaction contract:
+
+```text
+click / Enter / Space   play or pause
+physical VOLUME         controls audio volume
+starting another track  pauses the previous track
+browser tab hidden      pauses active audio
+block leaves viewport   releases its playback surface
+```
+
+The player is a generic document capability, not project-specific UI. Keep soundtrack previews deliberately small: enough material to communicate the musical identity, but not an uncompressed archive of full production masters.
+
 ### YouTube
 
 ```md
@@ -219,15 +240,16 @@ Rich documents can become expensive quickly. Follow these rules:
 1. Put substantial binary media under `public/media/<slug>/` so Vite serves it independently from the JS bundle.
 2. Large `media`, `gallery` and `compare` images are loaded on their first visible CRT paint rather than during full-document layout.
 3. Local user-started videos use `preload="none"` and never continue playing after POWER OFF, document replacement or browser backgrounding.
-4. Cross-origin iframes use browser lazy loading and are mounted only while their block is visible.
-5. Three.js animation only ticks while the model block is visible; runtime teardown disposes GPU resources explicitly.
-6. Keep exported screenshots/WebP and GLB sizes appropriate for portfolio presentation; runtime lazy loading is not a substitute for asset optimization.
+4. Local audio uses metadata-first loading, pauses competing tracks and releases its source when the inline surface is destroyed.
+5. Cross-origin iframes use browser lazy loading and are mounted only while their block is visible.
+6. Three.js animation only ticks while the model block is visible; runtime teardown disposes GPU resources explicitly.
+7. Keep exported screenshots/WebP, compressed audio previews and GLB sizes appropriate for portfolio presentation; runtime lazy loading is not a substitute for asset optimization.
 
 ## Content rules
 
 1. Curate from the exhaustive source material; do not dump an archive into the CRT.
 2. Explain your contribution, decisions and trade-offs. Visuals support the engineering story.
-3. Prefer local raster/video/3D when practical because those pixels can use the real CRT shader.
+3. Prefer local raster/video/audio/3D when practical because the portfolio can control their lifecycle and presentation directly.
 4. Keep filenames descriptive and asset ownership explicit.
 5. Never add project-specific rendering/loading code. If behavior is reusable, implement it as a shared block or provider adapter.
 6. Keep input predictable: ordinary wheel input must continue to scroll the project.
@@ -235,4 +257,4 @@ Rich documents can become expensive quickly. Follow these rules:
 
 ## Validation rule
 
-PENW and LEAK deliberately stress different shapes of project. A new engine capability should make sense for both without checking a project id. If a feature only works when the runtime knows that it is rendering PENW or LEAK, the abstraction is wrong.
+PENW, LEAK and ASTRO deliberately stress different shapes of project. A new engine capability should make sense across them without checking a project id. If a feature only works when the runtime knows which named project it is rendering, the abstraction is wrong.
