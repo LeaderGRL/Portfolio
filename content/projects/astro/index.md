@@ -77,9 +77,19 @@ That simplicity gave us a useful design constraint after the jam. New ideas had 
 
 We explored more ideas than we kept. That is normal design work, but it is easy to misrepresent it afterward. A whiteboard full of mechanics is not a screenshot of the final game.
 
-The finished direction stayed much closer to the original prototype than some of those explorations suggest: **eggs, an alien, competitive interactions and planned game modes involving bosses**.
+The current direction stays much closer to the original prototype than some of those explorations suggest: **eggs, an alien, competitive interactions and planned game modes involving bosses**.
 
 The useful work was deciding what deserved to survive the prototype stage.
+
+## EXPANDING WITHOUT REPLACING THE JAM GAME
+
+Post-jam production also gave us room to explore larger environments and additional modes. The volcano blockout is one example of that work.
+
+::media{src="volcano-blockout.webp" label="VOLCANO MAP / PRODUCTION BLOCKOUT" alt="ASTRO volcano map blockout explored for later game modes" fit=contain height=275}
+
+This is **production exploration, not a shipped-mode screenshot**. It shows where the project was heading: more authored spaces and boss-oriented variations built around the same competitive foundation.
+
+That is the line I want this portfolio page to keep clear. The jam loop is real and playable. The later production work is real. A planned mode is still a planned mode.
 
 ## THE ASTRONIMALS
 
