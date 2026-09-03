@@ -38,12 +38,12 @@ check(mediaBlocks.includes("provider: 'media-single'"), 'single media exposes in
 check(integrations.includes("button.className = 'document-media-hotspot'"), 'media blocks receive a clickable inspection hotspot')
 check(integrations.includes("viewer.open([{ src: block.src"), 'media click opens original image in inspector')
 
-for (const filename of ['menu-preview.mp3', 'in-game-preview.mp3', 'volcano-preview.mp3', 'victory-jingle.mp3']) {
-  const path = `public/media/Astro/${filename}`
-  check(fs.existsSync(path), `${filename} fallback asset exists`)
-  const size = fs.existsSync(path) ? fs.statSync(path).size : 0
-  check(size > 1000 && size < 250_000, `${filename} fallback remains web-sized`)
-  check(!astro.includes(`/media/Astro/${filename}`), `${filename} preview is not presented as final soundtrack`)
+check(!astro.includes('-preview.mp3'), 'Astro page does not present truncated soundtrack previews')
+const victoryPath = 'public/media/Astro/victory-jingle.mp3'
+check(fs.existsSync(victoryPath), 'complete victory jingle remains available')
+if (fs.existsSync(victoryPath)) {
+  const size = fs.statSync(victoryPath).size
+  check(size > 1000 && size < 250_000, 'victory jingle remains web-sized')
 }
 
 for (const filename of [
