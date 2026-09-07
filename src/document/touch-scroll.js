@@ -15,7 +15,9 @@ export function installTouchScroll(target, context) {
   const previousTouchAction = target.style.getPropertyValue('touch-action')
   target.style.setProperty('touch-action', 'pinch-zoom')
 
+  const activePointers = new Set()
   let gesture = null
+  let multiTouch = false
   let globalListenersAttached = false
   let suppressClickUntil = 0
 
@@ -29,20 +31,21 @@ export function installTouchScroll(target, context) {
     root.removeEventListener('blur', cancelGesture)
   }
 
-  const stopGesture = suppressClick => {
-    if (!gesture) {
-      detachGlobalListeners()
-      return
-    }
-
-    if (suppressClick && gesture.moved) suppressClickUntil = performance.now() + 400
+  const endGesture = suppressClick => {
+    if (suppressClick && gesture?.moved) suppressClickUntil = performance.now() + 400
     gesture = null
-    detachGlobalListeners()
   }
 
   function onAdditionalPointerDown(event) {
-    if (!gesture || event.pointerType === 'mouse' || event.pointerId === gesture.pointerId) return
-    stopGesture(true)
+    if (event.pointerType === 'mouse' || event.button > 0) return
+
+    activePointers.add(event.pointerId)
+    if (!gesture || event.pointerId === gesture.pointerId) return
+
+    // Keep the multi-touch lock until every contact has ended. The same second
+    // pointerdown will continue from window capture to the media target.
+    multiTouch = true
+    endGesture(true)
   }
 
   function onPointerMove(event) {
@@ -61,12 +64,21 @@ export function installTouchScroll(target, context) {
   }
 
   function finishPointer(event) {
-    if (!gesture || event.pointerId !== gesture.pointerId) return
-    stopGesture(true)
+    const ownsGesture = gesture?.pointerId === event.pointerId
+    if (ownsGesture) endGesture(true)
+
+    activePointers.delete(event.pointerId)
+    if (activePointers.size > 0) return
+
+    multiTouch = false
+    detachGlobalListeners()
   }
 
   function cancelGesture() {
-    stopGesture(false)
+    activePointers.clear()
+    multiTouch = false
+    endGesture(false)
+    detachGlobalListeners()
   }
 
   const attachGlobalListeners = () => {
@@ -80,8 +92,14 @@ export function installTouchScroll(target, context) {
   }
 
   const onPointerDown = event => {
-    if (event.pointerType === 'mouse' || event.button > 0 || gesture) return
+    if (event.pointerType === 'mouse' || event.button > 0) return
 
+    activePointers.add(event.pointerId)
+    if (multiTouch || activePointers.size > 1 || gesture) return
+
+    // A new physical contact is a new interaction. Any synthetic click from a
+    // previous drag has already been dispatched before this pointerdown.
+    suppressClickUntil = 0
     gesture = {
       pointerId: event.pointerId,
       startY: event.clientY,
@@ -104,9 +122,9 @@ export function installTouchScroll(target, context) {
     target.removeEventListener('pointerdown', onPointerDown)
     target.removeEventListener('click', suppressDraggedClick, true)
 
-    // Keep window-level listeners alive until an in-flight pointer ends. The
-    // media node may be removed while the finger is still scrolling it.
-    if (!gesture) detachGlobalListeners()
+    // Keep window-level listeners alive until every in-flight pointer ends. A
+    // media node may be removed while a swipe or pinch is still in progress.
+    if (activePointers.size === 0) detachGlobalListeners()
 
     if (previousTouchAction) target.style.setProperty('touch-action', previousTouchAction)
     else target.style.removeProperty('touch-action')
