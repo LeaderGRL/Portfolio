@@ -39,6 +39,15 @@ for (const viewport of [
     await expectInsideViewport(machine, viewport.width, viewport.height)
     await expectInsideViewport(page.locator('.nameplate'), viewport.width, viewport.height)
 
+    const background = page.locator('.machine__background--landscape img')
+    await expect.poll(async () => background.evaluate(image => image.dataset.decodeState)).toBe('ready')
+    const decoded = await background.evaluate(image => ({
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+    }))
+    expect(decoded.width).toBeGreaterThan(0)
+    expect(decoded.height).toBeGreaterThan(0)
+
     const screen = await expectInsideViewport(page.locator('#screen'), viewport.width, viewport.height, 6)
     expect(screen.width).toBeGreaterThan(260)
     expect(screen.height).toBeGreaterThan(160)
@@ -56,8 +65,43 @@ for (const viewport of [
       expect(box.bottom).toBeLessThanOrEqual(viewport.height + 1)
       expect(box.height).toBeGreaterThanOrEqual(44)
     }
+
+    const rasterRect = await page.locator('#tube').evaluate(element => {
+      const style = getComputedStyle(element)
+      return {
+        x: parseFloat(style.getPropertyValue('--landscape-terminal-x')),
+        y: parseFloat(style.getPropertyValue('--landscape-terminal-y')),
+        width: parseFloat(style.getPropertyValue('--landscape-terminal-w')),
+        height: parseFloat(style.getPropertyValue('--landscape-terminal-h')),
+      }
+    })
+    expect(rasterRect.width / rasterRect.height).toBeCloseTo(4 / 3, 1)
+    expect(rasterRect.width).toBeLessThanOrEqual(100)
+    expect(rasterRect.height).toBeLessThanOrEqual(100)
   })
 }
+
+test('landscape chassis fits inside simulated phone safe-area insets', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')
+  await page.setViewportSize({ width: 915, height: 412 })
+  await boot(page)
+
+  await page.evaluate(() => {
+    const root = document.documentElement.style
+    root.setProperty('--safe-area-left', '42px')
+    root.setProperty('--safe-area-right', '34px')
+    root.setProperty('--safe-area-top', '8px')
+    root.setProperty('--safe-area-bottom', '6px')
+    window.dispatchEvent(new Event('resize'))
+  })
+
+  const box = await page.locator('#machine').boundingBox()
+  expect(box).not.toBeNull()
+  expect(box.x).toBeGreaterThanOrEqual(42 - 1)
+  expect(box.x + box.width).toBeLessThanOrEqual(915 - 34 + 1)
+  expect(box.y).toBeGreaterThanOrEqual(8 - 1)
+  expect(box.y + box.height).toBeLessThanOrEqual(412 - 6 + 1)
+})
 
 test('rotating a phone returns from landscape chassis to portrait compact chassis', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')
@@ -71,7 +115,20 @@ test('rotating a phone returns from landscape chassis to portrait compact chassi
   await expect(page.locator('body')).not.toHaveClass(/is-landscape-mobile-stage/)
 })
 
-test('landscape article remains inside the CRT and keeps native document scrolling', async ({ page }, testInfo) => {
+test('entering fullscreen removes landscape chassis geometry', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')
+  await page.setViewportSize({ width: 915, height: 412 })
+  await boot(page)
+  await expect(page.locator('#machine')).toHaveClass(/is-landscape-mobile/)
+
+  await page.evaluate(() => document.getElementById('fullscreen-switch')?.click())
+  await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
+  await expect(page.locator('#machine')).not.toHaveClass(/is-landscape-mobile/)
+  await expect(page.locator('body')).not.toHaveClass(/is-landscape-mobile-stage/)
+  await expect(page.locator('#tube')).not.toHaveAttribute('data-raster-layout', 'landscape')
+})
+
+test('landscape article enlarges the visible raster and keeps document scrolling', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')
   await page.setViewportSize({ width: 915, height: 412 })
   await boot(page, '/articles/01-ecs-entity-management')
@@ -84,11 +141,18 @@ test('landscape article remains inside the CRT and keeps native document scrolli
     overflowY: getComputedStyle(element).overflowY,
     clientHeight: element.clientHeight,
     scrollHeight: element.scrollHeight,
-    fontSize: parseFloat(getComputedStyle(element).fontSize),
   }))
   expect(['auto', 'scroll']).toContain(geometry.overflowY)
   expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight)
-  expect(geometry.fontSize).toBeGreaterThanOrEqual(28)
+
+  const rasterScale = await page.locator('#tube').evaluate(element => ({
+    mode: element.dataset.rasterLayout,
+    physicalScale: parseFloat(getComputedStyle(element).getPropertyValue('--landscape-document-scale')),
+  }))
+  expect(rasterScale.mode).toBe('landscape')
+  expect(rasterScale.physicalScale).toBeGreaterThanOrEqual(1.08)
+  expect(rasterScale.physicalScale).toBeLessThanOrEqual(1.25)
+  expect(10 * rasterScale.physicalScale).toBeGreaterThanOrEqual(10.8)
 
   const before = await reader.evaluate(element => element.scrollTop)
   await reader.evaluate(element => { element.scrollTop += Math.max(80, element.clientHeight * 0.5) })
