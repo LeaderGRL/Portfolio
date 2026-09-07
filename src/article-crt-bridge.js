@@ -3,6 +3,7 @@ import { ArticleRasteriser } from './article-rasteriser.js'
 import { DisplayPipeline } from './display-pipeline.js'
 import { createDefaultBlockRegistry } from './document/default-blocks.js'
 import { createDefaultIntegrationRegistry } from './document/default-integrations.js'
+import { AudioPlaybackManager } from './document/audio-playback-manager.js'
 import { enhanceAudioBlocks, registerAudioIntegration } from './document/audio-blocks.js'
 import { InlineIntegrationController } from './document/inline-integrations.js'
 import { SafeLocal3DManager } from './document/safe-local-3d.js'
@@ -52,15 +53,25 @@ class ArticleCRTRuntime {
       this.documentRaster?.markDirty?.()
     })
 
+    // Playback belongs to the document runtime, not to visible overlay nodes.
+    // Controls may be remounted during scroll or relayout without resetting audio.
+    this.audioPlayback = new AudioPlaybackManager({
+      onChange: () => {
+        app.dirty = true
+        this.documentRaster?.markDirty?.()
+      },
+    })
+
     this.blockRegistry = enhanceAudioBlocks(
       enhanceMediaBlocks(
         enhanceModel3DFallback(createDefaultBlockRegistry({ local3d: this.local3d }), this.local3d),
       ),
+      this.audioPlayback,
     )
     this.integrations = registerAudioIntegration(createDefaultIntegrationRegistry({
       local3d: this.local3d,
       mediaViewer: this.mediaViewer,
-    }))
+    }), this.audioPlayback)
 
     this.documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
       app.dirty = true
@@ -72,6 +83,7 @@ class ArticleCRTRuntime {
       registry: this.integrations,
     })
 
+    this.audioPlayback.setPowered(!tube.classList.contains('is-powered-off'))
     this.articleRaster = this.documentRaster
     this.destroyed = false
   }
@@ -101,6 +113,7 @@ class ArticleCRTRuntime {
     syncArticleReader(documentItem)
 
     const itemChanged = this.documentRaster.setItem(documentItem)
+    this.audioPlayback.setDocument(documentItem)
     if (itemChanged) {
       this.mediaViewer.close()
       this.inlineIntegrations.clear()
@@ -138,24 +151,19 @@ class ArticleCRTRuntime {
   }
 
   setViewport(layout) {
-    // A resize event arrives after the browser has already reflowed the DOM.
-    // Its new scroll range cannot describe the old reading position. The
-    // raster still holds the last synchronized progress in the old layout.
     const { scroll, maxScroll } = this.documentRaster
     const position = this.isDocument()
       ? { item: this.app.state.item, progress: maxScroll ? scroll / maxScroll : 0 }
       : null
     if (!this.documentRaster.setViewport(layout)) return
     this.restoreReadingPosition(position)
+    // Only view-bound controls are remounted. Persistent audio state survives.
     this.inlineIntegrations.clear()
     this.mediaViewer.resize()
   }
 
   restoreReadingPosition(position) {
     if (!position || position.item !== this.app.state.item) return
-    // The visible raster uses a normalized DOM scroll range. Fullscreen can
-    // change the viewport height and trigger native scroll anchoring during
-    // intermediate layout; restoring raw scrollTop would still move its pixels.
     const range = Math.max(0, this.reader.scrollHeight - this.reader.clientHeight)
     this.reader.scrollTop = position.progress * range
     this.documentRaster._syncScrollFromDOM()
@@ -163,7 +171,10 @@ class ArticleCRTRuntime {
   }
 
   frame(time) {
-    if (this.destroyed || !this.isDocument()) return
+    if (this.destroyed) return
+
+    this.audioPlayback.setPowered(!this.tube.classList.contains('is-powered-off'))
+    if (!this.isDocument()) return
 
     if (this.mediaViewer.isOpen) {
       this.inlineIntegrations.clear()
@@ -190,6 +201,7 @@ class ArticleCRTRuntime {
     if (this.destroyed) return
     this.destroyed = true
     this.inlineIntegrations.destroy()
+    this.audioPlayback.destroy()
     this.mediaViewer.destroy()
     this.local3d.dispose()
     syncArticleReader(null)
