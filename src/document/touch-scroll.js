@@ -1,27 +1,51 @@
+function getRenderedScaleY(reader) {
+  const layoutHeight = Number(reader?.offsetHeight || reader?.clientHeight || 0)
+  const renderedHeight = Number(reader?.getBoundingClientRect?.().height || 0)
+  if (!(layoutHeight > 0) || !(renderedHeight > 0)) return 1
+
+  const scale = renderedHeight / layoutHeight
+  return Number.isFinite(scale) && scale > 0 ? scale : 1
+}
+
 export function installTouchScroll(target, context) {
   const reader = context?.rasteriser?.reader
-  if (!target || !reader) return () => {}
+  const root = target?.ownerDocument?.defaultView || globalThis
+  if (!target || !reader || !root?.addEventListener) return () => {}
 
-  const previousTouchAction = target.style.touchAction
-  target.style.touchAction = 'none'
+  const previousTouchAction = target.style.getPropertyValue('touch-action')
+  target.style.setProperty('touch-action', 'pinch-zoom')
 
   let gesture = null
+  let globalListenersAttached = false
   let suppressClickUntil = 0
 
-  const onPointerDown = event => {
-    if (event.pointerType === 'mouse' || event.button > 0) return
-
-    gesture = {
-      pointerId: event.pointerId,
-      startY: event.clientY,
-      lastY: event.clientY,
-      moved: false,
-    }
-
-    try { target.setPointerCapture?.(event.pointerId) } catch {}
+  const detachGlobalListeners = () => {
+    if (!globalListenersAttached) return
+    globalListenersAttached = false
+    root.removeEventListener('pointerdown', onAdditionalPointerDown, true)
+    root.removeEventListener('pointermove', onPointerMove)
+    root.removeEventListener('pointerup', finishPointer)
+    root.removeEventListener('pointercancel', finishPointer)
+    root.removeEventListener('blur', cancelGesture)
   }
 
-  const onPointerMove = event => {
+  const stopGesture = suppressClick => {
+    if (!gesture) {
+      detachGlobalListeners()
+      return
+    }
+
+    if (suppressClick && gesture.moved) suppressClickUntil = performance.now() + 400
+    gesture = null
+    detachGlobalListeners()
+  }
+
+  function onAdditionalPointerDown(event) {
+    if (!gesture || event.pointerType === 'mouse' || event.pointerId === gesture.pointerId) return
+    stopGesture(true)
+  }
+
+  function onPointerMove(event) {
     if (!gesture || event.pointerId !== gesture.pointerId) return
 
     const total = gesture.startY - event.clientY
@@ -31,17 +55,40 @@ export function installTouchScroll(target, context) {
     if (!gesture.moved && Math.abs(total) < 6) return
 
     gesture.moved = true
-    if (delta) reader.scrollTop += delta
+    if (delta) reader.scrollTop += delta / getRenderedScaleY(reader)
     event.preventDefault()
     event.stopPropagation()
   }
 
-  const finishPointer = event => {
+  function finishPointer(event) {
     if (!gesture || event.pointerId !== gesture.pointerId) return
+    stopGesture(true)
+  }
 
-    if (gesture.moved) suppressClickUntil = performance.now() + 400
-    try { target.releasePointerCapture?.(event.pointerId) } catch {}
-    gesture = null
+  function cancelGesture() {
+    stopGesture(false)
+  }
+
+  const attachGlobalListeners = () => {
+    if (globalListenersAttached) return
+    globalListenersAttached = true
+    root.addEventListener('pointerdown', onAdditionalPointerDown, true)
+    root.addEventListener('pointermove', onPointerMove, { passive: false })
+    root.addEventListener('pointerup', finishPointer)
+    root.addEventListener('pointercancel', finishPointer)
+    root.addEventListener('blur', cancelGesture)
+  }
+
+  const onPointerDown = event => {
+    if (event.pointerType === 'mouse' || event.button > 0 || gesture) return
+
+    gesture = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      lastY: event.clientY,
+      moved: false,
+    }
+    attachGlobalListeners()
   }
 
   const suppressDraggedClick = event => {
@@ -51,19 +98,17 @@ export function installTouchScroll(target, context) {
   }
 
   target.addEventListener('pointerdown', onPointerDown)
-  target.addEventListener('pointermove', onPointerMove)
-  target.addEventListener('pointerup', finishPointer)
-  target.addEventListener('pointercancel', finishPointer)
   target.addEventListener('click', suppressDraggedClick, true)
 
   return () => {
     target.removeEventListener('pointerdown', onPointerDown)
-    target.removeEventListener('pointermove', onPointerMove)
-    target.removeEventListener('pointerup', finishPointer)
-    target.removeEventListener('pointercancel', finishPointer)
     target.removeEventListener('click', suppressDraggedClick, true)
 
-    if (previousTouchAction) target.style.touchAction = previousTouchAction
+    // Keep window-level listeners alive until an in-flight pointer ends. The
+    // media node may be removed while the finger is still scrolling it.
+    if (!gesture) detachGlobalListeners()
+
+    if (previousTouchAction) target.style.setProperty('touch-action', previousTouchAction)
     else target.style.removeProperty('touch-action')
   }
 }
