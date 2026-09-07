@@ -51,6 +51,8 @@ for (const filename of [
   'design-board.webp',
   'game-crealab.webp',
   'characters.webp',
+  'camera-work.webp',
+  'volcano-blockout.webp',
   'team.webp',
   'team-01.webp',
   'team-03.webp',
@@ -63,7 +65,7 @@ for (const filename of [
 }
 
 const astroMediaDirectives = astro.match(/^::media\{[^\n]+\}$/gm) || []
-check(astroMediaDirectives.length >= 4, 'Astro keeps several editorial images in the story')
+check(astroMediaDirectives.length >= 6, 'Astro keeps several editorial images in the story')
 check(astroMediaDirectives.every(line => /\bfit=contain\b/.test(line)), 'every Astro editorial image opts out of cropping')
 check(!astro.includes('::hero{'), 'Astro does not use a cropping hero block')
 check(!astro.includes('::system{'), 'Astro avoids decorative system-card grids')
@@ -78,6 +80,7 @@ check(astro.includes('Pôle Pixel in Villeurbanne'), 'Astro names the Game Créa
 check(astro.includes('Focus Entertainment'), 'Astro records publisher contact context')
 check(astro.includes('Game Designer and Programmer'), 'Astro states Jordan design/programming role')
 check(astro.includes('I would rather keep this section precise'), 'Astro avoids invented personal ownership')
+check(astro.includes('production exploration, not a shipped-mode screenshot'), 'Astro separates production exploration from shipped content')
 check(astro.includes('ASTRO is currently **paused**'), 'Astro reports the real project status')
 check(astro.includes('professional schedules changed'), 'Astro explains why development paused')
 check(astro.includes('## THE TEAM'), 'Astro includes the team and production context')
