@@ -1,0 +1,306 @@
+/* ============================================================================
+   MOBILE LANDSCAPE
+
+   Landscape phones use a third authored chassis instead of cropping the
+   desktop 1920x1080 plate. The runtime selects the closest source aspect and
+   publishes its measured alpha aperture through --landscape-ap-*.
+   ========================================================================== */
+.machine__background--landscape{ display:none; }
+.machine__background--landscape[hidden]{ display:none !important; }
+
+body.is-landscape-mobile-stage{
+  background:#e9d8c2;
+}
+body.is-landscape-mobile-stage #stage{
+  background:transparent;
+}
+
+.machine.is-landscape-mobile{
+  left:50%;
+  top:50%;
+  width:var(--landscape-design-w);
+  height:var(--landscape-design-h);
+  display:block;
+  transform-origin:50% 50%;
+  transform:translate(-50%,-50%) scale(var(--fit));
+  border-radius:0;
+  background:#e9d8c2;
+  box-shadow:none;
+}
+.machine.is-landscape-mobile::after{ display:none; }
+.is-landscape-mobile .machine__background--desktop,
+.is-landscape-mobile .machine__background--mobile{ display:none; }
+.is-landscape-mobile .machine__background--landscape{
+  display:block;
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  z-index:2;
+  pointer-events:none;
+}
+.is-landscape-mobile .machine__background--landscape img{
+  width:100%;
+  height:100%;
+  object-fit:fill;
+}
+
+/* The live tube follows the artist-cut alpha opening exactly. A small bleed
+   remains behind the photographic black moulding so fractional scaling never
+   exposes a dead seam around the glass. */
+.is-landscape-mobile .screen{
+  position:absolute;
+  left:calc(var(--landscape-ap-l) * 100% - 8px);
+  top:calc(var(--landscape-ap-t) * 100% - 8px);
+  width:calc((var(--landscape-ap-r) - var(--landscape-ap-l)) * 100% + 16px);
+  height:calc((var(--landscape-ap-b) - var(--landscape-ap-t)) * 100% + 16px);
+  margin:0;
+  transform:none;
+}
+.is-landscape-mobile .tube{
+  inset:0;
+  width:100%;
+  height:100%;
+}
+.is-landscape-mobile .screen__bezel{ display:none; }
+
+/* The artwork deliberately leaves one quiet material field to the right of
+   the tube. Hardware is placed in that field rather than baked into the image,
+   so controls retain their real pressed/selected states. */
+.is-landscape-mobile .plate-row{
+  position:absolute;
+  left:61.5%;
+  top:5.2%;
+  width:34.5%;
+  height:8.8%;
+  display:block;
+  padding:0;
+}
+.is-landscape-mobile .rail{ display:none; }
+.is-landscape-mobile .nameplate{
+  width:100%;
+  height:100%;
+  margin:0;
+}
+.is-landscape-mobile .nameplate h1{
+  font-size:23px;
+  letter-spacing:.30em;
+  text-indent:.30em;
+}
+.is-landscape-mobile .nameplate p{
+  font-size:8px;
+  letter-spacing:.18em;
+  text-indent:.18em;
+}
+
+.is-landscape-mobile .panel--left{
+  position:absolute;
+  left:60.5%;
+  top:16.5%;
+  width:36.5%;
+  height:43.5%;
+  padding:0;
+  display:block;
+  transform:none;
+}
+.is-landscape-mobile #nav-keys{
+  width:100%;
+  height:100%;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-rows:repeat(3,minmax(0,1fr));
+  gap:16px 18px;
+}
+.is-landscape-mobile .key,
+.is-landscape-mobile .key--sm{
+  width:100%;
+  height:100%;
+  min-width:0;
+  min-height:0;
+  border-radius:15px;
+}
+.is-landscape-mobile .key__button{ border-radius:13px; }
+.is-landscape-mobile .key__face{ border-radius:11px; }
+.is-landscape-mobile .key__legend{
+  padding-left:48px;
+  padding-right:24px;
+  font-size:17px;
+  letter-spacing:.07em;
+}
+.is-landscape-mobile .key__icon{
+  display:grid;
+  place-items:center;
+  position:absolute;
+  left:15px;
+  top:50%;
+  translate:0 -50%;
+  width:23px;
+  height:23px;
+  color:var(--key-text);
+  z-index:3;
+}
+.is-landscape-mobile .key__icon svg{
+  display:block;
+  width:100%;
+  height:100%;
+  fill:currentColor;
+}
+.is-landscape-mobile .key.is-on .key__icon{ color:#315a3e; }
+.is-landscape-mobile .key__led{
+  top:11px;
+  right:12px;
+  width:9px;
+  height:9px;
+}
+
+.is-landscape-mobile .panel--right{
+  position:absolute;
+  left:60.5%;
+  top:62.0%;
+  width:36.5%;
+  height:33.0%;
+  padding:0;
+  display:block;
+}
+.is-landscape-mobile .panel--right .stack,
+.is-landscape-mobile .panel--right .rule,
+.is-landscape-mobile .panel--right .controls-row,
+.is-landscape-mobile .panel--right .bottom-row{
+  position:absolute;
+  left:0;
+  transform:none;
+  width:100%;
+}
+.is-landscape-mobile .panel--right .stack{
+  top:0;
+  height:27%;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:18px;
+}
+.is-landscape-mobile .panel--right .rule{ display:none; }
+.is-landscape-mobile .panel--right .controls-row{
+  top:35%;
+  height:34%;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  column-gap:16px;
+  align-items:start;
+}
+.is-landscape-mobile .control{
+  width:100%;
+  min-width:0;
+}
+.is-landscape-mobile .control + .control{ margin-top:0; }
+.is-landscape-mobile .caption{
+  justify-content:center;
+  min-height:24px;
+  font-size:13px;
+  letter-spacing:.08em;
+  text-indent:0;
+  color:var(--ink-hard);
+}
+.is-landscape-mobile .caption::after{ display:none; }
+.is-landscape-mobile .control:first-child .caption{ font-size:0; }
+.is-landscape-mobile .control:first-child .caption::before{
+  content:"CRT";
+  font-size:13px;
+}
+.is-landscape-mobile .control__row,
+.is-landscape-mobile .slider-row{
+  justify-content:center;
+  margin-top:10px;
+  gap:0;
+}
+.is-landscape-mobile .control__row .tiny,
+.is-landscape-mobile .slider-row .tiny{ display:none; }
+.is-landscape-mobile .switch{ width:120px; }
+.is-landscape-mobile .slider{ width:150px; margin:0; }
+
+.is-landscape-mobile .panel--right .bottom-row{
+  top:72%;
+  height:28%;
+  display:block;
+}
+.is-landscape-mobile .grille{ display:none; }
+.is-landscape-mobile .power{
+  width:max-content;
+  margin:0 auto;
+}
+.is-landscape-mobile .power::before{
+  content:"POWER";
+  position:absolute;
+  left:50%;
+  top:-25px;
+  translate:-50% 0;
+  font-size:13px;
+  font-weight:650;
+  letter-spacing:.08em;
+  color:var(--ink-hard);
+}
+.is-landscape-mobile .rocker{ width:58px; }
+.is-landscape-mobile .foot{ display:none; }
+
+/* The physical aperture is much shorter than the portrait tube. Reduce reader
+   chrome instead of shrinking the article body into illegibility. */
+.is-landscape-mobile .article-reader{
+  padding:20px 24px 34px;
+  font-size:15px;
+  line-height:1.52;
+}
+.is-landscape-mobile .article-reader__title{ font-size:24px; }
+.is-landscape-mobile .article-reader__heading{
+  margin-top:25px;
+  font-size:18px;
+}
+
+/* The selected source aspect is close to the device aspect, so any remaining
+   contain-fit strip is only a few pixels. Keep it material-coloured rather than
+   introducing black letterbox bars. */
+body.is-landscape-mobile-stage::before,
+body.is-landscape-mobile-stage::after{
+  content:"";
+  position:fixed;
+  z-index:0;
+  pointer-events:none;
+  background:#e9d8c2;
+}
+body.is-landscape-mobile-stage::before{
+  left:0;
+  right:0;
+  top:0;
+  height:var(--landscape-gap-y,0px);
+}
+body.is-landscape-mobile-stage::after{
+  left:0;
+  right:0;
+  bottom:0;
+  height:var(--landscape-gap-y,0px);
+}
+body.is-landscape-mobile-stage #stage::before,
+body.is-landscape-mobile-stage #stage::after{
+  content:"";
+  position:absolute;
+  z-index:0;
+  top:0;
+  bottom:0;
+  width:var(--landscape-gap-x,0px);
+  pointer-events:none;
+  background:#e9d8c2;
+}
+body.is-landscape-mobile-stage #stage::before{ left:0; }
+body.is-landscape-mobile-stage #stage::after{ right:0; }
+
+@media (max-height:430px){
+  .is-landscape-mobile .nameplate h1{ font-size:21px; }
+  .is-landscape-mobile .key__legend{ font-size:16px; }
+  .is-landscape-mobile .caption,
+  .is-landscape-mobile .control:first-child .caption::before,
+  .is-landscape-mobile .power::before{ font-size:12px; }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .machine.is-landscape-mobile{
+    transform:translate(-50%,-50%) scale(var(--fit));
+  }
+}
