@@ -13,6 +13,7 @@
 }
 
 .machine__background--landscape{ display:none; }
+/* Preserve the native hidden contract against the active landscape rule. */
 .machine__background--landscape[hidden]{ display:none !important; }
 
 body.is-landscape-mobile-stage{ background:#e9d8c2; }
@@ -54,7 +55,8 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   --landscape-controls-left:62.5%;
   --landscape-controls-width:540px;
   --landscape-nav-top:11%;
-  --landscape-key-h:92px;
+  /* 94 design pixels retain a real >=44px target after the 915x412 fit. */
+  --landscape-key-h:94px;
   --landscape-action-top:55%;
   --landscape-controls-top:72%;
   --landscape-power-top:85%;
@@ -128,6 +130,7 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   padding:0;
   display:block;
   transform:none;
+  z-index:3;
 }
 .is-landscape-mobile #nav-keys{
   width:100%;
@@ -205,6 +208,10 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   height:100%;
   padding:0;
   display:block;
+  z-index:3;
+  /* The panel itself spans the full height. Only its visible controls should
+     own pointer input; otherwise this transparent box covers the nav keys. */
+  pointer-events:none;
 }
 .is-landscape-mobile .panel--right .stack,
 .is-landscape-mobile .panel--right .controls-row,
@@ -213,6 +220,7 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   left:0;
   width:100%;
   transform:none;
+  pointer-events:auto;
 }
 .is-landscape-mobile .panel--right .stack{
   top:var(--landscape-action-top);
@@ -331,19 +339,20 @@ body.is-landscape-mobile-stage::after{
   position:fixed;
   z-index:0;
   pointer-events:none;
-  background:#e9d8c2;
 }
 body.is-landscape-mobile-stage::before{
   left:0;
   right:0;
   top:0;
   height:var(--landscape-gap-y,0px);
+  background:var(--landscape-edge-top,#e9d8c2);
 }
 body.is-landscape-mobile-stage::after{
   left:0;
   right:0;
   bottom:0;
   height:var(--landscape-gap-y,0px);
+  background:var(--landscape-edge-bottom,#e9d8c2);
 }
 body.is-landscape-mobile-stage #stage::before,
 body.is-landscape-mobile-stage #stage::after{
@@ -354,10 +363,15 @@ body.is-landscape-mobile-stage #stage::after{
   bottom:0;
   width:var(--landscape-gap-x,0px);
   pointer-events:none;
-  background:#e9d8c2;
 }
-body.is-landscape-mobile-stage #stage::before{ left:0; }
-body.is-landscape-mobile-stage #stage::after{ right:0; }
+body.is-landscape-mobile-stage #stage::before{
+  left:0;
+  background:var(--landscape-edge-left,#e9d8c2);
+}
+body.is-landscape-mobile-stage #stage::after{
+  right:0;
+  background:var(--landscape-edge-right,#e9d8c2);
+}
 
 @media (max-height:430px){
   .is-landscape-mobile .key__legend{ font-size:23px; }

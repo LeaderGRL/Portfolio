@@ -5,6 +5,19 @@ const isChromiumDesktop = testInfo => testInfo.project.name === 'chromium'
 async function emulateTouchPhone(page) {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, get: () => 5 })
+
+    const nativeMatchMedia = window.matchMedia.bind(window)
+    window.matchMedia = query => {
+      const result = nativeMatchMedia(query)
+      if (query !== '(pointer: coarse)' && query !== '(hover: none)') return result
+      return new Proxy(result, {
+        get(target, property) {
+          if (property === 'matches') return true
+          const value = Reflect.get(target, property, target)
+          return typeof value === 'function' ? value.bind(target) : value
+        },
+      })
+    }
   })
 }
 
@@ -54,7 +67,16 @@ test('CRT-off landscape media canvas matches the wide tube aspect', async ({ pag
   await page.locator('#crt-switch').click()
   await expect(page.locator('#tube')).toHaveClass(/is-crt-off/)
 
+  const reader = page.locator('#article-reader')
   const media = page.locator('.document-inline-integrations button').first()
+  await expect.poll(async () => {
+    if (await media.count()) return true
+    await reader.evaluate(element => {
+      element.scrollTop = Math.min(element.scrollHeight, element.scrollTop + element.clientHeight * 0.8)
+      return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    })
+    return false
+  }).toBe(true)
   await expect(media).toBeVisible()
   await media.click()
   await expect(page.locator('#tube')).toHaveClass(/is-media-inspecting/)
@@ -70,4 +92,26 @@ test('CRT-off landscape media canvas matches the wide tube aspect', async ({ pag
   })
 
   expect(Math.abs(ratios.canvas - ratios.tube)).toBeLessThan(0.01)
+})
+
+test('landscape navigation owns its hit area and keeps physical press feedback', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Landscape hit-testing regression only needs Chromium')
+  await bootLandscape(page, '/')
+
+  const articles = page.getByRole('button', { name: 'ARTICLES', exact: true })
+  const centreIsOwned = await articles.evaluate(key => {
+    const rect = key.getBoundingClientRect()
+    const owner = document.elementFromPoint(rect.left + rect.width * 0.5, rect.top + rect.height * 0.5)
+    return owner === key || key.contains(owner)
+  })
+  expect(centreIsOwned).toBe(true)
+
+  const box = await articles.boundingBox()
+  expect(box).not.toBeNull()
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5)
+  await page.mouse.down()
+  await expect(articles).toHaveClass(/is-down/)
+  await page.mouse.up()
+  await expect(page).toHaveURL(/\/articles$/)
+  await expect(articles).not.toHaveClass(/is-down/)
 })

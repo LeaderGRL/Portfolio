@@ -9,6 +9,12 @@ const LANDSCAPE_LAYOUTS = [
     width: 1536,
     height: 1024,
     aperture: [0.149740, 0.196289, 0.590495, 0.648438],
+    edges: {
+      top: 'linear-gradient(90deg,#fef6f0 0%,#f0e5d6 25%,#e3d5c5 50%,#d9ccbc 75%,#d0c5b4 100%)',
+      bottom: 'linear-gradient(90deg,#d5c7b7 0%,#d5c8b5 25%,#d0c3b3 50%,#cec0b0 75%,#c9bcac 100%)',
+      left: 'linear-gradient(180deg,#fef6f0 0%,#efe4d5 25%,#e8ddcc 50%,#e1d4c4 75%,#d5c7b7 100%)',
+      right: 'linear-gradient(180deg,#d0c5b4 0%,#d1c6b5 25%,#d1c6b5 50%,#ccc3b3 75%,#c9bcac 100%)',
+    },
     src: frame3x2,
   },
   {
@@ -16,6 +22,12 @@ const LANDSCAPE_LAYOUTS = [
     width: 1672,
     height: 941,
     aperture: [0.153110, 0.228480, 0.566388, 0.651435],
+    edges: {
+      top: 'linear-gradient(90deg,#fcf4ee 0%,#ede0ce 25%,#e1d2be 50%,#d6c7b3 75%,#cebfab 100%)',
+      bottom: 'linear-gradient(90deg,#d9cab6 0%,#dacbb7 25%,#d6c7b3 50%,#d3c4b0 75%,#cdbfac 100%)',
+      left: 'linear-gradient(180deg,#fcf4ee 0%,#f1e3d3 25%,#ecdac9 50%,#e3d4c0 75%,#d9cab6 100%)',
+      right: 'linear-gradient(180deg,#cebfab 0%,#d0c1ad 25%,#d3c4b0 50%,#d0c1ad 75%,#cdbfac 100%)',
+    },
     src: frame16x9,
   },
   {
@@ -23,6 +35,12 @@ const LANDSCAPE_LAYOUTS = [
     width: 1916,
     height: 821,
     aperture: [0.140397, 0.200974, 0.536013, 0.685749],
+    edges: {
+      top: 'linear-gradient(90deg,#fbf3ec 0%,#f7ecdb 25%,#e4dac9 50%,#dacdbd 75%,#cec0b0 100%)',
+      bottom: 'linear-gradient(90deg,#ded1c1 0%,#dccebe 25%,#d5c7b7 50%,#cec3b3 75%,#cabdab 100%)',
+      left: 'linear-gradient(180deg,#fbf3ec 0%,#efe4d5 25%,#eadfd1 50%,#e6dbca 75%,#ded1c1 100%)',
+      right: 'linear-gradient(180deg,#cec0b0 0%,#cdc2b1 25%,#cdc2b1 50%,#ccc1b0 75%,#cabdab 100%)',
+    },
     src: frame21x9,
   },
 ]
@@ -43,11 +61,16 @@ function closestLayout(viewportAspect) {
 }
 
 function hasTouchInput() {
-  if (Number(navigator?.maxTouchPoints || 0) > 0) return true
+  const touchPoints = Number(navigator?.maxTouchPoints || 0)
+  if (touchPoints <= 0) return false
+
+  /* maxTouchPoints is also non-zero on hybrid Windows laptops. The authored
+     phone chassis is appropriate only when touch is the primary interaction,
+     otherwise a short desktop window unexpectedly becomes the mobile UI. */
   try {
-    return matchMedia('(pointer: coarse)').matches
+    return matchMedia('(pointer: coarse)').matches || matchMedia('(hover: none)').matches
   } catch {
-    return false
+    return touchPoints > 0
   }
 }
 
@@ -244,6 +267,10 @@ export function installLandscapeMobileLayout(app) {
       '--landscape-gap-y',
       '--landscape-center-x',
       '--landscape-center-y',
+      '--landscape-edge-top',
+      '--landscape-edge-bottom',
+      '--landscape-edge-left',
+      '--landscape-edge-right',
     ]) root.removeProperty(property)
   }
 
@@ -296,6 +323,10 @@ export function installLandscapeMobileLayout(app) {
     root.setProperty('--landscape-center-y', `${safe.centerY}px`)
     root.setProperty('--landscape-gap-x', `${Math.max(0, (viewportWidth - renderedWidth) * 0.5)}px`)
     root.setProperty('--landscape-gap-y', `${Math.max(0, (viewportHeight - renderedHeight) * 0.5)}px`)
+    root.setProperty('--landscape-edge-top', layout.edges.top)
+    root.setProperty('--landscape-edge-bottom', layout.edges.bottom)
+    root.setProperty('--landscape-edge-left', layout.edges.left)
+    root.setProperty('--landscape-edge-right', layout.edges.right)
 
     if (activeLayout !== layout.id) loadBackground(image, layout)
     layer.hidden = false

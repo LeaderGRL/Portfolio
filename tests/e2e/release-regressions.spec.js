@@ -6,6 +6,19 @@ const isChromiumDesktop = testInfo => testInfo.project.name === 'chromium'
 async function emulateTouchPhone(page) {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, get: () => 5 })
+
+    const nativeMatchMedia = window.matchMedia.bind(window)
+    window.matchMedia = query => {
+      const result = nativeMatchMedia(query)
+      if (query !== '(pointer: coarse)' && query !== '(hover: none)') return result
+      return new Proxy(result, {
+        get(target, property) {
+          if (property === 'matches') return true
+          const value = Reflect.get(target, property, target)
+          return typeof value === 'function' ? value.bind(target) : value
+        },
+      })
+    }
   })
 }
 
@@ -44,7 +57,7 @@ for (const viewport of [
     await expect(page.locator('body')).toHaveClass(/is-landscape-mobile-stage/)
 
     await expectInsideViewport(machine, viewport.width, viewport.height)
-    await expectInsideViewport(page.locator('.nameplate'), viewport.width, viewport.height)
+    await expect(page.locator('.nameplate')).toBeHidden()
 
     const background = page.locator('.machine__background--landscape img')
     await expect.poll(async () => background.evaluate(image => image.dataset.decodeState)).toBe('ready')
@@ -72,6 +85,13 @@ for (const viewport of [
       expect(box.bottom).toBeLessThanOrEqual(viewport.height + 1)
       expect(box.height).toBeGreaterThanOrEqual(44)
     }
+
+    const navKeysOwnTheirCentres = await page.locator('#nav-keys .key').evaluateAll(keys => keys.map(key => {
+      const rect = key.getBoundingClientRect()
+      const owner = document.elementFromPoint(rect.left + rect.width * 0.5, rect.top + rect.height * 0.5)
+      return owner === key || key.contains(owner)
+    }))
+    expect(navKeysOwnTheirCentres).toEqual([true, true, true, true, true, true])
 
     const rasterRect = await page.locator('#tube').evaluate(element => {
       const style = getComputedStyle(element)
