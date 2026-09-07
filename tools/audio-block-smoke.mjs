@@ -7,6 +7,54 @@ const check = (condition, label) => {
   if (!condition) failed++
 }
 
+const readWebpSize = path => {
+  const data = fs.readFileSync(path)
+  if (
+    data.length < 30 ||
+    data.toString('ascii', 0, 4) !== 'RIFF' ||
+    data.toString('ascii', 8, 12) !== 'WEBP'
+  ) return null
+
+  let offset = 12
+  while (offset + 8 <= data.length) {
+    const type = data.toString('ascii', offset, offset + 4)
+    const chunkSize = data.readUInt32LE(offset + 4)
+    const payload = offset + 8
+
+    if (type === 'VP8 ' && payload + 10 <= data.length) {
+      if (
+        data[payload + 3] === 0x9d &&
+        data[payload + 4] === 0x01 &&
+        data[payload + 5] === 0x2a
+      ) {
+        return {
+          width: data.readUInt16LE(payload + 6) & 0x3fff,
+          height: data.readUInt16LE(payload + 8) & 0x3fff,
+        }
+      }
+    }
+
+    if (type === 'VP8L' && payload + 5 <= data.length && data[payload] === 0x2f) {
+      const bits = data.readUInt32LE(payload + 1)
+      return {
+        width: (bits & 0x3fff) + 1,
+        height: ((bits >>> 14) & 0x3fff) + 1,
+      }
+    }
+
+    if (type === 'VP8X' && payload + 10 <= data.length) {
+      return {
+        width: data.readUIntLE(payload + 4, 3) + 1,
+        height: data.readUIntLE(payload + 7, 3) + 1,
+      }
+    }
+
+    offset = payload + chunkSize + (chunkSize & 1)
+  }
+
+  return null
+}
+
 const audioBlocks = fs.readFileSync('src/document/audio-blocks.js', 'utf8')
 const bridge = fs.readFileSync('src/article-crt-bridge.js', 'utf8')
 const semantic = fs.readFileSync('src/document/semantic-blocks.js', 'utf8')
@@ -45,6 +93,7 @@ check(integrations.includes("button.className = 'document-media-hotspot'"), 'med
 check(integrations.includes("viewer.open([{ src: block.src"), 'media click opens original image in inspector')
 
 for (const filename of [
+  'key-art.webp',
   'gameplay.webp',
   'design-board.webp',
   'game-crealab.webp',
@@ -58,8 +107,18 @@ for (const filename of [
 ]) {
   const path = `content/projects/astro/${filename}`
   check(fs.existsSync(path), `${filename} exists`)
-  const size = fs.existsSync(path) ? fs.statSync(path).size : 0
+  if (!fs.existsSync(path)) continue
+
+  const size = fs.statSync(path).size
   check(size > 1000 && size < 250_000, `${filename} is optimized for CRT presentation`)
+
+  const dimensions = readWebpSize(path)
+  check(Boolean(dimensions), `${filename} exposes valid WebP dimensions`)
+  if (dimensions) {
+    const longSide = Math.max(dimensions.width, dimensions.height)
+    const shortSide = Math.min(dimensions.width, dimensions.height)
+    check(longSide >= 700 && shortSide >= 500, `${filename} keeps inspector-ready resolution`)
+  }
 }
 
 for (const filename of ['gameplay.mp4', 'menu.mp3', 'in-game.mp3', 'volcano.mp3', 'victory.mp3']) {
@@ -106,7 +165,7 @@ check(astro.includes('Focus Entertainment'), 'Astro records publisher contact co
 check(astro.includes('Game Designer and Programmer'), 'Astro states Jordan design/programming role')
 check(astro.includes('Game design took most of my time'), 'Astro keeps the role emphasis concrete')
 check(astro.includes('The volcano never became a finished mode'), 'Astro separates the production blockout from finished content')
-check(astro.includes('1–4 · 2–4 COMPETITIVE CORE'), 'Astro distinguishes supported players from competitive core')
+check(astro.includes('PLAYERS | 2–4 COMPETITIVE CORE'), 'Astro records the competitive player count')
 check(astro.includes('Pauline Mercat'), 'Astro credits Pauline Mercat')
 check(astro.includes('Alexandre Gaulé'), 'Astro credits Alexandre Gaulé')
 check(astro.includes('Eliott Guignabaudet'), 'Astro credits Eliott Guignabaudet')
