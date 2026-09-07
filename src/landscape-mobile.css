@@ -19,8 +19,13 @@ body.is-landscape-mobile-stage{ background:#e9d8c2; }
 body.is-landscape-mobile-stage #stage{ background:transparent; }
 
 .machine.is-landscape-mobile{
-  --landscape-controls-left:61.5%;
-  --landscape-controls-width:35.0%;
+  --landscape-controls-left:64.5%;
+  --landscape-controls-width:520px;
+  --landscape-nav-top:11.5%;
+  --landscape-key-h:112px;
+  --landscape-action-top:57%;
+  --landscape-controls-top:74%;
+  --landscape-power-top:86%;
   left:var(--landscape-center-x,50%);
   top:var(--landscape-center-y,50%);
   width:var(--landscape-design-w);
@@ -33,16 +38,26 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   box-shadow:none;
 }
 .machine.is-landscape-mobile[data-landscape-variant="3x2"]{
-  --landscape-controls-left:64%;
-  --landscape-controls-width:33%;
+  --landscape-controls-left:64.5%;
+  --landscape-controls-width:480px;
+  --landscape-nav-top:12%;
+  --landscape-key-h:100px;
+  --landscape-action-top:57%;
+  --landscape-controls-top:74%;
+  --landscape-power-top:86%;
 }
 .machine.is-landscape-mobile[data-landscape-variant="16x9"]{
-  --landscape-controls-left:62%;
-  --landscape-controls-width:35%;
+  --landscape-controls-left:64.5%;
+  --landscape-controls-width:520px;
 }
 .machine.is-landscape-mobile[data-landscape-variant="21x9"]{
-  --landscape-controls-left:59%;
-  --landscape-controls-width:38%;
+  --landscape-controls-left:62.5%;
+  --landscape-controls-width:540px;
+  --landscape-nav-top:11%;
+  --landscape-key-h:92px;
+  --landscape-action-top:55%;
+  --landscape-controls-top:72%;
+  --landscape-power-top:85%;
 }
 .machine.is-landscape-mobile::after{ display:none; }
 .is-landscape-mobile .machine__background--desktop,
@@ -91,74 +106,77 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   height:var(--landscape-terminal-h,100%);
 }
 
-/* The artwork deliberately leaves one quiet material field to the right of
-   the tube. Hardware is placed in that field rather than baked into the image,
-   so controls retain their real pressed/selected states. */
-.is-landscape-mobile .plate-row{
-  position:absolute;
-  left:var(--landscape-controls-left);
-  top:4.5%;
-  width:var(--landscape-controls-width);
-  height:9.5%;
-  display:block;
-  padding:0;
+/* The landscape composition deliberately removes the desktop nameplate. The
+   CRT already carries the identity, so the hardware field stays quiet and the
+   controls can breathe instead of becoming a second title card. */
+.is-landscape-mobile .plate-row,
+.is-landscape-mobile .nameplate,
+.is-landscape-mobile .rail{
+  display:none !important;
 }
-.is-landscape-mobile .rail{ display:none; }
-.is-landscape-mobile .nameplate{
-  width:100%;
-  height:100%;
-  margin:0;
-}
-.is-landscape-mobile .nameplate h1{
-  font-size:29px;
-  letter-spacing:.24em;
-  text-indent:.24em;
-}
-.is-landscape-mobile .nameplate p{ display:none; }
 
+/* Navigation uses the existing physical key sprites and interaction states,
+   but at the smallest size that still preserves a 44px touch target on every
+   supported landscape phone. The softer shadow keeps the panel tactile without
+   turning eight controls into eight separate visual blocks. */
 .is-landscape-mobile .panel--left{
   position:absolute;
   left:var(--landscape-controls-left);
-  top:16%;
+  top:var(--landscape-nav-top);
   width:var(--landscape-controls-width);
-  height:43.5%;
+  height:auto;
   padding:0;
   display:block;
   transform:none;
 }
 .is-landscape-mobile #nav-keys{
   width:100%;
-  height:100%;
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
-  grid-template-rows:repeat(3,minmax(0,1fr));
-  gap:16px 18px;
+  grid-template-rows:repeat(3,var(--landscape-key-h));
+  gap:18px 22px;
 }
 .is-landscape-mobile .key,
 .is-landscape-mobile .key--sm{
+  --key-gap:1.5px;
   width:100%;
-  height:100%;
+  height:var(--landscape-key-h);
   min-width:0;
   min-height:0;
-  border-radius:15px;
+  border-radius:10px;
+  box-shadow:
+    -3px -3px 7px color-mix(in oklab,var(--key-light-glow) 72%,transparent),
+    -1px -1px 2px color-mix(in oklab,var(--key-shadow-near) 62%,transparent),
+    1px 1px 0 color-mix(in oklab,var(--key-cavity-rim) 70%,transparent),
+    4px 5px 10px color-mix(in oklab,var(--key-shadow-glow) 72%,transparent);
 }
-.is-landscape-mobile .key__button{ border-radius:13px; }
-.is-landscape-mobile .key__face{ border-radius:11px; }
+.is-landscape-mobile .key::before{
+  box-shadow:
+    inset 1px 1px 2px color-mix(in oklab,var(--key-cavity-deep) 64%,black 36%),
+    inset 0 0 3px color-mix(in oklab,var(--key-cavity-deep) 35%,transparent);
+}
+.is-landscape-mobile .key__button{
+  border-radius:8px;
+  transform:translateY(-1px);
+  box-shadow:1px 1.5px 3px color-mix(in oklab,var(--key-shadow-near) 58%,transparent);
+}
+.is-landscape-mobile .key__face{ border-radius:7px; }
 .is-landscape-mobile .key__legend{
-  padding-left:61px;
-  padding-right:30px;
-  font-size:26px;
-  letter-spacing:.055em;
+  padding-left:45px;
+  padding-right:24px;
+  font-size:24px;
+  font-weight:650;
+  letter-spacing:.075em;
 }
 .is-landscape-mobile .key__icon{
   display:grid;
   place-items:center;
   position:absolute;
-  left:18px;
+  left:14px;
   top:50%;
   translate:0 -50%;
-  width:34px;
-  height:34px;
+  width:25px;
+  height:25px;
   color:var(--key-text);
   z-index:3;
 }
@@ -170,46 +188,68 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
 }
 .is-landscape-mobile .key.is-on .key__icon{ color:#315a3e; }
 .is-landscape-mobile .key__led{
-  top:13px;
-  right:14px;
-  width:11px;
-  height:11px;
+  top:9px;
+  right:10px;
+  width:8px;
+  height:8px;
 }
 
+/* Actions, switches and power share the same calm right-hand column. Fixed
+   vertical tiers make the hierarchy read immediately: navigation, actions,
+   optical controls, then power. */
 .is-landscape-mobile .panel--right{
   position:absolute;
   left:var(--landscape-controls-left);
-  top:61%;
+  top:0;
   width:var(--landscape-controls-width);
-  height:35%;
+  height:100%;
   padding:0;
   display:block;
 }
 .is-landscape-mobile .panel--right .stack,
-.is-landscape-mobile .panel--right .rule,
 .is-landscape-mobile .panel--right .controls-row,
 .is-landscape-mobile .panel--right .bottom-row{
   position:absolute;
   left:0;
-  transform:none;
   width:100%;
+  transform:none;
 }
 .is-landscape-mobile .panel--right .stack{
-  top:0;
-  height:38%;
+  top:var(--landscape-action-top);
+  height:var(--landscape-key-h);
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:18px;
+  gap:22px;
+}
+.is-landscape-mobile .panel--right .stack .key__legend{
+  justify-content:center;
+  padding:0 22px;
 }
 .is-landscape-mobile .panel--right .rule{ display:none; }
+
+.is-landscape-mobile .panel--right .stack::before,
+.is-landscape-mobile .panel--right .controls-row::before,
+.is-landscape-mobile .panel--right .bottom-row::before{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  height:1px;
+  pointer-events:none;
+  background:rgba(109,94,68,.24);
+  box-shadow:0 1px 0 rgba(255,255,255,.55);
+}
+.is-landscape-mobile .panel--right .stack::before{ top:-36px; }
+
 .is-landscape-mobile .panel--right .controls-row{
-  top:44%;
-  height:30%;
+  top:var(--landscape-controls-top);
+  height:72px;
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
-  column-gap:16px;
+  column-gap:22px;
   align-items:start;
 }
+.is-landscape-mobile .panel--right .controls-row::before{ top:-31px; }
 .is-landscape-mobile .control{
   width:100%;
   min-width:0;
@@ -217,9 +257,9 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
 .is-landscape-mobile .control + .control{ margin-top:0; }
 .is-landscape-mobile .caption{
   justify-content:center;
-  min-height:28px;
-  font-size:22px;
-  letter-spacing:.06em;
+  min-height:21px;
+  font-size:19px;
+  letter-spacing:.075em;
   text-indent:0;
   color:var(--ink-hard);
 }
@@ -227,24 +267,26 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
 .is-landscape-mobile .control:first-child .caption{ font-size:0; }
 .is-landscape-mobile .control:first-child .caption::before{
   content:"CRT";
-  font-size:22px;
+  font-size:19px;
+  letter-spacing:.075em;
 }
 .is-landscape-mobile .control__row,
 .is-landscape-mobile .slider-row{
   justify-content:center;
-  margin-top:10px;
+  margin-top:9px;
   gap:0;
 }
 .is-landscape-mobile .control__row .tiny,
 .is-landscape-mobile .slider-row .tiny{ display:none; }
-.is-landscape-mobile .switch{ width:130px; }
-.is-landscape-mobile .slider{ width:160px; margin:0; }
+.is-landscape-mobile .switch{ width:102px; }
+.is-landscape-mobile .slider{ width:132px; margin:0; }
 
 .is-landscape-mobile .panel--right .bottom-row{
-  top:79%;
-  height:21%;
+  top:var(--landscape-power-top);
+  height:82px;
   display:block;
 }
+.is-landscape-mobile .panel--right .bottom-row::before{ top:-24px; }
 .is-landscape-mobile .grille{ display:none; }
 .is-landscape-mobile .power{
   width:max-content;
@@ -254,14 +296,14 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   content:"POWER";
   position:absolute;
   left:50%;
-  top:-30px;
+  top:-24px;
   translate:-50% 0;
-  font-size:21px;
+  font-size:18px;
   font-weight:650;
-  letter-spacing:.06em;
+  letter-spacing:.075em;
   color:var(--ink-hard);
 }
-.is-landscape-mobile .rocker{ width:62px; }
+.is-landscape-mobile .rocker{ width:50px; }
 .is-landscape-mobile .foot{ display:none; }
 
 /* The semantic reader mirrors the logical document scale used by the visible
@@ -318,11 +360,10 @@ body.is-landscape-mobile-stage #stage::before{ left:0; }
 body.is-landscape-mobile-stage #stage::after{ right:0; }
 
 @media (max-height:430px){
-  .is-landscape-mobile .nameplate h1{ font-size:27px; }
-  .is-landscape-mobile .key__legend{ font-size:25px; }
+  .is-landscape-mobile .key__legend{ font-size:23px; }
   .is-landscape-mobile .caption,
-  .is-landscape-mobile .control:first-child .caption::before,
-  .is-landscape-mobile .power::before{ font-size:20px; }
+  .is-landscape-mobile .control:first-child .caption::before{ font-size:18px; }
+  .is-landscape-mobile .power::before{ font-size:17px; }
 }
 
 @media (prefers-reduced-motion:reduce){
