@@ -7,7 +7,7 @@ import { syncContactLinks } from './contact-links.js'
  *
  * App owns keyboard boundaries and viewport sizing. This module only augments
  * coarse-pointer hit testing without changing the visible industrial sprites,
- * turns terminal listing rows into direct touch targets on compact layouts,
+ * turns terminal listing rows into direct touch targets on portable layouts,
  * and keeps native CONTACT anchors aligned with terminal navigation state.
  * ========================================================================== */
 
@@ -34,6 +34,10 @@ const TAP_SLOP_PX = 12
 
 function closestInteractive(target) {
   return target instanceof Element ? target.closest(INTERACTIVE_SELECTOR) : null
+}
+
+function usesPortableTouchLayout(machine) {
+  return machine.classList.contains('is-compact') || machine.classList.contains('is-landscape-mobile')
 }
 
 function expandedRect(rect, minimum = MIN_TARGET_PX) {
@@ -80,7 +84,7 @@ function bindCompactTargetExpansion() {
 
   const onPointerUp = event => {
     if (!event.isPrimary || event.button > 0) return
-    if (!machine.classList.contains('is-compact')) return
+    if (!usesPortableTouchLayout(machine)) return
     if (closestInteractive(event.target)) return
 
     const controls = [
@@ -125,9 +129,9 @@ function bindScreenListingPointer(app) {
   if (!tube || !machine) return () => {}
 
   const starts = new Map()
-  // Rows are direct targets wherever the panel keys are out of reach: the
-  // compact portable, and full screen on any layout (the chassis is hidden).
-  const rowsAreTargets = () => machine.classList.contains('is-compact') || Boolean(app.state?.fullscreen)
+  // Rows are direct targets wherever the panel keys are out of reach: portable
+  // portrait, portable landscape, and full screen on any layout.
+  const rowsAreTargets = () => usesPortableTouchLayout(machine) || Boolean(app.state?.fullscreen)
 
   const onPointerDown = event => {
     if (!event.isPrimary || event.button > 0) return
