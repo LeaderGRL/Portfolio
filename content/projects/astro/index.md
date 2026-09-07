@@ -5,12 +5,12 @@ status: PAUSED · GAME JAM → GAME CRÉALAB 2024
 year: 2024
 stack: [Unreal Engine, C++, Blueprints, Game Design, Programming, Local Multiplayer]
 theme: synthwave
-link: https://github.com/LeaderGRL/A_back
+link: https://awelyaa.itch.io/astro
 ---
 
 ::facts{columns=2 label="PROJECT SNAPSHOT"}
 FORMAT | COMPETITIVE LOCAL PARTY GAME
-PLAYERS | 2–4
+PLAYERS | 1–4 · 2–4 COMPETITIVE CORE
 ENGINE | UNREAL ENGINE
 ORIGIN | CONFITURE DE JEUX × YNOV 2024
 GAME CRÉALAB | 4 PROJECTS SELECTED FROM 38
@@ -105,7 +105,7 @@ A beautiful character that becomes a twelve-pixel mystery during an actual match
 
 I worked on ASTRO as both a **Game Designer and Programmer**.
 
-Game Design took most of my time. I also programmed several gameplay mechanics during production, which meant design discussions could move from "would this be fun?" to "let's try it" fairly quickly.
+Game design took most of my time. I also programmed several gameplay mechanics during production, which meant design discussions could move from "would this be fun?" to "let's try it" fairly quickly.
 
 That overlap was useful. When a rule changed, I had a better idea of its implementation cost. When something felt wrong in the build, I could look at both the code and the rule instead of assuming one of them was innocent.
 
@@ -122,13 +122,13 @@ The Unreal project moved toward a modular game structure, reusable game-flow cod
 One of the reasons ASTRO continued after the jam was simply that the team had good chemistry. That sounds less impressive than a technical architecture diagram, but for a project built outside full-time production hours it turned out to be fairly important infrastructure.
 
 ::gallery{columns=2 fit=contain}
-team-01.webp | PRODUCTION
-team-03.webp | WORK SESSION
-team.webp | TEAM
-team-trip.webp | GAME CAMP
+team-01.webp | Team members working together during ASTRO production
+team-03.webp | ASTRO work session during production
+team.webp | ASTRO team gathered during development
+team-trip.webp | ASTRO team travelling together during Game Camp
 ::
 
-The team brought together production, Game Design, programming, 3D, environment art, animation, UI and sound.
+The team included **Pauline Mercat, Alexandre Gaulé, Eliott Guignabaudet, Zoé Guignabaudet and me**, with work spanning production, game design, programming, 3D, environment art, animation and UI. **DOGMA** handled sound design and music.
 
 ASTRO also gave us opportunities to present the project outside the team, get professional feedback and meet people from the industry through Game Créalab. That was a meaningful step up from the environment in which the first version had been made a few months earlier.
 
