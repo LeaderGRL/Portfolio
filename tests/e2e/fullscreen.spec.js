@@ -56,7 +56,6 @@ test('full screen fills the viewport with a high-resolution continuous glass sur
   await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
   await expect(fullscreenSwitch).toHaveAttribute('aria-checked', 'true')
 
-  // The whole viewport is glass; the chassis is set aside.
   const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
   const tube = await page.locator('#tube').boundingBox()
   expect(tube).not.toBeNull()
@@ -67,8 +66,6 @@ test('full screen fills the viewport with a high-resolution continuous glass sur
   await expect(page.locator('.panel--left')).toBeHidden()
   await expect(page.locator('.panel--right')).toBeHidden()
 
-  // Both the picture and its interaction layers fill the viewport. The cell
-  // grid remains proportional within that surface, not a 4:3 backing canvas.
   const surface = await page.locator('.display-surface').boundingBox()
   expect(surface).not.toBeNull()
   expect(Math.round(surface.height)).toBe(viewport.height)
@@ -80,7 +77,6 @@ test('full screen fills the viewport with a high-resolution continuous glass sur
   await expect(page.locator('.tube__gloss--core')).toBeHidden()
   await expect(page.locator('.fullscreen-reflection')).toHaveCount(0)
 
-  // Navigation stays available on the glass.
   const softkeys = page.locator('#softkeys')
   await expect(softkeys).toBeVisible()
   await expect(softkeys.locator('[aria-current="page"]')).toHaveText(/HOME/)
@@ -102,23 +98,19 @@ test('escape leaves full screen before it means BACK', async ({ page }, testInfo
   test.skip(isMobile(testInfo), 'Desktop keyboard scenario')
   await page.setViewportSize(DESKTOP)
   await boot(page, '/articles/01-ecs-entity-management')
-
   await page.keyboard.press('f')
   await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
-
   await page.keyboard.press('Escape')
   await expect(page.locator('body')).not.toHaveClass(/is-crt-fullscreen/)
   await expect(page).toHaveURL(/\/articles\/01-ecs-entity-management$/)
-
   await page.keyboard.press('Escape')
   await expect(page).toHaveURL(/\/articles$/)
 })
 
 test('full screen switch sits on its own tier on the portable panel', async ({ page }, testInfo) => {
   test.skip(!isMobile(testInfo), 'Portable geometry regression only needs the mobile engine')
-  test.setTimeout(120_000) // Full-viewport software GL plus a high-DPR screenshot on hosted runners.
+  test.setTimeout(120_000)
   await boot(page)
-
   const boxes = {}
   for (const id of ['crt-switch', 'fullscreen-switch', 'volume', 'power']) {
     boxes[id] = await page.locator(`#${id}`).boundingBox()
@@ -133,10 +125,8 @@ test('full screen switch sits on its own tier on the portable panel', async ({ p
   expect(overlaps(boxes['fullscreen-switch'], boxes['volume'])).toBe(false)
   expect(overlaps(boxes['fullscreen-switch'], boxes['power'])).toBe(false)
   expect(boxes['power'].y).toBeGreaterThan(boxes['fullscreen-switch'].y + boxes['fullscreen-switch'].height)
-
   await page.locator('#fullscreen-switch').tap()
   await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
-  // A portrait screen uses its height too; no short landscape picture window.
   const surface = await page.locator('.display-surface').boundingBox()
   expect(Math.round(surface.width)).toBe(viewport.width)
   expect(Math.round(surface.height)).toBe(viewport.height)
@@ -155,7 +145,6 @@ test('full screen mode is axe-clean', async ({ page }, testInfo) => {
   await boot(page)
   await page.keyboard.press('f')
   await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
-
   const results = await new AxeBuilder({ page }).analyze()
   const serious = results.violations.filter(violation => ['serious', 'critical'].includes(violation.impact))
   expect(serious).toEqual([])
@@ -186,7 +175,6 @@ for (const mode of ['crt-on', 'crt-off', 'no-webgl']) {
     if (isMobile(testInfo)) test.setTimeout(120_000)
     else await page.setViewportSize(DESKTOP)
     await page.addInitScript(({ noWebGL }) => {
-      // Exercise the CSS-only mode used when native fullscreen is unavailable.
       Element.prototype.requestFullscreen = () => Promise.reject(new Error('Test: native fullscreen unavailable'))
       if (noWebGL) {
         const original = HTMLCanvasElement.prototype.getContext
@@ -204,12 +192,9 @@ for (const mode of ['crt-on', 'crt-off', 'no-webgl']) {
     await page.locator('#fullscreen-switch').click()
     await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
     if (mode !== 'crt-on') await expect(page.locator('#tube')).toHaveClass(mode === 'crt-off' ? /is-crt-off/ : /is-fallback/)
-    // Same raster position, allowing at most one native scroll pixel of rounding.
     const drift = () => reader.evaluate((node, progress) => Math.abs(node.scrollTop - progress * (node.scrollHeight - node.clientHeight)), progress)
     await expect.poll(drift).toBeLessThanOrEqual(1)
     const surface = await page.locator('#display-surface').boundingBox()
-    // CRT ON is the requested mode, not a promise that this runner has WebGL.
-    // Headless Firefox on Linux may use the supported live 2D fallback.
     const visiblePixels = page.locator('#gl:visible, #article-source:visible')
     await expect(visiblePixels).toHaveCount(1)
     const pixels = await visiblePixels.boundingBox()
@@ -226,14 +211,10 @@ for (const mode of ['crt-on', 'crt-off', 'no-webgl']) {
       await expect(page.locator('.tube__gloss--soft')).toBeHidden()
     }
     await attachScreenshot(page, testInfo, `article-fullscreen-${mode}`)
-    // A nonzero position catches old-scrollTop/new-scrollHeight errors that
-    // the above-the-fold media/orientation scenario cannot detect.
     for (const size of [{ width: 430, height: 900 }, { width: 900, height: 430 }, DESKTOP]) {
       await page.setViewportSize(size)
       await expectViewportSource(page, '#article-source')
-      await expect.poll(() => reader.evaluate((node, progress) =>
-        Math.abs(node.scrollTop / (node.scrollHeight - node.clientHeight) - progress), progress)
-      ).toBeLessThan(.0002)
+      await expect.poll(() => reader.evaluate((node, progress) => Math.abs(node.scrollTop / (node.scrollHeight - node.clientHeight) - progress), progress)).toBeLessThan(.0002)
     }
     await page.locator('.softkeys__key--exit').click()
     await expect.poll(drift).toBeLessThanOrEqual(3)
@@ -250,7 +231,7 @@ for (const gpuMode of ['limited', 'allocation-failure', 'upload-failure']) {
       Element.prototype.requestFullscreen = () => Promise.reject(new Error('Test: CSS fullscreen'))
       const getParameter = WebGL2RenderingContext.prototype.getParameter
       WebGL2RenderingContext.prototype.getParameter = function(parameter) {
-        if (parameter === this.MAX_TEXTURE_SIZE) return 512 // forces downsampling even at DPR 1
+        if (parameter === this.MAX_TEXTURE_SIZE) return 512
         return getParameter.call(this, parameter)
       }
       const checkStatus = WebGL2RenderingContext.prototype.checkFramebufferStatus
@@ -299,14 +280,9 @@ for (const gpuMode of ['limited', 'allocation-failure', 'upload-failure']) {
 
 test('fullscreen article and media retain high-resolution CRT without specular glare', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo) && !isMobile(testInfo), 'Resolution and touch geometry use Chromium profiles')
-  // Two full-resolution captures, media inspection and reflow are expensive
-  // under software GL. Keep 1080p coverage without relaxing UI assertions.
   test.setTimeout(120_000)
   if (isChromiumDesktop(testInfo)) await page.setViewportSize({ width: 1920, height: 1080 })
   await page.addInitScript(() => {
-    // Chromium disallows setWindowBounds while natively fullscreen. Keep the
-    // CSS fullscreen layout active to exercise live resizing/orientation here;
-    // the preceding scenarios cover native entry and exit separately.
     Element.prototype.requestFullscreen = () => Promise.reject(new Error('Test: CSS fullscreen resize'))
   })
   const errors = []
@@ -327,8 +303,6 @@ test('fullscreen article and media retain high-resolution CRT without specular g
   await expect(page.locator('.tube__shade')).toBeVisible()
   await attachScreenshot(page, testInfo, 'fullscreen-classic-article')
 
-  // The first illustration is above the fold at these sizes. Its real DOM
-  // hit target must agree with the reflowed raster and open the same pipeline.
   const media = page.locator('.document-inline-integrations button').first()
   await expect(media).toBeVisible()
   const target = await media.boundingBox()
@@ -344,14 +318,23 @@ test('fullscreen article and media retain high-resolution CRT without specular g
   await expect(page.locator('#tube')).not.toHaveClass(/is-media-inspecting/)
   await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
 
-  // Reflow after orientation/window changes must keep hotspots and rendering
-  // alive; returning to the chassis restores the native 480x360 source.
   const progress = await page.locator('#article-reader').evaluate(node => node.scrollTop)
   await page.setViewportSize(isMobile(testInfo) ? { width: 851, height: 393 } : { width: 960, height: 720 })
   await expect(media).toBeVisible()
   expect(await page.locator('#article-reader').evaluate(node => node.scrollTop)).toBe(progress)
   await page.locator('.softkeys__key--exit').click()
-  expect(await page.locator('#article-source').evaluate(canvas => [canvas.width, canvas.height])).toEqual([480, 360])
+  if (isMobile(testInfo)) {
+    const tube = page.locator('#tube')
+    await expect(tube).toHaveAttribute('data-raster-layout', 'landscape')
+    const expected = await tube.evaluate(element => {
+      const rect = element.getBoundingClientRect()
+      const density = Math.min(devicePixelRatio, 2)
+      return [Math.floor(rect.width * density), Math.floor(rect.height * density)]
+    })
+    await expect.poll(() => page.locator('#article-source').evaluate(canvas => [canvas.width, canvas.height])).toEqual(expected)
+  } else {
+    expect(await page.locator('#article-source').evaluate(canvas => [canvas.width, canvas.height])).toEqual([480, 360])
+  }
   expect(errors).toEqual([])
 })
 

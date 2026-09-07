@@ -9,9 +9,9 @@
  * the desk, viewport resolution in fullscreen).
  * Closing the viewer simply lets the document repaint at the exact same scroll.
  *
- * CRT OFF uses a separate 1440x1080 canvas so project media can be inspected
- * cleanly at a substantially higher resolution on the desk. In fullscreen,
- * both paths use the same high resolution, with no sharpness jump on opening.
+ * CRT OFF uses a separate high-resolution canvas so project media can be
+ * inspected cleanly on the desk. Landscape uses the actual tube aspect so the
+ * bypass canvas is never stretched by CSS across the wider glass.
  * ========================================================================== */
 export class MediaViewer {
   constructor({ tube, crtCanvas, onChange = () => {} }) {
@@ -151,13 +151,25 @@ export class MediaViewer {
     image.src = item.src
   }
 
+  _deskBypassSize() {
+    if (this.tube?.dataset?.rasterLayout !== 'landscape') return { width: 1440, height: 1080 }
+
+    const rect = this.tube.getBoundingClientRect()
+    if (!(rect.width > 0) || !(rect.height > 0)) return { width: 1440, height: 1080 }
+
+    const width = 1440
+    const height = Math.max(1, Math.round(width * rect.height / rect.width))
+    return { width, height }
+  }
+
   resize() {
     const fullscreen = document.body.classList.contains('is-crt-fullscreen')
-    const width = fullscreen ? this.crtCanvas.width : 1440
-    const height = fullscreen ? this.crtCanvas.height : 1080
-    if (this.hiresCanvas.width !== width || this.hiresCanvas.height !== height) {
-      this.hiresCanvas.width = width
-      this.hiresCanvas.height = height
+    const size = fullscreen
+      ? { width: this.crtCanvas.width, height: this.crtCanvas.height }
+      : this._deskBypassSize()
+    if (this.hiresCanvas.width !== size.width || this.hiresCanvas.height !== size.height) {
+      this.hiresCanvas.width = size.width
+      this.hiresCanvas.height = size.height
     }
     if (this.isOpen) this._renderCurrent()
   }
@@ -169,7 +181,7 @@ export class MediaViewer {
     this.index = Math.max(0, Math.min(normalized.length - 1, Number(index) || 0))
     this.isOpen = true
     this.tube?.classList.add('is-media-inspecting')
-    this._renderCurrent()
+    this.resize()
     return true
   }
 

@@ -7,7 +7,7 @@ import { syncContactLinks } from './contact-links.js'
  *
  * App owns keyboard boundaries and viewport sizing. This module only augments
  * coarse-pointer hit testing without changing the visible industrial sprites,
- * turns terminal listing rows into direct touch targets on compact layouts,
+ * turns terminal listing rows into direct touch targets on portable layouts,
  * and keeps native CONTACT anchors aligned with terminal navigation state.
  * ========================================================================== */
 
@@ -36,6 +36,10 @@ function closestInteractive(target) {
   return target instanceof Element ? target.closest(INTERACTIVE_SELECTOR) : null
 }
 
+function usesPortableTouchLayout(machine) {
+  return machine.classList.contains('is-compact') || machine.classList.contains('is-landscape-mobile')
+}
+
 function expandedRect(rect, minimum = MIN_TARGET_PX) {
   const width = Math.max(rect.width, minimum)
   const height = Math.max(rect.height, minimum)
@@ -53,6 +57,13 @@ function expandedRect(rect, minimum = MIN_TARGET_PX) {
 
 function contains(rect, x, y) {
   return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+}
+
+function containsClientRect(rect, x, y) {
+  return x >= rect.left
+    && x <= rect.left + rect.width
+    && y >= rect.top
+    && y <= rect.top + rect.height
 }
 
 function setSliderFromPoint(slider, clientX) {
@@ -80,7 +91,7 @@ function bindCompactTargetExpansion() {
 
   const onPointerUp = event => {
     if (!event.isPrimary || event.button > 0) return
-    if (!machine.classList.contains('is-compact')) return
+    if (!usesPortableTouchLayout(machine)) return
     if (closestInteractive(event.target)) return
 
     const controls = [
@@ -125,14 +136,18 @@ function bindScreenListingPointer(app) {
   if (!tube || !machine) return () => {}
 
   const starts = new Map()
-  // Rows are direct targets wherever the panel keys are out of reach: the
-  // compact portable, and full screen on any layout (the chassis is hidden).
-  const rowsAreTargets = () => machine.classList.contains('is-compact') || Boolean(app.state?.fullscreen)
+  // Rows are direct targets wherever the panel keys are out of reach: portable
+  // portrait, portable landscape, and full screen on any layout.
+  const rowsAreTargets = () => usesPortableTouchLayout(machine) || Boolean(app.state?.fullscreen)
+  const rasterRect = () => app.rasterClientRect?.() || tube.getBoundingClientRect()
 
   const onPointerDown = event => {
     if (!event.isPrimary || event.button > 0) return
     if (!rowsAreTargets()) return
     if (closestInteractive(event.target)) return
+
+    const rect = rasterRect()
+    if (!rect.width || !rect.height || !containsClientRect(rect, event.clientX, event.clientY)) return
     starts.set(event.pointerId, { x: event.clientX, y: event.clientY })
   }
 
@@ -145,6 +160,9 @@ function bindScreenListingPointer(app) {
     if (!rowsAreTargets()) return
     if (closestInteractive(event.target)) return
 
+    const rect = rasterRect()
+    if (!rect.width || !rect.height || !containsClientRect(rect, event.clientX, event.clientY)) return
+
     const dx = event.clientX - start.x
     const dy = event.clientY - start.y
     if (Math.hypot(dx, dy) > TAP_SLOP_PX) return
@@ -153,11 +171,6 @@ function bindScreenListingPointer(app) {
     if ((route !== 'projects' && route !== 'articles') || app.state?.item) return
 
     const items = route === 'projects' ? CONTENT.projects : CONTENT.articles
-    // In full screen the raster is underscanned inside the tube, so rows are
-    // measured against the raster rectangle rather than the whole glass.
-    const rect = app.rasterClientRect?.() || tube.getBoundingClientRect()
-    if (!rect.width || !rect.height) return
-
     const sourceY = ((event.clientY - rect.top) / rect.height) * SRC_H
     const row = Math.floor((sourceY - PAD_Y) / CHAR_H)
     const relativeRow = row - LIST_FIRST_ROW
