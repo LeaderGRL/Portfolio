@@ -3,6 +3,12 @@ import AxeBuilder from '@axe-core/playwright'
 
 const isChromiumDesktop = testInfo => testInfo.project.name === 'chromium'
 
+async function emulateTouchPhone(page) {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, get: () => 5 })
+  })
+}
+
 async function boot(page, path = '/') {
   await page.goto(path)
   await expect(page.locator('#machine')).toBeVisible()
@@ -27,6 +33,7 @@ for (const viewport of [
 ]) {
   test(`landscape ${viewport.width}x${viewport.height} uses the ${viewport.variant} authored chassis`, async ({ page }, testInfo) => {
     test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')
+    await emulateTouchPhone(page)
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await boot(page)
 
@@ -69,20 +76,31 @@ for (const viewport of [
     const rasterRect = await page.locator('#tube').evaluate(element => {
       const style = getComputedStyle(element)
       return {
-        x: parseFloat(style.getPropertyValue('--landscape-terminal-x')),
-        y: parseFloat(style.getPropertyValue('--landscape-terminal-y')),
         width: parseFloat(style.getPropertyValue('--landscape-terminal-w')),
         height: parseFloat(style.getPropertyValue('--landscape-terminal-h')),
+        tubeWidth: element.clientWidth,
+        tubeHeight: element.clientHeight,
       }
     })
-    expect(rasterRect.width / rasterRect.height).toBeCloseTo(4 / 3, 1)
-    expect(rasterRect.width).toBeLessThanOrEqual(100)
-    expect(rasterRect.height).toBeLessThanOrEqual(100)
+    expect(rasterRect.width / rasterRect.height).toBeCloseTo(4 / 3, 2)
+    expect(rasterRect.width).toBeGreaterThan(0)
+    expect(rasterRect.height).toBeGreaterThan(0)
+    expect(rasterRect.width).toBeLessThanOrEqual(rasterRect.tubeWidth + 1)
+    expect(rasterRect.height).toBeLessThanOrEqual(rasterRect.tubeHeight + 1)
   })
 }
 
+test('short desktop viewport does not activate the touch-only landscape chassis', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Desktop input regression only needs Chromium')
+  await page.setViewportSize({ width: 960, height: 540 })
+  await boot(page)
+  await expect(page.locator('#machine')).not.toHaveClass(/is-landscape-mobile/)
+  await expect(page.locator('body')).not.toHaveClass(/is-landscape-mobile-stage/)
+})
+
 test('landscape chassis fits inside simulated phone safe-area insets', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')
+  await emulateTouchPhone(page)
   await page.setViewportSize({ width: 915, height: 412 })
   await boot(page)
 
@@ -105,6 +123,7 @@ test('landscape chassis fits inside simulated phone safe-area insets', async ({ 
 
 test('rotating a phone returns from landscape chassis to portrait compact chassis', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')
+  await emulateTouchPhone(page)
   await page.setViewportSize({ width: 915, height: 412 })
   await boot(page)
   await expect(page.locator('#machine')).toHaveClass(/is-landscape-mobile/)
@@ -117,6 +136,7 @@ test('rotating a phone returns from landscape chassis to portrait compact chassi
 
 test('entering fullscreen removes landscape chassis geometry', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')
+  await emulateTouchPhone(page)
   await page.setViewportSize({ width: 915, height: 412 })
   await boot(page)
   await expect(page.locator('#machine')).toHaveClass(/is-landscape-mobile/)
@@ -130,6 +150,7 @@ test('entering fullscreen removes landscape chassis geometry', async ({ page }, 
 
 test('landscape article enlarges the visible raster and keeps document scrolling', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')
+  await emulateTouchPhone(page)
   await page.setViewportSize({ width: 915, height: 412 })
   await boot(page, '/articles/01-ecs-entity-management')
 
