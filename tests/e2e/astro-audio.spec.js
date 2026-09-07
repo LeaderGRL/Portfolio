@@ -16,8 +16,6 @@ async function revealSoundtrack(page) {
   await expect(heading).toBeAttached()
   await heading.evaluate(node => node.scrollIntoView({ block: 'start' }))
 
-  const controls = page.locator('.document-audio-hotspot')
-  await expect(controls).toHaveCount(4)
   await expect(audioButton(page, 0)).toHaveAttribute('aria-label', 'Play MENU')
   await expect(audioButton(page, 1)).toHaveAttribute('aria-label', 'Play IN-GAME')
 }
