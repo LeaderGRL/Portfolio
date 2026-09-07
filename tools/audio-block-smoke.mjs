@@ -38,14 +38,6 @@ check(mediaBlocks.includes("provider: 'media-single'"), 'single media exposes in
 check(integrations.includes("button.className = 'document-media-hotspot'"), 'media blocks receive a clickable inspection hotspot')
 check(integrations.includes("viewer.open([{ src: block.src"), 'media click opens original image in inspector')
 
-check(!astro.includes('-preview.mp3'), 'Astro page does not present truncated soundtrack previews')
-const victoryPath = 'public/media/Astro/victory-jingle.mp3'
-check(fs.existsSync(victoryPath), 'complete victory jingle remains available')
-if (fs.existsSync(victoryPath)) {
-  const size = fs.statSync(victoryPath).size
-  check(size > 1000 && size < 250_000, 'victory jingle remains web-sized')
-}
-
 for (const filename of [
   'gameplay.webp',
   'design-board.webp',
@@ -64,12 +56,38 @@ for (const filename of [
   check(size > 1000 && size < 250_000, `${filename} is optimized for CRT presentation`)
 }
 
+for (const filename of ['gameplay.mp4', 'menu.mp3', 'in-game.mp3', 'volcano.mp3', 'victory.mp3']) {
+  const path = `public/media/Astro/${filename}`
+  check(fs.existsSync(path), `${filename} exists`)
+}
+
+const gameplayVideo = 'public/media/Astro/gameplay.mp4'
+if (fs.existsSync(gameplayVideo)) {
+  const size = fs.statSync(gameplayVideo).size
+  check(size > 1_000_000 && size < 15_000_000, 'gameplay video remains web-sized')
+}
+
+for (const filename of ['menu.mp3', 'in-game.mp3', 'volcano.mp3', 'victory.mp3']) {
+  const path = `public/media/Astro/${filename}`
+  if (!fs.existsSync(path)) continue
+  const size = fs.statSync(path).size
+  check(size > 100_000 && size < 7_000_000, `${filename} remains web-sized`)
+}
+
 const astroMediaDirectives = astro.match(/^::media\{[^\n]+\}$/gm) || []
 check(astroMediaDirectives.length >= 6, 'Astro keeps several editorial images in the story')
 check(astroMediaDirectives.every(line => /\bfit=contain\b/.test(line)), 'every Astro editorial image opts out of cropping')
 check(!astro.includes('::hero{'), 'Astro does not use a cropping hero block')
 check(!astro.includes('::system{'), 'Astro avoids decorative system-card grids')
 check(!astro.includes('::pipeline{'), 'Astro avoids decorative pipeline blocks')
+
+check(astro.includes('::video{src="/media/Astro/gameplay.mp4"'), 'Astro embeds the gameplay video')
+const astroAudioDirectives = astro.match(/^::audio\{[^\n]+\}$/gm) || []
+check(astroAudioDirectives.length === 4, 'Astro exposes all four soundtrack tracks')
+for (const filename of ['menu.mp3', 'in-game.mp3', 'volcano.mp3', 'victory.mp3']) {
+  check(astro.includes(`src="/media/Astro/${filename}"`), `Astro embeds ${filename}`)
+}
+check(!astro.includes('-preview.mp3'), 'Astro page does not present truncated soundtrack previews')
 
 check(astro.includes('CONFITURE DE JEUX × YNOV 2024'), 'Astro identifies the original game jam')
 check(astro.includes('Pick up an egg. Bring it back to your chest.'), 'Astro explains the original egg/chest loop')
@@ -84,9 +102,13 @@ check(astro.includes('The volcano never became a finished mode'), 'Astro separat
 check(!astro.toLowerCase().includes('portfolio'), 'Astro copy stays focused on the project rather than the page itself')
 check(!astro.includes('I like keeping it accessible'), 'Astro does not frame the public jam build as a deliberate curation choice')
 check(!astro.includes('The project still has planned directions'), 'Astro current-status section stays concise')
+check(!astro.includes('still lists ASTRO among the four selected projects'), 'Astro avoids source-verification prose')
+check(!astro.includes("The CNC's 2024 FAJV results"), 'Astro avoids source-verification prose')
+check(!astro.includes('Most players will never notice any of this'), 'Astro production section ends on the engineering point')
 check(astro.includes('ASTRO is currently **paused**'), 'Astro reports the real project status')
 check(astro.includes('professional schedules changed'), 'Astro explains why development paused')
 check(astro.includes('## THE TEAM'), 'Astro includes the team and production context')
+check(astro.includes('## SOUNDTRACK'), 'Astro includes the soundtrack section')
 
 console.log(failed ? `\n  ${failed} audio/Astro check(s) FAILED` : '\n  all audio/Astro checks passed')
 process.exit(failed ? 1 : 0)

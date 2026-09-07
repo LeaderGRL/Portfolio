@@ -47,11 +47,13 @@ The first gave us something worth improving. The second turned out to be just as
 
 After the jam, we did not try to replace the core loop with a more complicated pitch. ASTRO remained a game about collecting eggs before the other players. Development mostly meant taking that simple prototype and making it feel like an actual game: better presentation, cleaner feedback, stronger production values and enough structure to support additional modes later.
 
+::video{src="/media/Astro/gameplay.mp4" alt="ASTRO gameplay from the post-jam production build" height=286}
+
 The egg survived every redesign. An alien joined the problem, boss encounters appeared in the plans, but the basic question stayed the same: who gets the egg home without being launched off the map?
 
 ## SELECTED FOR GAME CRÉALAB
 
-A few months later, ASTRO was selected for **Game Créalab Lyon 2024**.
+A few months later, ASTRO was selected for [Game Créalab Lyon 2024](https://gamecrealab.com/residence/lyon-2024/).
 
 The residency ran from September 16 to September 28 at **Pôle Pixel in Villeurbanne**. Only **4 projects were selected from 38 applications** for that edition. The programme provided dedicated development time, financial support, daily coaching and access to industry professionals around the selected projects.
 
@@ -62,8 +64,6 @@ Those two weeks were not a feature sprint. Production was mixed with daily coach
 ::media{src="camera-work.webp" label="WORK SESSION / GAME CRÉALAB" alt="ASTRO production work during the Game Créalab residency" fit=contain height=270}
 
 The residency also included two publisher work sessions. **Yves Le Yaouanq from Focus Entertainment** and **Simon Bachelier from Firesquid** reviewed the selected projects' artistic propositions and market positioning.
-
-The [official Game Créalab page](https://gamecrealab.com/residence/lyon-2024/) still lists ASTRO among the four selected projects. The CNC's 2024 FAJV results also list **Game Créalab 2024** among the supported events.
 
 During the jam, the important question was whether the game was fun by Sunday. At Game Créalab, we also had to answer what happened after Sunday.
 
@@ -117,8 +117,6 @@ The codebase grew with the project. What was enough for a weekend prototype had 
 
 The Unreal project moved toward a modular game structure, reusable game-flow code and data-driven audio tools. The goal was not to make the architecture impressive; it was to make the next change cheaper than the previous one.
 
-Most players will never notice any of this. They will notice if the round flow breaks while somebody is carrying an egg, which is a much stronger motivation.
-
 ## THE TEAM
 
 One of the reasons ASTRO continued after the jam was simply that the team had good chemistry. That sounds less impressive than a technical architecture diagram, but for a project built outside full-time production hours it turned out to be fairly important infrastructure.
@@ -130,9 +128,23 @@ team.webp | TEAM
 team-trip.webp | GAME CAMP
 ::
 
-The team brought together production, Game Design, programming, 3D, environment art, animation, UI and sound. **DOGMA** handled sound design and music for the project.
+The team brought together production, Game Design, programming, 3D, environment art, animation, UI and sound.
 
 ASTRO also gave us opportunities to present the project outside the team, get professional feedback and meet people from the industry through Game Créalab. That was a meaningful step up from the environment in which the first version had been made a few months earlier.
+
+## SOUNDTRACK
+
+**DOGMA** handled ASTRO's sound design and music. The tracks below cover the menu, the main game, the volcano direction and victory.
+
+::audio{src="/media/Astro/menu.mp3" label="MENU" credit="DOGMA"}
+
+::audio{src="/media/Astro/in-game.mp3" label="IN-GAME" credit="DOGMA"}
+
+::audio{src="/media/Astro/volcano.mp3" label="VOLCANO" credit="DOGMA"}
+
+::audio{src="/media/Astro/victory.mp3" label="VICTORY" credit="DOGMA"}
+
+The victory track lasts about seven seconds. Long enough to know who won, short enough to start another round.
 
 ## CURRENT STATUS
 
