@@ -80,6 +80,7 @@ function semanticHeight(block) {
       const gap = Number.isFinite(Number(block.gap)) ? Math.max(12, Math.min(48, Number(block.gap))) : 24
       return value + gap
     }
+    case 'audio': return Math.max(88, Math.min(150, Number(block.height) || 104))
     case 'facts': return Math.max(72, Math.ceil(count / Math.max(1, Math.min(3, Number(block.columns) || 2))) * 58 + 14)
     case 'system': return Math.max(98, Math.ceil(count / Math.max(1, Math.min(2, Number(block.columns) || 2))) * 78 + 20)
     case 'pipeline': return Math.max(88, count * 42 + 18)
@@ -109,6 +110,15 @@ export function renderRichSemanticBlock(block) {
     const section = fixedSection(block, height, block.label || `${block.type} information`)
     if (block.label) section.append(make('h3', '', block.label))
     appendDefinitionRows(section, rows(block.body))
+    return section
+  }
+
+  if (block.type === 'audio') {
+    const label = block.label || block.title || 'Audio track'
+    const section = fixedSection(block, height, label)
+    section.append(make('h3', '', label))
+    if (block.credit) section.append(make('p', '', block.credit))
+    section.append(make('p', '', 'Interactive audio preview. Use the player control shown on the CRT when this block is visible.'))
     return section
   }
 
