@@ -61,6 +61,8 @@ The residency ran from September 16 to September 28 at **Pôle Pixel in Villeurb
 
 The programme was not about sitting in a room and adding features for fifteen days. We worked on the concept with daily coaching, professional speakers and masterclasses covering game design, artistic direction, technical questions, positioning and how to present the project outside the team.
 
+::media{src="camera-work.webp" label="WORK SESSION / GAME CRÉALAB" alt="ASTRO production work during the Game Créalab residency" fit=contain height=270}
+
 The residency also included two publisher work sessions. **Yves Le Yaouanq from Focus Entertainment** and **Simon Bachelier from Firesquid** reviewed the selected projects' artistic propositions and market positioning.
 
 The [official Game Créalab page](https://gamecrealab.com/residence/lyon-2024/) still lists ASTRO among the four selected projects. The CNC's 2024 FAJV results also list **Game Créalab 2024** among the supported events.
