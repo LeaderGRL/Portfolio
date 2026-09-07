@@ -8,7 +8,7 @@ const MEDIA_ROOT = path.join(ROOT, 'public', 'media')
 const SOURCE_ROOT = path.join(ROOT, 'assets', 'src')
 const REPORT_PATH = path.join(ROOT, 'tmp', 'asset-audit.json')
 const MEDIA_EXTENSIONS = new Set([
-  '.avif', '.gif', '.jpeg', '.jpg', '.m4v', '.mov', '.mp4', '.png', '.svg', '.webm', '.webp',
+  '.aac', '.avif', '.flac', '.gif', '.jpeg', '.jpg', '.m4a', '.m4v', '.mov', '.mp3', '.mp4', '.ogg', '.opus', '.png', '.svg', '.wav', '.webm', '.webp',
 ])
 
 function walk(root) {
