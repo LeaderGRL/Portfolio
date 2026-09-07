@@ -181,7 +181,7 @@ export class MediaViewer {
     this.index = Math.max(0, Math.min(normalized.length - 1, Number(index) || 0))
     this.isOpen = true
     this.tube?.classList.add('is-media-inspecting')
-    this._renderCurrent()
+    this.resize()
     return true
   }
 
