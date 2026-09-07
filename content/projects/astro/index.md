@@ -61,7 +61,7 @@ The residency ran from September 16 to September 28 at **Pôle Pixel in Villeurb
 
 Those two weeks were not a feature sprint. Production was mixed with daily coaching, professional speakers and masterclasses covering game design, artistic direction, technical questions, positioning and how to explain the project to people who had not spent the previous months staring at it.
 
-::media{src="camera-work.webp" label="WORK SESSION / GAME CRÉALAB" alt="ASTRO production work during the Game Créalab residency" fit=contain height=270}
+::media{src="team-04.webp" label="WORK SESSION / GAME CRÉALAB" alt="ASTRO production work during the Game Créalab residency" fit=contain height=270}
 
 The residency also included two publisher work sessions. **Yves Le Yaouanq from Focus Entertainment** and **Simon Bachelier from Firesquid** reviewed the selected projects' artistic propositions and market positioning.
 
@@ -124,7 +124,7 @@ One of the reasons ASTRO continued after the jam was simply that the team had go
 ::gallery{columns=2 fit=contain}
 team-01.webp | Team members working together during ASTRO production
 team-03.webp | ASTRO work session during production
-team.webp | ASTRO team gathered during development
+team-02.webp | ASTRO team gathered during development
 team-trip.webp | ASTRO team travelling together during Game Camp
 ::
 
