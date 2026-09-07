@@ -167,11 +167,13 @@ Interaction contract:
 click / Enter / Space   play or pause
 physical VOLUME         controls audio volume
 starting another track  pauses the previous track
+POWER OFF               stops and releases audio
+project/document switch stops and releases audio
 browser tab hidden      pauses active audio
 block leaves viewport   releases its playback surface
 ```
 
-The player is a generic document capability, not project-specific UI. Full-length tracks are acceptable when they are web-compressed and intentionally published with the project. Audio starts with metadata-only preload, so several full tracks may appear in one document without eagerly downloading every payload. Prefer an excerpt only when licensing, bandwidth or editorial intent requires one; do not truncate a track merely to satisfy the renderer.
+The player is a generic document capability, not project-specific UI. A local audio element is created with `preload="none"` and without a `src`; the source is assigned only after an explicit click, Enter or Space playback request. Merely opening or scrolling through a project must therefore issue no audio request. Duration and progress become available after playback begins, unless an optional duration is authored in the block. Full-length tracks are acceptable when they are web-compressed and intentionally published with the project.
 
 Do not ship uncompressed production masters such as large WAV exports when a high-quality web MP3/Opus encode communicates the same work. Runtime lazy loading is a safety net, not a substitute for sensible encoding.
 
@@ -242,7 +244,7 @@ Rich documents can become expensive quickly. Follow these rules:
 1. Put substantial binary media under `public/media/<slug>/` so Vite serves it independently from the JS bundle.
 2. Large `media`, `gallery` and `compare` images are loaded on their first visible CRT paint rather than during full-document layout.
 3. Local user-started videos use `preload="none"` and never continue playing after POWER OFF, document replacement or browser backgrounding.
-4. Local audio uses metadata-first loading, pauses competing tracks and releases its source when the inline surface is destroyed. Full tracks are fine when compressed for the web.
+4. Local audio has no `src` until explicit playback, pauses competing tracks and releases its source when the inline surface is destroyed. Scrolling past audio blocks must not fetch their files.
 5. Cross-origin iframes use browser lazy loading and are mounted only while their block is visible.
 6. Three.js animation only ticks while the model block is visible; runtime teardown disposes GPU resources explicitly.
 7. Keep exported screenshots/WebP, web audio, video and GLB sizes appropriate for portfolio presentation; runtime lazy loading is not a substitute for asset optimization.
