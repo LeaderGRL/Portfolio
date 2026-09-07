@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 const isChromiumDesktop = testInfo => testInfo.project.name === 'chromium'
+const audioButton = (page, index) => page.locator('.document-audio-hotspot').nth(index)
 
 async function boot(page) {
   await page.goto('/projects/astro')
@@ -14,8 +15,11 @@ async function revealSoundtrack(page) {
   const heading = reader.getByRole('heading', { name: 'SOUNDTRACK' })
   await expect(heading).toBeAttached()
   await heading.evaluate(node => node.scrollIntoView({ block: 'start' }))
-  await expect(page.getByRole('button', { name: 'Play MENU' })).toBeAttached()
-  await expect(page.getByRole('button', { name: 'Play IN-GAME' })).toBeAttached()
+
+  const controls = page.locator('.document-audio-hotspot')
+  await expect(controls).toHaveCount(4)
+  await expect(audioButton(page, 0)).toHaveAttribute('aria-label', 'Play MENU')
+  await expect(audioButton(page, 1)).toHaveAttribute('aria-label', 'Play IN-GAME')
 }
 
 test('Astro audio performs no MP3 request before explicit playback', async ({ page }, testInfo) => {
@@ -31,7 +35,7 @@ test('Astro audio performs no MP3 request before explicit playback', async ({ pa
   await page.waitForTimeout(500)
   expect(mp3Requests).toEqual([])
 
-  const menu = page.getByRole('button', { name: 'Play MENU' })
+  const menu = audioButton(page, 0)
   await expect(menu).toHaveAttribute('aria-pressed', 'false')
   const statusId = await menu.getAttribute('aria-describedby')
   expect(statusId).toBeTruthy()
@@ -56,7 +60,7 @@ test('Astro audio reports media failures instead of silently swallowing them', a
   await boot(page)
   await revealSoundtrack(page)
 
-  const menu = page.getByRole('button', { name: 'Play MENU' })
+  const menu = audioButton(page, 0)
   const statusId = await menu.getAttribute('aria-describedby')
   await menu.click({ force: true })
 
@@ -88,15 +92,18 @@ test('Astro audio pauses competing tracks, follows volume and stops on POWER OFF
   await boot(page)
   await revealSoundtrack(page)
 
-  const menu = page.getByRole('button', { name: 'Play MENU' })
-  const inGame = page.getByRole('button', { name: 'Play IN-GAME' })
+  const menu = audioButton(page, 0)
+  const inGame = audioButton(page, 1)
 
   await menu.click({ force: true })
   await expect(menu).toHaveAttribute('aria-pressed', 'true')
+  await expect(menu).toHaveAttribute('aria-label', 'Pause MENU')
 
   await inGame.click({ force: true })
   await expect(inGame).toHaveAttribute('aria-pressed', 'true')
+  await expect(inGame).toHaveAttribute('aria-label', 'Pause IN-GAME')
   await expect(menu).toHaveAttribute('aria-pressed', 'false')
+  await expect(menu).toHaveAttribute('aria-label', 'Play MENU')
 
   await page.locator('#volume').evaluate(node => node.setAttribute('aria-valuenow', '23'))
   await expect.poll(() => page.evaluate(() => {
