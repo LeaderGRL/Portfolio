@@ -70,9 +70,9 @@ body.is-landscape-mobile-stage #stage{
 .is-landscape-mobile .plate-row{
   position:absolute;
   left:61.5%;
-  top:5.2%;
+  top:4.5%;
   width:34.5%;
-  height:8.8%;
+  height:9.5%;
   display:block;
   padding:0;
 }
@@ -83,20 +83,16 @@ body.is-landscape-mobile-stage #stage{
   margin:0;
 }
 .is-landscape-mobile .nameplate h1{
-  font-size:23px;
-  letter-spacing:.30em;
-  text-indent:.30em;
+  font-size:29px;
+  letter-spacing:.24em;
+  text-indent:.24em;
 }
-.is-landscape-mobile .nameplate p{
-  font-size:8px;
-  letter-spacing:.18em;
-  text-indent:.18em;
-}
+.is-landscape-mobile .nameplate p{ display:none; }
 
 .is-landscape-mobile .panel--left{
   position:absolute;
   left:60.5%;
-  top:16.5%;
+  top:16.0%;
   width:36.5%;
   height:43.5%;
   padding:0;
@@ -122,20 +118,20 @@ body.is-landscape-mobile-stage #stage{
 .is-landscape-mobile .key__button{ border-radius:13px; }
 .is-landscape-mobile .key__face{ border-radius:11px; }
 .is-landscape-mobile .key__legend{
-  padding-left:48px;
-  padding-right:24px;
-  font-size:17px;
-  letter-spacing:.07em;
+  padding-left:61px;
+  padding-right:30px;
+  font-size:26px;
+  letter-spacing:.055em;
 }
 .is-landscape-mobile .key__icon{
   display:grid;
   place-items:center;
   position:absolute;
-  left:15px;
+  left:18px;
   top:50%;
   translate:0 -50%;
-  width:23px;
-  height:23px;
+  width:34px;
+  height:34px;
   color:var(--key-text);
   z-index:3;
 }
@@ -147,18 +143,18 @@ body.is-landscape-mobile-stage #stage{
 }
 .is-landscape-mobile .key.is-on .key__icon{ color:#315a3e; }
 .is-landscape-mobile .key__led{
-  top:11px;
-  right:12px;
-  width:9px;
-  height:9px;
+  top:13px;
+  right:14px;
+  width:11px;
+  height:11px;
 }
 
 .is-landscape-mobile .panel--right{
   position:absolute;
   left:60.5%;
-  top:62.0%;
+  top:61.0%;
   width:36.5%;
-  height:33.0%;
+  height:35.0%;
   padding:0;
   display:block;
 }
@@ -173,15 +169,15 @@ body.is-landscape-mobile-stage #stage{
 }
 .is-landscape-mobile .panel--right .stack{
   top:0;
-  height:27%;
+  height:38%;
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
   gap:18px;
 }
 .is-landscape-mobile .panel--right .rule{ display:none; }
 .is-landscape-mobile .panel--right .controls-row{
-  top:35%;
-  height:34%;
+  top:44%;
+  height:30%;
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
   column-gap:16px;
@@ -194,9 +190,9 @@ body.is-landscape-mobile-stage #stage{
 .is-landscape-mobile .control + .control{ margin-top:0; }
 .is-landscape-mobile .caption{
   justify-content:center;
-  min-height:24px;
-  font-size:13px;
-  letter-spacing:.08em;
+  min-height:28px;
+  font-size:22px;
+  letter-spacing:.06em;
   text-indent:0;
   color:var(--ink-hard);
 }
@@ -204,7 +200,7 @@ body.is-landscape-mobile-stage #stage{
 .is-landscape-mobile .control:first-child .caption{ font-size:0; }
 .is-landscape-mobile .control:first-child .caption::before{
   content:"CRT";
-  font-size:13px;
+  font-size:22px;
 }
 .is-landscape-mobile .control__row,
 .is-landscape-mobile .slider-row{
@@ -214,12 +210,12 @@ body.is-landscape-mobile-stage #stage{
 }
 .is-landscape-mobile .control__row .tiny,
 .is-landscape-mobile .slider-row .tiny{ display:none; }
-.is-landscape-mobile .switch{ width:120px; }
-.is-landscape-mobile .slider{ width:150px; margin:0; }
+.is-landscape-mobile .switch{ width:130px; }
+.is-landscape-mobile .slider{ width:160px; margin:0; }
 
 .is-landscape-mobile .panel--right .bottom-row{
-  top:72%;
-  height:28%;
+  top:79%;
+  height:21%;
   display:block;
 }
 .is-landscape-mobile .grille{ display:none; }
@@ -231,27 +227,27 @@ body.is-landscape-mobile-stage #stage{
   content:"POWER";
   position:absolute;
   left:50%;
-  top:-25px;
+  top:-30px;
   translate:-50% 0;
-  font-size:13px;
+  font-size:21px;
   font-weight:650;
-  letter-spacing:.08em;
+  letter-spacing:.06em;
   color:var(--ink-hard);
 }
-.is-landscape-mobile .rocker{ width:58px; }
+.is-landscape-mobile .rocker{ width:62px; }
 .is-landscape-mobile .foot{ display:none; }
 
-/* The physical aperture is much shorter than the portrait tube. Reduce reader
-   chrome instead of shrinking the article body into illegibility. */
+/* The physical aperture is much shorter than the portrait tube. Use larger
+   design-space type so the final transformed article remains readable. */
 .is-landscape-mobile .article-reader{
-  padding:20px 24px 34px;
-  font-size:15px;
-  line-height:1.52;
+  padding:18px 22px 30px;
+  font-size:28px;
+  line-height:1.48;
 }
-.is-landscape-mobile .article-reader__title{ font-size:24px; }
+.is-landscape-mobile .article-reader__title{ font-size:40px; }
 .is-landscape-mobile .article-reader__heading{
   margin-top:25px;
-  font-size:18px;
+  font-size:31px;
 }
 
 /* The selected source aspect is close to the device aspect, so any remaining
@@ -292,11 +288,11 @@ body.is-landscape-mobile-stage #stage::before{ left:0; }
 body.is-landscape-mobile-stage #stage::after{ right:0; }
 
 @media (max-height:430px){
-  .is-landscape-mobile .nameplate h1{ font-size:21px; }
-  .is-landscape-mobile .key__legend{ font-size:16px; }
+  .is-landscape-mobile .nameplate h1{ font-size:27px; }
+  .is-landscape-mobile .key__legend{ font-size:25px; }
   .is-landscape-mobile .caption,
   .is-landscape-mobile .control:first-child .caption::before,
-  .is-landscape-mobile .power::before{ font-size:12px; }
+  .is-landscape-mobile .power::before{ font-size:20px; }
 }
 
 @media (prefers-reduced-motion:reduce){
