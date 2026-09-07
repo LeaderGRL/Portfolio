@@ -1,4 +1,5 @@
 import { formatTime } from './audio-playback-manager.js'
+import { installTouchScroll } from './touch-scroll.js'
 
 let audioControlId = 0
 
@@ -71,67 +72,6 @@ function progressDescription(snapshot) {
   const state = snapshot.playing ? 'Playing' : 'Paused'
   if (!duration) return `${state}. Duration will be available after playback starts.`
   return `${state}, ${formatTime(current)} of ${formatTime(duration)}.`
-}
-
-function installTouchScroll(host, context) {
-  const reader = context?.rasteriser?.reader
-  if (!reader) return () => {}
-
-  host.style.touchAction = 'none'
-  let gesture = null
-  let suppressClickUntil = 0
-
-  const onPointerDown = event => {
-    if (event.pointerType === 'mouse' || event.button > 0) return
-    gesture = {
-      pointerId: event.pointerId,
-      startY: event.clientY,
-      lastY: event.clientY,
-      moved: false,
-    }
-    try { host.setPointerCapture?.(event.pointerId) } catch {}
-  }
-
-  const onPointerMove = event => {
-    if (!gesture || event.pointerId !== gesture.pointerId) return
-    const total = gesture.startY - event.clientY
-    const delta = gesture.lastY - event.clientY
-    gesture.lastY = event.clientY
-    if (!gesture.moved && Math.abs(total) < 6) return
-
-    gesture.moved = true
-    if (delta) reader.scrollTop += delta
-    event.preventDefault()
-    event.stopPropagation()
-  }
-
-  const finishPointer = event => {
-    if (!gesture || event.pointerId !== gesture.pointerId) return
-    if (gesture.moved) suppressClickUntil = performance.now() + 400
-    try { host.releasePointerCapture?.(event.pointerId) } catch {}
-    gesture = null
-  }
-
-  const suppressDraggedClick = event => {
-    if (performance.now() > suppressClickUntil) return
-    event.preventDefault()
-    event.stopImmediatePropagation()
-  }
-
-  host.addEventListener('pointerdown', onPointerDown)
-  host.addEventListener('pointermove', onPointerMove)
-  host.addEventListener('pointerup', finishPointer)
-  host.addEventListener('pointercancel', finishPointer)
-  host.addEventListener('click', suppressDraggedClick, true)
-
-  return () => {
-    host.removeEventListener('pointerdown', onPointerDown)
-    host.removeEventListener('pointermove', onPointerMove)
-    host.removeEventListener('pointerup', finishPointer)
-    host.removeEventListener('pointercancel', finishPointer)
-    host.removeEventListener('click', suppressDraggedClick, true)
-    host.style.removeProperty('touch-action')
-  }
 }
 
 function audioAdapter(playback) {

@@ -1,4 +1,5 @@
 import { IntegrationRegistry } from './integration-registry.js'
+import { installTouchScroll } from './touch-scroll.js'
 
 function iframeAdapter(resolveSrc) {
   return {
@@ -65,7 +66,7 @@ function galleryItems(block) {
 
 function mediaSingleAdapter(viewer) {
   return {
-    mount({ block, host }) {
+    mount({ block, host, context }) {
       if (!block.src) return null
       const button = document.createElement('button')
       button.type = 'button'
@@ -73,18 +74,23 @@ function mediaSingleAdapter(viewer) {
       button.setAttribute('aria-label', block.label ? `Open ${block.label}` : 'Open document image')
       button.style.inset = '0'
       button.addEventListener('click', () => viewer.open([{ src: block.src, label: block.label || '' }], 0))
+      const removeTouchScroll = installTouchScroll(button, context)
       host.append(button)
-      return () => button.remove()
+      return () => {
+        removeTouchScroll()
+        button.remove()
+      }
     },
   }
 }
 
 function mediaGalleryAdapter(viewer) {
   return {
-    mount({ block, host }) {
+    mount({ block, host, context }) {
       const items = galleryItems(block)
       const columns = Math.max(1, Math.min(3, Number(block.columns) || 2))
       const rows = Math.max(1, Math.ceil(items.length / columns))
+      const removeTouchScroll = []
 
       items.forEach((item, index) => {
         const button = document.createElement('button')
@@ -99,21 +105,26 @@ function mediaGalleryAdapter(viewer) {
         button.style.width = `${100 / columns}%`
         button.style.height = `${100 / rows}%`
         button.addEventListener('click', () => viewer.open(items, index))
+        removeTouchScroll.push(installTouchScroll(button, context))
         host.append(button)
       })
 
-      return () => host.replaceChildren()
+      return () => {
+        removeTouchScroll.forEach(remove => remove())
+        host.replaceChildren()
+      }
     },
   }
 }
 
 function mediaCompareAdapter(viewer) {
   return {
-    mount({ block, host }) {
+    mount({ block, host, context }) {
       const items = [
         { src: block.before, label: block.beforeLabel || 'Before' },
         { src: block.after, label: block.afterLabel || 'After' },
       ].filter(item => item.src)
+      const removeTouchScroll = []
 
       items.forEach((item, index) => {
         const button = document.createElement('button')
@@ -125,10 +136,14 @@ function mediaCompareAdapter(viewer) {
         button.style.width = '50%'
         button.style.height = '100%'
         button.addEventListener('click', () => viewer.open(items, index))
+        removeTouchScroll.push(installTouchScroll(button, context))
         host.append(button)
       })
 
-      return () => host.replaceChildren()
+      return () => {
+        removeTouchScroll.forEach(remove => remove())
+        host.replaceChildren()
+      }
     },
   }
 }
@@ -175,8 +190,12 @@ function localVideoAdapter() {
         toggle()
       })
 
+      const removeTouchScroll = installTouchScroll(button, context)
       host.append(button)
-      return () => button.remove()
+      return () => {
+        removeTouchScroll()
+        button.remove()
+      }
     },
   }
 }
