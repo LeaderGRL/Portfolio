@@ -42,8 +42,17 @@ function closestLayout(viewportAspect) {
   })
 }
 
+function hasTouchInput() {
+  if (Number(navigator?.maxTouchPoints || 0) > 0) return true
+  try {
+    return matchMedia('(pointer: coarse)').matches
+  } catch {
+    return false
+  }
+}
+
 function isMobileLandscape(width, height) {
-  if (!(width > 0) || !(height > 0)) return false
+  if (!hasTouchInput() || !(width > 0) || !(height > 0)) return false
   const aspect = width / height
   return aspect >= LANDSCAPE_MIN_ASPECT && height <= MOBILE_MAX_HEIGHT && width <= MOBILE_MAX_WIDTH
 }
