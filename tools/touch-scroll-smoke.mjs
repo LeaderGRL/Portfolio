@@ -50,8 +50,10 @@ const pointer = (pointerId, clientY, overrides = {}) => ({
   clientY,
   pointerType: 'touch',
   button: 0,
-  preventDefault() {},
+  defaultPrevented: false,
+  preventDefault() { this.defaultPrevented = true },
   stopPropagation() {},
+  stopImmediatePropagation() {},
   ...overrides,
 })
 
@@ -86,10 +88,30 @@ secondTarget.style = new FakeStyle()
 secondTarget.ownerDocument = { defaultView: root }
 reader.scrollTop = 0
 const cleanupSecond = installTouchScroll(secondTarget, { rasteriser: { reader } })
+
 secondTarget.dispatch('pointerdown', pointer(10, 100))
-root.dispatch('pointerdown', pointer(11, 100))
+const secondContact = pointer(11, 100)
+root.dispatch('pointerdown', secondContact)
+secondTarget.dispatch('pointerdown', secondContact)
+root.dispatch('pointermove', pointer(11, 50))
 root.dispatch('pointermove', pointer(10, 50))
-check(reader.scrollTop === 0, 'second touch cancels manual scrolling for pinch zoom')
+check(reader.scrollTop === 0, 'second touch cannot restart manual scrolling during pinch')
+root.dispatch('pointerup', pointer(11, 50))
+root.dispatch('pointerup', pointer(10, 50))
+
+secondTarget.dispatch('pointerdown', pointer(12, 100))
+root.dispatch('pointermove', pointer(12, 70))
+root.dispatch('pointerup', pointer(12, 70))
+const draggedClick = pointer(12, 70)
+secondTarget.dispatch('click', draggedClick)
+check(draggedClick.defaultPrevented, 'drag synthetic click is suppressed')
+
+secondTarget.dispatch('pointerdown', pointer(13, 100))
+root.dispatch('pointerup', pointer(13, 100))
+const quickTapClick = pointer(13, 100)
+secondTarget.dispatch('click', quickTapClick)
+check(!quickTapClick.defaultPrevented, 'new tap clears stale drag click suppression')
+
 cleanupSecond()
 
 console.log(failed ? `\n  ${failed} touch-scroll check(s) FAILED` : '\n  all touch-scroll checks passed')
