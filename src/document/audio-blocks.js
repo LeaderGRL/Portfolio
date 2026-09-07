@@ -1,4 +1,5 @@
 const ACTIVE_AUDIO = new Set()
+let audioStatusId = 0
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value))
@@ -29,8 +30,9 @@ function paintAudio(ctx, block, layout, env) {
   const width = layout.width
   const height = layout.height - 10
   const audio = block.__audioElement || null
-  const playing = Boolean(audio && !audio.paused && !audio.ended)
-  const duration = Number(audio?.duration) || 0
+  const failed = Boolean(block.__audioError)
+  const playing = Boolean(audio && !failed && !audio.paused && !audio.ended)
+  const duration = Number(audio?.duration) || Number(block.duration) || 0
   const current = Number(audio?.currentTime) || 0
   const progress = duration > 0 ? clamp(current / duration, 0, 1) : 0
   const title = String(block.label || block.title || 'AUDIO TRACK').toUpperCase()
@@ -38,12 +40,12 @@ function paintAudio(ctx, block, layout, env) {
 
   ctx.fillStyle = colors.panel
   ctx.fillRect(x, y, width, height)
-  ctx.strokeStyle = colors.dim
+  ctx.strokeStyle = failed ? colors.amber : colors.dim
   ctx.strokeRect(x + .5, y + .5, width - 1, height - 1)
 
   ctx.fillStyle = playing ? colors.core : colors.amber
   ctx.font = '700 10px ui-monospace, "SFMono-Regular", Consolas, monospace'
-  ctx.fillText(playing ? '❚❚ PAUSE' : '▶ PLAY', x + 12, y + 24)
+  ctx.fillText(failed ? '↻ RETRY' : playing ? '❚❚ PAUSE' : '▶ PLAY', x + 12, y + 24)
 
   ctx.fillStyle = colors.bright
   ctx.font = '700 10px ui-monospace, "SFMono-Regular", Consolas, monospace'
@@ -60,14 +62,14 @@ function paintAudio(ctx, block, layout, env) {
   const barW = width - 24
   ctx.fillStyle = 'rgba(47,208,109,.13)'
   ctx.fillRect(barX, barY, barW, 5)
-  ctx.fillStyle = colors.mid
+  ctx.fillStyle = failed ? colors.amber : colors.mid
   ctx.fillRect(barX, barY, barW * progress, 5)
 
   ctx.fillStyle = colors.dim
   ctx.font = '600 7px ui-monospace, "SFMono-Regular", Consolas, monospace'
-  ctx.fillText(`${formatTime(current)} / ${duration ? formatTime(duration) : '--:--'}`, barX, barY + 19)
+  ctx.fillText(failed ? 'AUDIO UNAVAILABLE' : `${formatTime(current)} / ${duration ? formatTime(duration) : '--:--'}`, barX, barY + 19)
   ctx.textAlign = 'right'
-  ctx.fillText('CLICK TO PLAY / PAUSE', x + width - 12, barY + 19)
+  ctx.fillText(failed ? 'CLICK TO RETRY' : 'CLICK TO PLAY / PAUSE', x + width - 12, barY + 19)
   ctx.textAlign = 'left'
 }
 
@@ -78,16 +80,75 @@ function audioAdapter() {
 
       const rasteriser = context?.rasteriser
       const audio = new Audio()
-      audio.src = block.src
-      audio.preload = 'metadata'
+      audio.preload = 'none'
       audio.volume = panelVolume()
       block.__audioElement = audio
+      delete block.__audioError
       ACTIVE_AUDIO.add(audio)
 
+      const label = String(block.label || block.title || 'audio track')
       const markDirty = () => rasteriser?.markDirty?.()
       const syncVolume = () => { audio.volume = panelVolume() }
-      const events = ['loadedmetadata', 'play', 'pause', 'ended', 'timeupdate', 'seeked']
-      events.forEach(name => audio.addEventListener(name, markDirty, { passive: true }))
+
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'document-media-hotspot document-audio-hotspot'
+      button.style.inset = '0'
+      button.setAttribute('aria-pressed', 'false')
+
+      const status = document.createElement('span')
+      status.className = 'sr document-audio-status'
+      status.id = `document-audio-status-${++audioStatusId}`
+      status.setAttribute('role', 'status')
+      button.setAttribute('aria-describedby', status.id)
+
+      let failed = false
+      const syncAccessibility = () => {
+        const playing = !failed && !audio.paused && !audio.ended
+        const duration = Number(audio.duration) || Number(block.duration) || 0
+        const current = Number(audio.currentTime) || 0
+
+        button.setAttribute('aria-pressed', playing ? 'true' : 'false')
+        button.setAttribute('aria-label', `${failed ? 'Retry' : playing ? 'Pause' : 'Play'} ${label}`)
+
+        if (failed) {
+          status.textContent = 'Audio unavailable. Activate the control to retry.'
+        } else if (duration > 0) {
+          status.textContent = `${playing ? 'Playing' : 'Paused'}, ${formatTime(current)} of ${formatTime(duration)}.`
+        } else {
+          status.textContent = `${playing ? 'Playing' : 'Paused'}. Duration will be available after playback starts.`
+        }
+      }
+
+      const setFailed = error => {
+        failed = true
+        block.__audioError = true
+        if (!audio.paused) audio.pause()
+        console.warn(`Document audio failed: ${block.src}`, error || audio.error || '')
+        syncAccessibility()
+        markDirty()
+      }
+
+      const resetFailure = () => {
+        failed = false
+        delete block.__audioError
+        syncAccessibility()
+        markDirty()
+      }
+
+      const ensureSource = () => {
+        if (audio.getAttribute('src')) return
+        audio.src = block.src
+      }
+
+      const onMediaState = () => {
+        syncAccessibility()
+        markDirty()
+      }
+      const onError = () => setFailed(audio.error)
+      const events = ['loadedmetadata', 'durationchange', 'play', 'pause', 'ended', 'timeupdate', 'seeked']
+      events.forEach(name => audio.addEventListener(name, onMediaState, { passive: true }))
+      audio.addEventListener('error', onError, { passive: true })
 
       const volumeControl = document.getElementById('volume')
       const volumeObserver = volumeControl ? new MutationObserver(syncVolume) : null
@@ -98,45 +159,62 @@ function audioAdapter() {
       }
       document.addEventListener('visibilitychange', pauseWhenHidden)
 
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.className = 'document-media-hotspot document-audio-hotspot'
-      button.style.inset = '0'
-      button.setAttribute('aria-label', `Play or pause ${block.label || block.title || 'audio track'}`)
-
       const toggle = async () => {
-        if (audio.paused || audio.ended) {
-          stopOtherAudio(audio)
-          syncVolume()
-          try { await audio.play() } catch {}
-        } else {
+        if (!audio.paused && !audio.ended && !failed) {
           audio.pause()
+          return
         }
+
+        stopOtherAudio(audio)
+        syncVolume()
+        if (failed) {
+          audio.pause()
+          audio.removeAttribute('src')
+          try { audio.load() } catch (error) {
+            console.warn('Unable to reset document audio element', error)
+          }
+          resetFailure()
+        }
+        ensureSource()
+
+        try {
+          await audio.play()
+        } catch (error) {
+          if (error?.name !== 'AbortError') setFailed(error)
+        }
+        syncAccessibility()
         markDirty()
       }
 
       button.addEventListener('click', event => {
         event.preventDefault()
         event.stopPropagation()
-        toggle()
+        void toggle()
       })
       button.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return
         event.preventDefault()
-        toggle()
+        void toggle()
       })
-      host.append(button)
+
+      host.append(button, status)
+      syncAccessibility()
 
       return () => {
         volumeObserver?.disconnect()
         document.removeEventListener('visibilitychange', pauseWhenHidden)
-        events.forEach(name => audio.removeEventListener(name, markDirty))
+        events.forEach(name => audio.removeEventListener(name, onMediaState))
+        audio.removeEventListener('error', onError)
         audio.pause()
         audio.removeAttribute('src')
-        try { audio.load() } catch {}
+        try { audio.load() } catch (error) {
+          console.warn('Unable to release document audio element', error)
+        }
         ACTIVE_AUDIO.delete(audio)
         if (block.__audioElement === audio) delete block.__audioElement
+        delete block.__audioError
         button.remove()
+        status.remove()
         markDirty()
       }
     },
