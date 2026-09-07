@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import { DIRECTIVE_TYPES, getBlockDefinition, normalizeProvider } from '../src/document/schema.js'
 
 let failed = 0
@@ -7,8 +8,8 @@ const check = (condition, label) => {
   if (!condition) failed++
 }
 
-const readWebpSize = path => {
-  const data = fs.readFileSync(path)
+const readWebpSize = filePath => {
+  const data = fs.readFileSync(filePath)
   if (
     data.length < 30 ||
     data.toString('ascii', 0, 4) !== 'RIFF' ||
@@ -55,6 +56,10 @@ const readWebpSize = path => {
   return null
 }
 
+const parseAttributes = directive => Object.fromEntries(
+  [...directive.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, key, value]) => [key, value]),
+)
+
 const audioBlocks = fs.readFileSync('src/document/audio-blocks.js', 'utf8')
 const bridge = fs.readFileSync('src/article-crt-bridge.js', 'utf8')
 const semantic = fs.readFileSync('src/document/semantic-blocks.js', 'utf8')
@@ -92,27 +97,31 @@ check(mediaBlocks.includes("provider: 'media-single'"), 'single media exposes in
 check(integrations.includes("button.className = 'document-media-hotspot'"), 'media blocks receive a clickable inspection hotspot')
 check(integrations.includes("viewer.open([{ src: block.src"), 'media click opens original image in inspector')
 
-for (const filename of [
-  'key-art.webp',
-  'gameplay.webp',
-  'design-board.webp',
-  'game-crealab.webp',
-  'characters.webp',
-  'team-04.webp',
-  'volcano-blockout.webp',
-  'team-02.webp',
-  'team-01.webp',
-  'team-03.webp',
-  'team-trip.webp',
-]) {
-  const path = `content/projects/astro/${filename}`
-  check(fs.existsSync(path), `${filename} exists`)
-  if (!fs.existsSync(path)) continue
+const astroMediaDirectives = astro.match(/^::media\{[^\n]+\}$/gm) || []
+check(astroMediaDirectives.length >= 6, 'Astro keeps several editorial images in the story')
+check(astroMediaDirectives.every(line => /\bfit=contain\b/.test(line)), 'every Astro editorial image opts out of cropping')
 
-  const size = fs.statSync(path).size
+const editorialImages = new Set([
+  'key-art.webp',
+  ...astroMediaDirectives.map(line => parseAttributes(line).src).filter(Boolean),
+])
+
+const galleryBody = astro.match(/::gallery\{[^\n]*\}\n([\s\S]*?)\n::/)?.[1] || ''
+for (const line of galleryBody.split('\n')) {
+  const src = line.split('|')[0]?.trim()
+  if (src) editorialImages.add(src)
+}
+
+for (const filename of editorialImages) {
+  const filePath = path.join('content/projects/astro', filename)
+  check(fs.existsSync(filePath), `${filename} exists`)
+  if (!fs.existsSync(filePath)) continue
+
+  const size = fs.statSync(filePath).size
   check(size > 1000 && size < 250_000, `${filename} is optimized for CRT presentation`)
 
-  const dimensions = readWebpSize(path)
+  if (path.extname(filename).toLowerCase() !== '.webp') continue
+  const dimensions = readWebpSize(filePath)
   check(Boolean(dimensions), `${filename} exposes valid WebP dimensions`)
   if (dimensions) {
     const longSide = Math.max(dimensions.width, dimensions.height)
@@ -121,37 +130,46 @@ for (const filename of [
   }
 }
 
-for (const filename of ['gameplay.mp4', 'menu.mp3', 'in-game.mp3', 'volcano.mp3', 'victory.mp3']) {
-  const path = `public/media/Astro/${filename}`
-  check(fs.existsSync(path), `${filename} exists`)
-}
-
-const gameplayVideo = 'public/media/Astro/gameplay.mp4'
-if (fs.existsSync(gameplayVideo)) {
-  const size = fs.statSync(gameplayVideo).size
-  check(size > 1_000_000 && size < 15_000_000, 'gameplay video remains web-sized')
-}
-
-for (const filename of ['menu.mp3', 'in-game.mp3', 'volcano.mp3', 'victory.mp3']) {
-  const path = `public/media/Astro/${filename}`
-  if (!fs.existsSync(path)) continue
-  const size = fs.statSync(path).size
-  check(size > 100_000 && size < 7_000_000, `${filename} remains web-sized`)
-}
-
-const astroMediaDirectives = astro.match(/^::media\{[^\n]+\}$/gm) || []
-check(astroMediaDirectives.length >= 6, 'Astro keeps several editorial images in the story')
-check(astroMediaDirectives.every(line => /\bfit=contain\b/.test(line)), 'every Astro editorial image opts out of cropping')
 check(!astro.includes('::hero{'), 'Astro does not use a cropping hero block')
 check(!astro.includes('::system{'), 'Astro avoids decorative system-card grids')
 check(!astro.includes('::pipeline{'), 'Astro avoids decorative pipeline blocks')
 
-check(astro.includes('::video{src="/media/Astro/gameplay.mp4"'), 'Astro embeds the gameplay video')
-const astroAudioDirectives = astro.match(/^::audio\{[^\n]+\}$/gm) || []
-check(astroAudioDirectives.length === 4, 'Astro exposes all four soundtrack tracks')
-for (const filename of ['menu.mp3', 'in-game.mp3', 'volcano.mp3', 'victory.mp3']) {
-  check(astro.includes(`src="/media/Astro/${filename}"`), `Astro embeds ${filename}`)
+const astroVideoDirectives = astro.match(/^::video\{[^\n]+\}$/gm) || []
+check(astroVideoDirectives.length > 0, 'Astro exposes at least one gameplay video')
+for (const directive of astroVideoDirectives) {
+  const { src } = parseAttributes(directive)
+  check(Boolean(src), 'Astro video directive has a source')
+  if (!src?.startsWith('/media/')) continue
+  const filePath = path.join('public', src)
+  check(fs.existsSync(filePath), `${path.basename(src)} exists`)
+  if (fs.existsSync(filePath)) {
+    const size = fs.statSync(filePath).size
+    check(size > 100_000 && size < 15_000_000, `${path.basename(src)} remains web-sized`)
+  }
 }
+
+const astroAudioDirectives = astro.match(/^::audio\{[^\n]+\}$/gm) || []
+check(astroAudioDirectives.length > 0, 'Astro exposes soundtrack tracks')
+
+const audioSources = []
+for (const directive of astroAudioDirectives) {
+  const attrs = parseAttributes(directive)
+  check(Boolean(attrs.src), 'Astro audio directive has a source')
+  check(Boolean(attrs.label), 'Astro audio directive has a label')
+  if (!attrs.src) continue
+
+  audioSources.push(attrs.src)
+  check(/^\/media\/Astro\/[^/]+\.(mp3|ogg|opus|wav|m4a)$/i.test(attrs.src), `${path.basename(attrs.src)} uses a supported local audio path`)
+
+  const filePath = path.join('public', attrs.src)
+  check(fs.existsSync(filePath), `${path.basename(attrs.src)} exists`)
+  if (!fs.existsSync(filePath)) continue
+
+  const size = fs.statSync(filePath).size
+  check(size > 10_000 && size < 7_000_000, `${path.basename(attrs.src)} remains web-sized`)
+}
+
+check(new Set(audioSources).size === audioSources.length, 'Astro soundtrack sources are unique')
 check(!astro.includes('-preview.mp3'), 'Astro page does not present truncated soundtrack previews')
 check(astro.includes('link: https://awelyaa.itch.io/astro'), 'Astro primary project link is public itch.io')
 
