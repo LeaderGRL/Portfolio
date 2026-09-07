@@ -16,6 +16,8 @@ body.is-landscape-mobile-stage #stage{
 }
 
 .machine.is-landscape-mobile{
+  --landscape-controls-left:61.5%;
+  --landscape-controls-width:35.0%;
   left:50%;
   top:50%;
   width:var(--landscape-design-w);
@@ -26,6 +28,18 @@ body.is-landscape-mobile-stage #stage{
   border-radius:0;
   background:#e9d8c2;
   box-shadow:none;
+}
+.machine.is-landscape-mobile[data-landscape-variant="3x2"]{
+  --landscape-controls-left:64%;
+  --landscape-controls-width:33%;
+}
+.machine.is-landscape-mobile[data-landscape-variant="16x9"]{
+  --landscape-controls-left:62%;
+  --landscape-controls-width:35%;
+}
+.machine.is-landscape-mobile[data-landscape-variant="21x9"]{
+  --landscape-controls-left:59%;
+  --landscape-controls-width:38%;
 }
 .machine.is-landscape-mobile::after{ display:none; }
 .is-landscape-mobile .machine__background--desktop,
@@ -69,9 +83,9 @@ body.is-landscape-mobile-stage #stage{
    so controls retain their real pressed/selected states. */
 .is-landscape-mobile .plate-row{
   position:absolute;
-  left:61.5%;
+  left:var(--landscape-controls-left);
   top:4.5%;
-  width:34.5%;
+  width:var(--landscape-controls-width);
   height:9.5%;
   display:block;
   padding:0;
@@ -91,9 +105,9 @@ body.is-landscape-mobile-stage #stage{
 
 .is-landscape-mobile .panel--left{
   position:absolute;
-  left:60.5%;
+  left:var(--landscape-controls-left);
   top:16.0%;
-  width:36.5%;
+  width:var(--landscape-controls-width);
   height:43.5%;
   padding:0;
   display:block;
@@ -151,9 +165,9 @@ body.is-landscape-mobile-stage #stage{
 
 .is-landscape-mobile .panel--right{
   position:absolute;
-  left:60.5%;
+  left:var(--landscape-controls-left);
   top:61.0%;
-  width:36.5%;
+  width:var(--landscape-controls-width);
   height:35.0%;
   padding:0;
   display:block;
