@@ -5,21 +5,24 @@
    desktop 1920x1080 plate. The runtime selects the closest source aspect and
    publishes its measured alpha aperture through --landscape-ap-*.
    ========================================================================== */
+:root{
+  --safe-area-left:env(safe-area-inset-left,0px);
+  --safe-area-right:env(safe-area-inset-right,0px);
+  --safe-area-top:env(safe-area-inset-top,0px);
+  --safe-area-bottom:env(safe-area-inset-bottom,0px);
+}
+
 .machine__background--landscape{ display:none; }
 .machine__background--landscape[hidden]{ display:none !important; }
 
-body.is-landscape-mobile-stage{
-  background:#e9d8c2;
-}
-body.is-landscape-mobile-stage #stage{
-  background:transparent;
-}
+body.is-landscape-mobile-stage{ background:#e9d8c2; }
+body.is-landscape-mobile-stage #stage{ background:transparent; }
 
 .machine.is-landscape-mobile{
   --landscape-controls-left:61.5%;
   --landscape-controls-width:35.0%;
-  left:50%;
-  top:50%;
+  left:var(--landscape-center-x,50%);
+  top:var(--landscape-center-y,50%);
   width:var(--landscape-design-w);
   height:var(--landscape-design-h);
   display:block;
@@ -78,6 +81,16 @@ body.is-landscape-mobile-stage #stage{
 }
 .is-landscape-mobile .screen__bezel{ display:none; }
 
+/* The terminal remains a 4:3 raster inside the wider glass. The CRT shader
+   still owns the complete aperture; only terminal glyph geometry is contained
+   in this rectangle, so the surrounding phosphor stays continuous. */
+.is-landscape-mobile .terminal-contact-links{
+  left:var(--landscape-terminal-x,0%);
+  top:var(--landscape-terminal-y,0%);
+  width:var(--landscape-terminal-w,100%);
+  height:var(--landscape-terminal-h,100%);
+}
+
 /* The artwork deliberately leaves one quiet material field to the right of
    the tube. Hardware is placed in that field rather than baked into the image,
    so controls retain their real pressed/selected states. */
@@ -106,7 +119,7 @@ body.is-landscape-mobile-stage #stage{
 .is-landscape-mobile .panel--left{
   position:absolute;
   left:var(--landscape-controls-left);
-  top:16.0%;
+  top:16%;
   width:var(--landscape-controls-width);
   height:43.5%;
   padding:0;
@@ -166,9 +179,9 @@ body.is-landscape-mobile-stage #stage{
 .is-landscape-mobile .panel--right{
   position:absolute;
   left:var(--landscape-controls-left);
-  top:61.0%;
+  top:61%;
   width:var(--landscape-controls-width);
-  height:35.0%;
+  height:35%;
   padding:0;
   display:block;
 }
@@ -251,17 +264,20 @@ body.is-landscape-mobile-stage #stage{
 .is-landscape-mobile .rocker{ width:62px; }
 .is-landscape-mobile .foot{ display:none; }
 
-/* The physical aperture is much shorter than the portrait tube. Use larger
-   design-space type so the final transformed article remains readable. */
+/* The semantic reader mirrors the logical document scale used by the visible
+   ArticleRasteriser. The visible pixels still come from article-source; these
+   values keep native focus/scroll geometry in the same coordinate system. */
 .is-landscape-mobile .article-reader{
   padding:18px 22px 30px;
-  font-size:28px;
+  font-size:var(--landscape-reader-font,16px);
   line-height:1.48;
 }
-.is-landscape-mobile .article-reader__title{ font-size:40px; }
+.is-landscape-mobile .article-reader__title{
+  font-size:var(--landscape-reader-title,28px);
+}
 .is-landscape-mobile .article-reader__heading{
   margin-top:25px;
-  font-size:31px;
+  font-size:var(--landscape-reader-heading,20px);
 }
 
 /* The selected source aspect is close to the device aspect, so any remaining
