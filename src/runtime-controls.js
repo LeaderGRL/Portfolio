@@ -59,6 +59,13 @@ function contains(rect, x, y) {
   return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
 }
 
+function containsClientRect(rect, x, y) {
+  return x >= rect.left
+    && x <= rect.left + rect.width
+    && y >= rect.top
+    && y <= rect.top + rect.height
+}
+
 function setSliderFromPoint(slider, clientX) {
   const rect = slider.getBoundingClientRect()
   if (!rect.width) return
@@ -132,11 +139,15 @@ function bindScreenListingPointer(app) {
   // Rows are direct targets wherever the panel keys are out of reach: portable
   // portrait, portable landscape, and full screen on any layout.
   const rowsAreTargets = () => usesPortableTouchLayout(machine) || Boolean(app.state?.fullscreen)
+  const rasterRect = () => app.rasterClientRect?.() || tube.getBoundingClientRect()
 
   const onPointerDown = event => {
     if (!event.isPrimary || event.button > 0) return
     if (!rowsAreTargets()) return
     if (closestInteractive(event.target)) return
+
+    const rect = rasterRect()
+    if (!rect.width || !rect.height || !containsClientRect(rect, event.clientX, event.clientY)) return
     starts.set(event.pointerId, { x: event.clientX, y: event.clientY })
   }
 
@@ -149,6 +160,9 @@ function bindScreenListingPointer(app) {
     if (!rowsAreTargets()) return
     if (closestInteractive(event.target)) return
 
+    const rect = rasterRect()
+    if (!rect.width || !rect.height || !containsClientRect(rect, event.clientX, event.clientY)) return
+
     const dx = event.clientX - start.x
     const dy = event.clientY - start.y
     if (Math.hypot(dx, dy) > TAP_SLOP_PX) return
@@ -157,11 +171,6 @@ function bindScreenListingPointer(app) {
     if ((route !== 'projects' && route !== 'articles') || app.state?.item) return
 
     const items = route === 'projects' ? CONTENT.projects : CONTENT.articles
-    // In full screen the raster is underscanned inside the tube, so rows are
-    // measured against the raster rectangle rather than the whole glass.
-    const rect = app.rasterClientRect?.() || tube.getBoundingClientRect()
-    if (!rect.width || !rect.height) return
-
     const sourceY = ((event.clientY - rect.top) / rect.height) * SRC_H
     const row = Math.floor((sourceY - PAD_Y) / CHAR_H)
     const relativeRow = row - LIST_FIRST_ROW
