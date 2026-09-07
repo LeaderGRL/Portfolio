@@ -1,39 +1,22 @@
-const ACTIVE_AUDIO = new Set()
-let audioStatusId = 0
+import { formatTime } from './audio-playback-manager.js'
+
+let audioControlId = 0
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value))
 }
 
-function formatTime(seconds) {
-  const safe = Number.isFinite(seconds) && seconds > 0 ? seconds : 0
-  const minutes = Math.floor(safe / 60)
-  const rest = Math.floor(safe % 60)
-  return `${minutes}:${String(rest).padStart(2, '0')}`
-}
-
-function panelVolume() {
-  const value = Number(document.getElementById('volume')?.getAttribute('aria-valuenow'))
-  return Number.isFinite(value) ? clamp(value / 100, 0, 1) : 0.35
-}
-
-function stopOtherAudio(current) {
-  for (const audio of ACTIVE_AUDIO) {
-    if (audio !== current && !audio.paused) audio.pause()
-  }
-}
-
-function paintAudio(ctx, block, layout, env) {
+function paintAudio(ctx, block, layout, env, playback) {
   const { colors } = env
   const x = layout.x
   const y = layout.y
   const width = layout.width
   const height = layout.height - 10
-  const audio = block.__audioElement || null
-  const failed = Boolean(block.__audioError)
-  const playing = Boolean(audio && !failed && !audio.paused && !audio.ended)
-  const duration = Number(audio?.duration) || Number(block.duration) || 0
-  const current = Number(audio?.currentTime) || 0
+  const snapshot = playback?.snapshot(block) || {}
+  const failed = Boolean(snapshot.failed)
+  const playing = Boolean(snapshot.playing)
+  const duration = Number(snapshot.duration) || Number(block.duration) || 0
+  const current = Number(snapshot.currentTime) || 0
   const progress = duration > 0 ? clamp(current / duration, 0, 1) : 0
   const title = String(block.label || block.title || 'AUDIO TRACK').toUpperCase()
   const credit = String(block.credit || '').toUpperCase()
@@ -73,161 +56,156 @@ function paintAudio(ctx, block, layout, env) {
   ctx.textAlign = 'left'
 }
 
-function audioAdapter() {
+function liveAnnouncement(state, label) {
+  if (state === 'playing') return `Playing ${label}.`
+  if (state === 'paused') return `Paused ${label}.`
+  if (state === 'ended') return `${label} finished.`
+  if (state === 'error') return `Audio unavailable for ${label}. Activate the control to retry.`
+  return ''
+}
+
+function progressDescription(snapshot) {
+  if (snapshot.failed) return 'Audio unavailable. Activate the control to retry.'
+  const duration = Number(snapshot.duration) || 0
+  const current = Number(snapshot.currentTime) || 0
+  const state = snapshot.playing ? 'Playing' : 'Paused'
+  if (!duration) return `${state}. Duration will be available after playback starts.`
+  return `${state}, ${formatTime(current)} of ${formatTime(duration)}.`
+}
+
+function installTouchScroll(host, context) {
+  const reader = context?.rasteriser?.reader
+  if (!reader) return () => {}
+
+  host.style.touchAction = 'none'
+  let gesture = null
+  let suppressClickUntil = 0
+
+  const onPointerDown = event => {
+    if (event.pointerType === 'mouse' || event.button > 0) return
+    gesture = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      lastY: event.clientY,
+      moved: false,
+    }
+    try { host.setPointerCapture?.(event.pointerId) } catch {}
+  }
+
+  const onPointerMove = event => {
+    if (!gesture || event.pointerId !== gesture.pointerId) return
+    const total = gesture.startY - event.clientY
+    const delta = gesture.lastY - event.clientY
+    gesture.lastY = event.clientY
+    if (!gesture.moved && Math.abs(total) < 6) return
+
+    gesture.moved = true
+    if (delta) reader.scrollTop += delta
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  const finishPointer = event => {
+    if (!gesture || event.pointerId !== gesture.pointerId) return
+    if (gesture.moved) suppressClickUntil = performance.now() + 400
+    try { host.releasePointerCapture?.(event.pointerId) } catch {}
+    gesture = null
+  }
+
+  const suppressDraggedClick = event => {
+    if (performance.now() > suppressClickUntil) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+  }
+
+  host.addEventListener('pointerdown', onPointerDown)
+  host.addEventListener('pointermove', onPointerMove)
+  host.addEventListener('pointerup', finishPointer)
+  host.addEventListener('pointercancel', finishPointer)
+  host.addEventListener('click', suppressDraggedClick, true)
+
+  return () => {
+    host.removeEventListener('pointerdown', onPointerDown)
+    host.removeEventListener('pointermove', onPointerMove)
+    host.removeEventListener('pointerup', finishPointer)
+    host.removeEventListener('pointercancel', finishPointer)
+    host.removeEventListener('click', suppressDraggedClick, true)
+    host.style.removeProperty('touch-action')
+  }
+}
+
+function audioAdapter(playback) {
   return {
     mount({ block, host, context }) {
-      if (!block.src) return null
-
-      const rasteriser = context?.rasteriser
-      const audio = new Audio()
-      audio.preload = 'none'
-      audio.volume = panelVolume()
-      block.__audioElement = audio
-      delete block.__audioError
-      ACTIVE_AUDIO.add(audio)
+      if (!block.src || !playback) return null
 
       const label = String(block.label || block.title || 'audio track')
-      const markDirty = () => rasteriser?.markDirty?.()
-      const syncVolume = () => { audio.volume = panelVolume() }
-
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'document-media-hotspot document-audio-hotspot'
       button.style.inset = '0'
+      button.dataset.audioSrc = block.src
       button.setAttribute('aria-pressed', 'false')
 
-      const status = document.createElement('span')
-      status.className = 'sr document-audio-status'
-      status.id = `document-audio-status-${++audioStatusId}`
-      status.setAttribute('role', 'status')
-      button.setAttribute('aria-describedby', status.id)
+      const progress = document.createElement('span')
+      progress.className = 'sr document-audio-progress'
+      progress.id = `document-audio-progress-${++audioControlId}`
+      button.setAttribute('aria-describedby', progress.id)
 
-      let failed = false
-      const syncAccessibility = () => {
-        const playing = !failed && !audio.paused && !audio.ended
-        const duration = Number(audio.duration) || Number(block.duration) || 0
-        const current = Number(audio.currentTime) || 0
+      const live = document.createElement('span')
+      live.className = 'sr document-audio-live'
+      live.setAttribute('role', 'status')
+      live.setAttribute('aria-live', 'polite')
+      live.setAttribute('aria-atomic', 'true')
 
-        button.setAttribute('aria-pressed', playing ? 'true' : 'false')
-        button.setAttribute('aria-label', `${failed ? 'Retry' : playing ? 'Pause' : 'Play'} ${label}`)
+      let previousState = null
+      const sync = snapshot => {
+        const state = snapshot.state || 'idle'
+        button.setAttribute('aria-pressed', snapshot.playing ? 'true' : 'false')
+        button.setAttribute('aria-label', `${snapshot.failed ? 'Retry' : snapshot.playing ? 'Pause' : 'Play'} ${label}`)
+        progress.textContent = progressDescription(snapshot)
 
-        if (failed) {
-          status.textContent = 'Audio unavailable. Activate the control to retry.'
-        } else if (duration > 0) {
-          status.textContent = `${playing ? 'Playing' : 'Paused'}, ${formatTime(current)} of ${formatTime(duration)}.`
-        } else {
-          status.textContent = `${playing ? 'Playing' : 'Paused'}. Duration will be available after playback starts.`
+        // The progress description can change frequently, but the live region
+        // only announces meaningful playback state transitions.
+        if (previousState !== null && state !== previousState) {
+          const announcement = liveAnnouncement(state, label)
+          if (announcement) live.textContent = announcement
         }
+        previousState = state
       }
 
-      const setFailed = error => {
-        failed = true
-        block.__audioError = true
-        if (!audio.paused) audio.pause()
-        console.warn(`Document audio failed: ${block.src}`, error || audio.error || '')
-        syncAccessibility()
-        markDirty()
-      }
-
-      const resetFailure = () => {
-        failed = false
-        delete block.__audioError
-        syncAccessibility()
-        markDirty()
-      }
-
-      const ensureSource = () => {
-        if (audio.getAttribute('src')) return
-        audio.src = block.src
-      }
-
-      const onMediaState = () => {
-        syncAccessibility()
-        markDirty()
-      }
-      const onError = () => setFailed(audio.error)
-      const events = ['loadedmetadata', 'durationchange', 'play', 'pause', 'ended', 'timeupdate', 'seeked']
-      events.forEach(name => audio.addEventListener(name, onMediaState, { passive: true }))
-      audio.addEventListener('error', onError, { passive: true })
-
-      const volumeControl = document.getElementById('volume')
-      const volumeObserver = volumeControl ? new MutationObserver(syncVolume) : null
-      volumeObserver?.observe(volumeControl, { attributes: true, attributeFilter: ['aria-valuenow'] })
-
-      const pauseWhenHidden = () => {
-        if (document.hidden && !audio.paused) audio.pause()
-      }
-      document.addEventListener('visibilitychange', pauseWhenHidden)
-
-      const toggle = async () => {
-        if (!audio.paused && !audio.ended && !failed) {
-          audio.pause()
-          return
-        }
-
-        stopOtherAudio(audio)
-        syncVolume()
-        if (failed) {
-          audio.pause()
-          audio.removeAttribute('src')
-          try { audio.load() } catch (error) {
-            console.warn('Unable to reset document audio element', error)
-          }
-          resetFailure()
-        }
-        ensureSource()
-
-        try {
-          await audio.play()
-        } catch (error) {
-          if (error?.name !== 'AbortError') setFailed(error)
-        }
-        syncAccessibility()
-        markDirty()
-      }
-
-      button.addEventListener('click', event => {
+      const unsubscribe = playback.subscribe(block, sync)
+      const removeTouchScroll = installTouchScroll(host, context)
+      const activate = event => {
         event.preventDefault()
         event.stopPropagation()
-        void toggle()
-      })
-      button.addEventListener('keydown', event => {
-        if (event.key !== 'Enter' && event.key !== ' ') return
-        event.preventDefault()
-        void toggle()
-      })
+        void playback.toggle(block)
+      }
+      // Native buttons already map Enter and Space to click, so one handler
+      // covers mouse, touch taps and keyboard activation without double toggles.
+      button.addEventListener('click', activate)
 
-      host.append(button, status)
-      syncAccessibility()
+      host.append(button, progress, live)
 
       return () => {
-        volumeObserver?.disconnect()
-        document.removeEventListener('visibilitychange', pauseWhenHidden)
-        events.forEach(name => audio.removeEventListener(name, onMediaState))
-        audio.removeEventListener('error', onError)
-        audio.pause()
-        audio.removeAttribute('src')
-        try { audio.load() } catch (error) {
-          console.warn('Unable to release document audio element', error)
-        }
-        ACTIVE_AUDIO.delete(audio)
-        if (block.__audioElement === audio) delete block.__audioElement
-        delete block.__audioError
+        unsubscribe()
+        removeTouchScroll()
+        button.removeEventListener('click', activate)
         button.remove()
-        status.remove()
-        markDirty()
+        progress.remove()
+        live.remove()
       }
     },
   }
 }
 
-export function enhanceAudioBlocks(registry) {
+export function enhanceAudioBlocks(registry, playback) {
   registry.register('audio', {
     measure(_ctx, block) {
       return { height: clamp(Number(block.height) || 104, 88, 150) }
     },
     paint(ctx, block, layout, env) {
-      paintAudio(ctx, block, layout, env)
+      paintAudio(ctx, block, layout, env, playback)
     },
     getInteraction(block) {
       return {
@@ -241,7 +219,7 @@ export function enhanceAudioBlocks(registry) {
   return registry
 }
 
-export function registerAudioIntegration(registry) {
-  registry.register('audio', audioAdapter())
+export function registerAudioIntegration(registry, playback) {
+  registry.register('audio', audioAdapter(playback))
   return registry
 }
