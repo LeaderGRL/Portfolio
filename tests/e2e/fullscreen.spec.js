@@ -268,7 +268,7 @@ for (const gpuMode of ['limited', 'allocation-failure', 'upload-failure']) {
         }
         WebGL2RenderingContext.prototype.getError = function() {
           if (failed.delete(this)) return this.OUT_OF_MEMORY
-          return getError.call(this)
+          return getError.call(this, target)
         }
       }
     }, gpuMode)
@@ -345,13 +345,25 @@ test('fullscreen article and media retain high-resolution CRT without specular g
   await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
 
   // Reflow after orientation/window changes must keep hotspots and rendering
-  // alive; returning to the chassis restores the native 480x360 source.
+  // alive. Desktop returns to its native source while a landscape phone
+  // immediately restores the dedicated landscape raster.
   const progress = await page.locator('#article-reader').evaluate(node => node.scrollTop)
   await page.setViewportSize(isMobile(testInfo) ? { width: 851, height: 393 } : { width: 960, height: 720 })
   await expect(media).toBeVisible()
   expect(await page.locator('#article-reader').evaluate(node => node.scrollTop)).toBe(progress)
   await page.locator('.softkeys__key--exit').click()
-  expect(await page.locator('#article-source').evaluate(canvas => [canvas.width, canvas.height])).toEqual([480, 360])
+  if (isMobile(testInfo)) {
+    const tube = page.locator('#tube')
+    await expect(tube).toHaveAttribute('data-raster-layout', 'landscape')
+    const expected = await tube.evaluate(element => {
+      const rect = element.getBoundingClientRect()
+      const density = Math.min(devicePixelRatio, 2)
+      return [Math.floor(rect.width * density), Math.floor(rect.height * density)]
+    })
+    await expect.poll(() => page.locator('#article-source').evaluate(canvas => [canvas.width, canvas.height])).toEqual(expected)
+  } else {
+    expect(await page.locator('#article-source').evaluate(canvas => [canvas.width, canvas.height])).toEqual([480, 360])
+  }
   expect(errors).toEqual([])
 })
 
