@@ -201,10 +201,10 @@ function fitLandscapeRaster(app) {
   app.dirty = true
 
   tube.dataset.rasterLayout = 'landscape'
-  tube.style.setProperty('--landscape-terminal-x', `${(rect.x * 100).toFixed(4)}%`)
-  tube.style.setProperty('--landscape-terminal-y', `${(rect.y * 100).toFixed(4)}%`)
-  tube.style.setProperty('--landscape-terminal-w', `${(rect.w * 100).toFixed(4)}%`)
-  tube.style.setProperty('--landscape-terminal-h', `${(rect.h * 100).toFixed(4)}%`)
+  tube.style.setProperty('--landscape-terminal-x', `${picture.x.toFixed(3)}px`)
+  tube.style.setProperty('--landscape-terminal-y', `${picture.y.toFixed(3)}px`)
+  tube.style.setProperty('--landscape-terminal-w', `${picture.width.toFixed(3)}px`)
+  tube.style.setProperty('--landscape-terminal-h', `${picture.height.toFixed(3)}px`)
   tube.style.setProperty('--landscape-document-scale', layout.physicalDocumentScale.toFixed(4))
   tube.style.setProperty('--landscape-reader-font', `${(10 * layout.textScale).toFixed(3)}px`)
   tube.style.setProperty('--landscape-reader-title', `${(18 * layout.textScale).toFixed(3)}px`)
