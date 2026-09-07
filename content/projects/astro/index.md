@@ -55,7 +55,7 @@ That distinction matters to me. A prototype does not become more serious simply 
 
 A few months later, ASTRO was selected for **Game Créalab Lyon 2024**.
 
-The residency ran from September 16 to September 28 at **Pôle Pixel in Villeurbanne**. Only **4 projects were selected from 38 applications** for that edition, with each project receiving a **€2,500 grant** and two weeks of dedicated development time.
+The residency ran from September 16 to September 28 at **Pôle Pixel in Villeurbanne**. Only **4 projects were selected from 38 applications** for that edition. The programme provided dedicated development time, financial support, daily coaching and access to industry professionals around the selected projects.
 
 ::media{src="game-crealab.webp" label="ASTRO × GAME CRÉALAB LYON 2024" alt="ASTRO project visual used during Game Créalab Lyon 2024" fit=contain background=off height=260}
 
