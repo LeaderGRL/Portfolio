@@ -260,8 +260,10 @@ export function installLandscapeMobileLayout(app) {
   }
 
   const applyLandscape = (viewportWidth, viewportHeight, safe) => {
-    const layout = closestLayout(safe.width / safe.height)
-    const fit = Math.min(safe.width / layout.width, safe.height / layout.height)
+    const layout = closestLayout(viewportWidth / viewportHeight)
+    // Landscape is a full-bleed hardware composition. Cover the viewport and
+    // accept a small symmetric crop instead of synthesising material bars.
+    const fit = Math.max(viewportWidth / layout.width, viewportHeight / layout.height)
     const renderedWidth = layout.width * fit
     const renderedHeight = layout.height * fit
     const [left, top, right, bottom] = layout.aperture
