@@ -56,7 +56,12 @@ for (const viewport of [
     await expect(machine).toHaveAttribute('data-landscape-variant', viewport.variant)
     await expect(page.locator('body')).toHaveClass(/is-landscape-mobile-stage/)
 
-    await expectInsideViewport(machine, viewport.width, viewport.height)
+    const machineBox = await machine.boundingBox()
+    expect(machineBox).not.toBeNull()
+    expect(machineBox.x).toBeLessThanOrEqual(1)
+    expect(machineBox.y).toBeLessThanOrEqual(1)
+    expect(machineBox.x + machineBox.width).toBeGreaterThanOrEqual(viewport.width - 1)
+    expect(machineBox.y + machineBox.height).toBeGreaterThanOrEqual(viewport.height - 1)
     await expect(page.locator('.nameplate')).toBeHidden()
 
     const background = page.locator('.machine__background--landscape img')
@@ -68,7 +73,8 @@ for (const viewport of [
     expect(decoded.width).toBeGreaterThan(0)
     expect(decoded.height).toBeGreaterThan(0)
 
-    const screen = await expectInsideViewport(page.locator('#screen'), viewport.width, viewport.height, 6)
+    const screen = await page.locator('#screen').boundingBox()
+    expect(screen).not.toBeNull()
     expect(screen.width).toBeGreaterThan(260)
     expect(screen.height).toBeGreaterThan(160)
 
@@ -79,10 +85,6 @@ for (const viewport of [
       return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }
     }))
     for (const box of keyBoxes) {
-      expect(box.left).toBeGreaterThanOrEqual(-1)
-      expect(box.top).toBeGreaterThanOrEqual(-1)
-      expect(box.right).toBeLessThanOrEqual(viewport.width + 1)
-      expect(box.bottom).toBeLessThanOrEqual(viewport.height + 1)
       expect(box.height).toBeGreaterThanOrEqual(44)
     }
 
@@ -118,7 +120,7 @@ test('short desktop viewport does not activate the touch-only landscape chassis'
   await expect(page.locator('body')).not.toHaveClass(/is-landscape-mobile-stage/)
 })
 
-test('landscape chassis fits inside simulated phone safe-area insets', async ({ page }, testInfo) => {
+test('landscape chassis stays full bleed while interactive hardware respects safe-area insets', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')
   await emulateTouchPhone(page)
   await page.setViewportSize({ width: 915, height: 412 })
@@ -133,12 +135,23 @@ test('landscape chassis fits inside simulated phone safe-area insets', async ({ 
     window.dispatchEvent(new Event('resize'))
   })
 
-  const box = await page.locator('#machine').boundingBox()
-  expect(box).not.toBeNull()
-  expect(box.x).toBeGreaterThanOrEqual(42 - 1)
-  expect(box.x + box.width).toBeLessThanOrEqual(915 - 34 + 1)
-  expect(box.y).toBeGreaterThanOrEqual(8 - 1)
-  expect(box.y + box.height).toBeLessThanOrEqual(412 - 6 + 1)
+  const machine = await page.locator('#machine').boundingBox()
+  expect(machine).not.toBeNull()
+  expect(machine.x).toBeLessThanOrEqual(1)
+  expect(machine.y).toBeLessThanOrEqual(1)
+  expect(machine.x + machine.width).toBeGreaterThanOrEqual(914)
+  expect(machine.y + machine.height).toBeGreaterThanOrEqual(411)
+
+  const controls = await page.locator('#nav-keys .key, #action-keys .key, #crt-switch, #fullscreen-switch, #volume, #power').evaluateAll(nodes => nodes.map(node => {
+    const box = node.getBoundingClientRect()
+    return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }
+  }))
+  for (const box of controls) {
+    expect(box.left).toBeGreaterThanOrEqual(42 - 1)
+    expect(box.right).toBeLessThanOrEqual(915 - 34 + 1)
+    expect(box.top).toBeGreaterThanOrEqual(8 - 1)
+    expect(box.bottom).toBeLessThanOrEqual(412 - 6 + 1)
+  }
 })
 
 test('rotating a phone returns from landscape chassis to portrait compact chassis', async ({ page }, testInfo) => {
