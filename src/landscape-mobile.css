@@ -410,6 +410,11 @@ body.is-landscape-mobile-stage #stage::after{
       + var(--landscape-short-gap)
     );
   }
+  /* Ultrawide phones consume the 44px minimum at this height. Move the whole
+     derived tier stack up slightly instead of squeezing the optical controls. */
+  .machine.is-landscape-mobile[data-landscape-variant="21x9"]{
+    --landscape-nav-top:6%;
+  }
   .is-landscape-mobile .key__legend{
     padding-left:34px;
     padding-right:8px;
