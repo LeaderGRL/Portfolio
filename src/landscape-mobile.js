@@ -13,8 +13,19 @@ const MOBILE_MAX_WIDTH = 1400
 const MOBILE_MAX_HEIGHT = 600
 const LANDSCAPE_MIN_ASPECT = 1.05
 const SAFE_AREA_PROPERTIES = ['left', 'right', 'top', 'bottom']
-const CONTROL_RIGHT_EDGE = { '3x2': 0.96, '16x9': 0.955, '21x9': 0.95 }
-const CONTROL_SAFE_MARGIN = 8
+
+// The control deck follows the approved reference in viewport space instead of
+// inheriting arbitrary percentages from each chassis artwork. This keeps the
+// hardware centred, breathable and visually stable while the image cover-crops.
+const CONTROL_DECK = {
+  leftRatio: 0.68,
+  rightRatio: 0.965,
+  screenGapRatio: 0.035,
+  topRatio: 0.185,
+  sideMargin: 14,
+  bottomMargin: 8,
+  keyTarget: 44,
+}
 
 function closestLayout(viewportAspect) {
   return LANDSCAPE_LAYOUTS.reduce((best, candidate) => {
@@ -53,13 +64,15 @@ function readSafeArea(width, height) {
     return [edge, Number.isFinite(value) && value > 0 ? value : 0]
   }))
 
-  const safeWidth = Math.max(1, width - inset.left - inset.right)
-  const safeHeight = Math.max(1, height - inset.top - inset.bottom)
   return {
     ...inset,
-    width: safeWidth,
-    height: safeHeight,
+    width: Math.max(1, width - inset.left - inset.right),
+    height: Math.max(1, height - inset.top - inset.bottom),
   }
+}
+
+function mix(a, b, t) {
+  return a + (b - a) * t
 }
 
 function installBackground(machine) {
@@ -209,6 +222,92 @@ function fitLandscapeRaster(app) {
   app.documentRuntime?.setViewport?.(layout)
 }
 
+function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, renderedWidth, renderedHeight) {
+  const machineLeft = (viewportWidth - renderedWidth) * 0.5
+  const machineTop = (viewportHeight - renderedHeight) * 0.5
+  const screenRight = machineLeft + layout.aperture[2] * layout.width * fit
+
+  const rightMargin = Math.max(CONTROL_DECK.sideMargin + safe.right, viewportWidth * (1 - CONTROL_DECK.rightRatio))
+  const railRight = viewportWidth - rightMargin
+  const screenGap = viewportWidth * CONTROL_DECK.screenGapRatio
+  const preferredLeft = Math.max(
+    viewportWidth * CONTROL_DECK.leftRatio,
+    screenRight + screenGap,
+    safe.left + CONTROL_DECK.sideMargin,
+  )
+  const minimumWidth = clamp(viewportWidth * 0.255, 176, 266)
+  const railLeft = Math.max(
+    safe.left + CONTROL_DECK.sideMargin,
+    Math.min(preferredLeft, railRight - minimumWidth),
+  )
+  const railWidth = Math.max(1, railRight - railLeft)
+
+  // Interpolate from a compact 280px-tall phone to the approved Pixel 7
+  // proportions. The 44px targets never shrink; only whitespace compresses.
+  const rhythm = clamp((viewportHeight - 280) / 132, 0, 1)
+  const keyTarget = CONTROL_DECK.keyTarget
+  const faceHeight = mix(24, 30, rhythm)
+  const rowGap = mix(0, 2, rhythm)
+  const navActionGap = mix(6, 18, rhythm)
+  const actionControlsGap = mix(6, 22, rhythm)
+  const controlsHeight = mix(34, 49, rhythm)
+  const controlsPowerGap = mix(4, 14, rhythm)
+  const powerHeight = mix(30, 40, rhythm)
+  const totalHeight = keyTarget * 4
+    + rowGap * 2
+    + navActionGap
+    + actionControlsGap
+    + controlsHeight
+    + controlsPowerGap
+    + powerHeight
+
+  const minimumTop = safe.top + 6
+  const idealTop = viewportHeight * CONTROL_DECK.topRatio
+  const maximumTop = viewportHeight - safe.bottom - CONTROL_DECK.bottomMargin - totalHeight
+  const navTop = Math.max(minimumTop, Math.min(idealTop, maximumTop))
+  const navHeight = keyTarget * 3 + rowGap * 2
+  const actionTop = navTop + navHeight + navActionGap
+  const controlsTop = actionTop + keyTarget + actionControlsGap
+  const powerTop = controlsTop + controlsHeight + controlsPowerGap
+
+  const columnGap = mix(14, 18, clamp((viewportWidth - 667) / 248, 0, 1))
+  const separatorThickness = 1.25
+
+  const xToDesign = value => (value - machineLeft) / fit
+  const yToDesign = value => (value - machineTop) / fit
+  const sizeToDesign = value => value / fit
+
+  return {
+    railLeft: xToDesign(railLeft),
+    railWidth: sizeToDesign(railWidth),
+    navTop: yToDesign(navTop),
+    actionTop: yToDesign(actionTop),
+    controlsTop: yToDesign(controlsTop),
+    powerTop: yToDesign(powerTop),
+    keyHeight: sizeToDesign(keyTarget),
+    keyInset: sizeToDesign((keyTarget - faceHeight) * 0.5),
+    rowGap: sizeToDesign(rowGap),
+    columnGap: sizeToDesign(columnGap),
+    controlsHeight: sizeToDesign(controlsHeight),
+    powerHeight: sizeToDesign(powerHeight),
+    actionSeparatorOffset: sizeToDesign(-navActionGap * 0.5),
+    controlsSeparatorOffset: sizeToDesign(-actionControlsGap * 0.5),
+    powerSeparatorOffset: sizeToDesign(-controlsPowerGap * 0.5),
+    separatorThickness: sizeToDesign(separatorThickness),
+    fontSize: sizeToDesign(10),
+    captionSize: sizeToDesign(9.5),
+    iconSize: sizeToDesign(14),
+    iconLeft: sizeToDesign(10),
+    legendLeft: sizeToDesign(34),
+    ledSize: sizeToDesign(4.5),
+    ledTop: sizeToDesign(5),
+    ledRight: sizeToDesign(6),
+    switchWidth: sizeToDesign(50),
+    sliderWidth: sizeToDesign(52),
+    rockerWidth: sizeToDesign(24),
+  }
+}
+
 export function installLandscapeMobileLayout(app) {
   const machine = document.getElementById('machine')
   if (!machine || typeof app?._fit !== 'function' || typeof app?._fitRaster !== 'function') return () => {}
@@ -233,8 +332,33 @@ export function installLandscapeMobileLayout(app) {
       '--landscape-gap-y',
       '--landscape-center-x',
       '--landscape-center-y',
-      '--landscape-controls-shift-x',
-      '--landscape-controls-shift-y',
+      '--landscape-controls-left',
+      '--landscape-controls-width',
+      '--landscape-nav-top',
+      '--landscape-action-top',
+      '--landscape-controls-top',
+      '--landscape-power-top',
+      '--landscape-key-h',
+      '--landscape-key-inset',
+      '--landscape-row-gap',
+      '--landscape-column-gap',
+      '--landscape-controls-height',
+      '--landscape-power-height',
+      '--landscape-action-separator-offset',
+      '--landscape-controls-separator-offset',
+      '--landscape-power-separator-offset',
+      '--landscape-separator-thickness',
+      '--landscape-font-size',
+      '--landscape-caption-size',
+      '--landscape-icon-size',
+      '--landscape-icon-left',
+      '--landscape-legend-left',
+      '--landscape-led-size',
+      '--landscape-led-top',
+      '--landscape-led-right',
+      '--landscape-switch-width',
+      '--landscape-slider-width',
+      '--landscape-rocker-width',
       '--landscape-edge-top',
       '--landscape-edge-bottom',
       '--landscape-edge-left',
@@ -269,18 +393,15 @@ export function installLandscapeMobileLayout(app) {
     const renderedWidth = layout.width * fit
     const renderedHeight = layout.height * fit
     const [left, top, right, bottom] = layout.aperture
-
-    const horizontalCrop = Math.max(0, (renderedWidth - viewportWidth) * 0.5)
-    const verticalCrop = Math.max(0, (renderedHeight - viewportHeight) * 0.5)
-    const authoredRightMargin = layout.width * (1 - (CONTROL_RIGHT_EDGE[layout.id] || 0.95)) * fit
-    // Keep this margin signed. A negative value means cover-fit cropping has
-    // already pushed the authored control edge beyond the visible viewport.
-    const visibleRightMargin = authoredRightMargin - horizontalCrop
-    const requiredRightMargin = safe.right + CONTROL_SAFE_MARGIN
-    const controlsShiftX = Math.max(0, requiredRightMargin - visibleRightMargin) / fit
-    // Vertical cover cropping changes the visible origin of the authored
-    // chassis. Move only the interactive rail back into that visible slice.
-    const controlsShiftY = verticalCrop / fit
+    const deck = controlDeckGeometry(
+      viewportWidth,
+      viewportHeight,
+      safe,
+      layout,
+      fit,
+      renderedWidth,
+      renderedHeight,
+    )
 
     machine.classList.remove('is-compact')
     machine.classList.add('is-landscape-mobile')
@@ -303,14 +424,42 @@ export function installLandscapeMobileLayout(app) {
     root.setProperty('--landscape-render-h', `${renderedHeight}px`)
     root.setProperty('--landscape-center-x', `${viewportWidth * 0.5}px`)
     root.setProperty('--landscape-center-y', `${viewportHeight * 0.5}px`)
-    root.setProperty('--landscape-controls-shift-x', `${-controlsShiftX}px`)
-    root.setProperty('--landscape-controls-shift-y', `${controlsShiftY}px`)
     root.setProperty('--landscape-gap-x', '0px')
     root.setProperty('--landscape-gap-y', '0px')
     root.setProperty('--landscape-edge-top', layout.edges.top)
     root.setProperty('--landscape-edge-bottom', layout.edges.bottom)
     root.setProperty('--landscape-edge-left', layout.edges.left)
     root.setProperty('--landscape-edge-right', layout.edges.right)
+
+    for (const [property, value] of [
+      ['--landscape-controls-left', deck.railLeft],
+      ['--landscape-controls-width', deck.railWidth],
+      ['--landscape-nav-top', deck.navTop],
+      ['--landscape-action-top', deck.actionTop],
+      ['--landscape-controls-top', deck.controlsTop],
+      ['--landscape-power-top', deck.powerTop],
+      ['--landscape-key-h', deck.keyHeight],
+      ['--landscape-key-inset', deck.keyInset],
+      ['--landscape-row-gap', deck.rowGap],
+      ['--landscape-column-gap', deck.columnGap],
+      ['--landscape-controls-height', deck.controlsHeight],
+      ['--landscape-power-height', deck.powerHeight],
+      ['--landscape-action-separator-offset', deck.actionSeparatorOffset],
+      ['--landscape-controls-separator-offset', deck.controlsSeparatorOffset],
+      ['--landscape-power-separator-offset', deck.powerSeparatorOffset],
+      ['--landscape-separator-thickness', deck.separatorThickness],
+      ['--landscape-font-size', deck.fontSize],
+      ['--landscape-caption-size', deck.captionSize],
+      ['--landscape-icon-size', deck.iconSize],
+      ['--landscape-icon-left', deck.iconLeft],
+      ['--landscape-legend-left', deck.legendLeft],
+      ['--landscape-led-size', deck.ledSize],
+      ['--landscape-led-top', deck.ledTop],
+      ['--landscape-led-right', deck.ledRight],
+      ['--landscape-switch-width', deck.switchWidth],
+      ['--landscape-slider-width', deck.sliderWidth],
+      ['--landscape-rocker-width', deck.rockerWidth],
+    ]) root.setProperty(property, `${value.toFixed(3)}px`)
 
     if (activeLayout !== layout.id) loadBackground(image, layout)
     layer.hidden = false
