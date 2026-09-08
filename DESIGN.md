@@ -76,6 +76,40 @@ rail is a centred 430px-wide column with a 10px rhythm between the six keys;
 it begins noticeably below the CRT instead of visually attaching to its frame.
 CRT/Volume form a second lower tier, while Power sits on a distinct final tier.
 
+## Landscape mobile reference (September 8, 2026)
+
+Touch-first landscape devices use the three supplied photographic plates in
+`assets/src/chassis-frame-landscape-{3x2,16x9,21x9}.webp`. They are WebP
+conversions of the user's `14_12_34 (1)`, `14_12_35 (2)` and `14_12_35 (3)`
+PNGs respectively, at their original 1536 × 1024, 1672 × 941 and 1916 × 821
+dimensions. Alpha is preserved exactly after normalising near-opaque material
+to opaque, following the existing chassis pipeline. The fourth supplied image,
+`00_02_50`, is the composition reference: a generous CRT on the left, a quiet
+two-column bank of keys on the right, then actions, optical controls and power.
+
+The closest photographic aspect is contain-fitted inside the safe area, never
+stretched. `tools/build_chassis.py` measures each actual WebP into
+`assets/build/meta.json` → `ASSET_META.landscape_chassis` → the
+`--landscape-ap-*` / edge properties in `src/landscape-mobile.js`. Source
+replacement therefore updates the aperture and material continuation together.
+
+Runtime CSS remains the token owner. `src/landscape-mobile.css` owns the
+landscape geometry and `--landscape-key-surface` (`#dcd2c1`), feeding the
+existing shared key's cavity, rim, face, legend and LED. Keys retain 44 CSS px
+touch areas with slimmer inset faces; navigation/action/optical/power tiers sit
+at 17/62/77/90% of the plate height. On viewports at most 340px high navigation
+moves to 8% to retain separate targets. On these short viewports, tighter icon
+padding and 9px minimum legends keep complete section names visible within
+the narrower faces. The 16:9 and 3:2 control field starts at 69% with 27% width;
+the panoramic field starts at 64% with 31% width. Identity
+stays on the CRT. Desktop and portrait keep their existing compositions.
+
+Fullscreen starts at viewport origin on every aspect. Decorative desktop
+offsets never apply to it. The document and terminal reserve the actual
+softkey height, including wrapped 44px touch keys and safe-area padding, even
+when that exceeds 35% of a short viewport. Returning to landscape publishes
+the final reader metrics before restoring reading progress.
+
 ## Typography and iconography
 
 Panel text uses a compact industrial sans with tracked uppercase labels.
