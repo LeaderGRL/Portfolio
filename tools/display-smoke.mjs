@@ -96,6 +96,9 @@ for (const [width, height, dpr] of [[1920, 1080, 1], [393, 851, 3], [3840, 2160,
 }
 const hd = fullscreenLayout(1920, 1080, 1, 32)
 check(hd.pixelWidth === 1920 && hd.pixelHeight === 1080, '1080p source is rendered at its actual resolution')
+const shortLandscape = fullscreenLayout(568, 280, 2, 120)
+check(shortLandscape.bottom >= 132, 'short landscape reserves wrapped navigation beyond 35% of the viewport')
+check(shortLandscape.terminal.y + shortLandscape.terminal.height <= 148, 'short landscape terminal remains above wrapped controls')
 const allocations = []
 const uniforms = {}
 let disposed = 0

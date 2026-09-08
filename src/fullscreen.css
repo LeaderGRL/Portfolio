@@ -98,7 +98,7 @@ body.is-crt-fullscreen .softkeys{
   position:absolute; left:0; right:0; bottom:0; z-index:7;
   display:flex; flex-wrap:wrap; justify-content:center; align-items:center;
   gap:0 10px;
-  padding:6px 10px calc(4px + env(safe-area-inset-bottom, 0px));
+  padding:6px max(10px, var(--safe-area-right, 0px)) calc(4px + var(--safe-area-bottom, 0px)) max(10px, var(--safe-area-left, 0px));
   font:600 11px/1 ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
   letter-spacing:.14em; text-transform:uppercase;
   color:#2fd06d;
@@ -147,7 +147,7 @@ body.is-crt-fullscreen .softkeys{
 @media (pointer:coarse){
   .softkeys__key kbd{ display:none; }
   body.is-crt-fullscreen .softkeys{ gap:0 4px; }
-  .softkeys__key{ padding:10px 7px; }
+  .softkeys__key{ padding:10px 7px; min-height:44px; }
 }
 
 @media (prefers-reduced-motion: reduce){

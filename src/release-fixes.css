@@ -76,7 +76,7 @@ body.is-compact-stage #stage::after{
  * dedicated mobile-landscape chassis is already contain-fitted to its safe
  * rectangle and must not inherit this decorative desktop crop offset. */
 @media (max-height:600px) and (min-aspect-ratio:1.8){
-  body:not(.is-compact-stage):not(.is-landscape-mobile-stage) .machine:not(.is-compact):not(.is-landscape-mobile){
+  body:not(.is-crt-fullscreen):not(.is-compact-stage):not(.is-landscape-mobile-stage) .machine:not(.is-compact):not(.is-landscape-mobile){
     top:calc(50% + clamp(18px,5vh,28px));
   }
 }
