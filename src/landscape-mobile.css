@@ -387,6 +387,13 @@ body.is-landscape-mobile-stage #stage::after{
    the navigation tier while retaining the same independent 44px targets. */
 @media (max-height:340px){
   .machine.is-landscape-mobile{ --landscape-nav-top:8%; }
+  .is-landscape-mobile .key__legend{
+    padding-left:34px;
+    padding-right:8px;
+    font-size:max(21px, calc(9px / var(--fit)));
+    letter-spacing:.035em;
+  }
+  .is-landscape-mobile .key__icon{ left:10px; width:20px; height:20px; }
 }
 
 @media (prefers-reduced-motion:reduce){

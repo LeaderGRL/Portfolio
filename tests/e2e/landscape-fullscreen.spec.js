@@ -53,10 +53,20 @@ for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }
     const physicalKeys = await page.locator('#nav-keys .key, #action-keys .key').evaluateAll(keys => keys.map(key => {
       const rect = key.getBoundingClientRect()
       const owner = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
-      return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom, height: rect.height, hit: owner === key || key.contains(owner) }
+      const face = key.querySelector('.key__face').getBoundingClientRect()
+      const text = document.createRange()
+      text.selectNodeContents(key.querySelector('.key__legend'))
+      const label = text.getBoundingClientRect()
+      const icon = key.querySelector('.key__icon')?.getBoundingClientRect()
+      return {
+        x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom, height: rect.height,
+        hit: owner === key || key.contains(owner),
+        labelFits: label.right <= face.right && label.left >= (icon?.right || face.left),
+      }
     }))
     for (const [index, key] of physicalKeys.entries()) {
       expect(key.hit).toBe(true)
+      expect(key.labelFits).toBe(true)
       expect(key.height).toBeGreaterThanOrEqual(43.9)
       expect(key.bottom).toBeLessThanOrEqual(viewport.height)
       for (const other of physicalKeys.slice(index + 1)) {
