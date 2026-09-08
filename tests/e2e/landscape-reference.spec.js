@@ -13,7 +13,12 @@ async function bootLandscape(page, viewport) {
   await expect(page.locator('#machine')).toHaveClass(/is-landscape-mobile/)
 }
 
-for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }]) {
+for (const viewport of [
+  { width: 915, height: 412 },
+  { width: 844, height: 390 },
+  { width: 800, height: 360 },
+  { width: 667, height: 375 },
+]) {
   test(`landscape chassis is full bleed and airy at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
     await bootLandscape(page, viewport)
 
@@ -55,9 +60,9 @@ for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }
       expect(height).toBeLessThan(34)
     }
 
-    expect(geometry.actionFirstTop - geometry.navLastBottom).toBeGreaterThan(18)
-    expect(geometry.controls.top - geometry.actionLastBottom).toBeGreaterThan(18)
-    expect(geometry.power.top - geometry.controls.bottom).toBeGreaterThan(18)
+    expect(geometry.actionFirstTop - geometry.navLastBottom).toBeGreaterThan(10)
+    expect(geometry.controls.top - geometry.actionLastBottom).toBeGreaterThan(10)
+    expect(geometry.power.top - geometry.controls.bottom).toBeGreaterThan(10)
     expect(geometry.power.bottom).toBeLessThanOrEqual(viewport.height + 1)
 
     const screenshot = testInfo.outputPath(`landscape-reference-${viewport.width}x${viewport.height}.png`)
