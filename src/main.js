@@ -19,9 +19,11 @@ import { installFullscreenSoftkeys } from './fullscreen-softkeys.js'
 import { installRuntimeControls } from './runtime-controls.js'
 import { installSemanticFocusProxy } from './semantic-focus.js'
 import { installLandscapeMobileLayout } from './landscape-mobile.js'
+import { installLandscapeActionKeys } from './landscape-action-keys.js'
 
 const boot = () => {
   const app = start()
+  installLandscapeActionKeys()
   installLandscapeMobileLayout(app)
   installRuntimeControls(app)
   attachArticleCRT(app)
