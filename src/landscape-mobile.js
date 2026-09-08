@@ -13,6 +13,8 @@ const MOBILE_MAX_WIDTH = 1400
 const MOBILE_MAX_HEIGHT = 600
 const LANDSCAPE_MIN_ASPECT = 1.05
 const SAFE_AREA_PROPERTIES = ['left', 'right', 'top', 'bottom']
+const CONTROL_RIGHT_EDGE = { '3x2': 0.96, '16x9': 0.955, '21x9': 0.95 }
+const CONTROL_SAFE_MARGIN = 8
 
 function closestLayout(viewportAspect) {
   return LANDSCAPE_LAYOUTS.reduce((best, candidate) => {
@@ -57,8 +59,6 @@ function readSafeArea(width, height) {
     ...inset,
     width: safeWidth,
     height: safeHeight,
-    centerX: inset.left + safeWidth * 0.5,
-    centerY: inset.top + safeHeight * 0.5,
   }
 }
 
@@ -233,6 +233,7 @@ export function installLandscapeMobileLayout(app) {
       '--landscape-gap-y',
       '--landscape-center-x',
       '--landscape-center-y',
+      '--landscape-controls-shift-x',
       '--landscape-edge-top',
       '--landscape-edge-bottom',
       '--landscape-edge-left',
@@ -261,12 +262,18 @@ export function installLandscapeMobileLayout(app) {
 
   const applyLandscape = (viewportWidth, viewportHeight, safe) => {
     const layout = closestLayout(viewportWidth / viewportHeight)
-    // Landscape is a full-bleed hardware composition. Cover the viewport and
-    // accept a small symmetric crop instead of synthesising material bars.
+    // The photographic chassis deliberately covers the complete viewport. Safe
+    // areas constrain controls, not the material surface, so there are no bars.
     const fit = Math.max(viewportWidth / layout.width, viewportHeight / layout.height)
     const renderedWidth = layout.width * fit
     const renderedHeight = layout.height * fit
     const [left, top, right, bottom] = layout.aperture
+
+    const horizontalCrop = Math.max(0, (renderedWidth - viewportWidth) * 0.5)
+    const authoredRightMargin = layout.width * (1 - (CONTROL_RIGHT_EDGE[layout.id] || 0.95)) * fit
+    const visibleRightMargin = Math.max(0, authoredRightMargin - horizontalCrop)
+    const requiredRightMargin = safe.right + CONTROL_SAFE_MARGIN
+    const controlsShift = Math.max(0, requiredRightMargin - visibleRightMargin) / fit
 
     machine.classList.remove('is-compact')
     machine.classList.add('is-landscape-mobile')
@@ -287,10 +294,11 @@ export function installLandscapeMobileLayout(app) {
     root.setProperty('--landscape-ap-b', String(bottom))
     root.setProperty('--landscape-render-w', `${renderedWidth}px`)
     root.setProperty('--landscape-render-h', `${renderedHeight}px`)
-    root.setProperty('--landscape-center-x', `${safe.centerX}px`)
-    root.setProperty('--landscape-center-y', `${safe.centerY}px`)
-    root.setProperty('--landscape-gap-x', `${Math.max(0, (viewportWidth - renderedWidth) * 0.5)}px`)
-    root.setProperty('--landscape-gap-y', `${Math.max(0, (viewportHeight - renderedHeight) * 0.5)}px`)
+    root.setProperty('--landscape-center-x', `${viewportWidth * 0.5}px`)
+    root.setProperty('--landscape-center-y', `${viewportHeight * 0.5}px`)
+    root.setProperty('--landscape-controls-shift-x', `${-controlsShift}px`)
+    root.setProperty('--landscape-gap-x', '0px')
+    root.setProperty('--landscape-gap-y', '0px')
     root.setProperty('--landscape-edge-top', layout.edges.top)
     root.setProperty('--landscape-edge-bottom', layout.edges.bottom)
     root.setProperty('--landscape-edge-left', layout.edges.left)
