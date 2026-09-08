@@ -45,6 +45,29 @@ async function expectViewportGlass(page) {
   expect(reserved.bottom).toBeGreaterThanOrEqual(reserved.controls + 12)
 }
 
+async function expectLandscapeTiersSeparated(page, viewport) {
+  const geometry = await page.evaluate(() => {
+    const rect = selector => {
+      const node = document.querySelector(selector)
+      const box = node.getBoundingClientRect()
+      return { top: box.top, bottom: box.bottom, left: box.left, right: box.right, width: box.width, height: box.height }
+    }
+    return {
+      variant: document.getElementById('machine')?.dataset.landscapeVariant,
+      nav: rect('#nav-keys'),
+      actions: rect('#action-keys'),
+      controls: rect('.panel--right .controls-row'),
+      power: rect('.panel--right .bottom-row'),
+    }
+  })
+
+  expect(geometry.variant).toBe('21x9')
+  expect(geometry.nav.bottom).toBeLessThanOrEqual(geometry.actions.top)
+  expect(geometry.actions.bottom).toBeLessThanOrEqual(geometry.controls.top)
+  expect(geometry.controls.bottom).toBeLessThanOrEqual(geometry.power.top)
+  expect(geometry.power.bottom).toBeLessThanOrEqual(viewport.height + 1)
+}
+
 for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }, { width: 568, height: 280 }]) {
   test(`landscape fullscreen fills ${viewport.width}x${viewport.height} and all controls remain reachable`, async ({ page }, testInfo) => {
     const errors = []
@@ -86,6 +109,32 @@ for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }
     await expect(page.locator('#machine')).toHaveClass(/is-landscape-mobile/)
     await expect(page.locator('#fullscreen-switch')).toBeFocused()
     await expect(page.locator('#fullscreen-switch')).toHaveAttribute('aria-checked', 'false')
+    expect(errors).toEqual([])
+  })
+}
+
+for (const viewport of [{ width: 600, height: 280 }, { width: 640, height: 280 }]) {
+  test(`short 21:9 landscape keeps all hardware tiers separated at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
+    const errors = []
+    page.on('pageerror', error => errors.push(error.message))
+    await boot(page, viewport)
+    await expectLandscapeTiersSeparated(page, viewport)
+
+    const physicalKeys = await page.locator('#nav-keys .key, #action-keys .key').evaluateAll(keys => keys.map(key => {
+      const rect = key.getBoundingClientRect()
+      const owner = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+      return { top: rect.top, bottom: rect.bottom, height: rect.height, hit: owner === key || key.contains(owner) }
+    }))
+    for (const key of physicalKeys) {
+      expect(key.hit).toBe(true)
+      expect(key.height).toBeGreaterThanOrEqual(43.9)
+      expect(key.top).toBeGreaterThanOrEqual(0)
+      expect(key.bottom).toBeLessThanOrEqual(viewport.height + 1)
+    }
+
+    const screenshot = testInfo.outputPath(`short-landscape-${viewport.width}x${viewport.height}.png`)
+    await page.screenshot({ path: screenshot })
+    await testInfo.attach(`short-landscape-${viewport.width}x${viewport.height}`, { path: screenshot, contentType: 'image/png' })
     expect(errors).toEqual([])
   })
 }
