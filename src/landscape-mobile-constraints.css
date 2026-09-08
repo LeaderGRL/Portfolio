@@ -6,12 +6,13 @@
    reintroduce bars or overlapping touch targets.
    ========================================================================== */
 
-/* Safe-area compensation is published in design pixels by landscape-mobile.js.
-   Move the complete control rail without changing the photographic chassis or
-   CRT registration. */
+/* Safe-area and cover-crop compensation are published in design pixels by
+   landscape-mobile.js. Move the complete control rail without changing the
+   photographic chassis or CRT registration. */
 .is-landscape-mobile .panel--left,
 .is-landscape-mobile .panel--right{
   left:calc(var(--landscape-controls-left) + var(--landscape-controls-shift-x,0px));
+  transform:translateY(var(--landscape-controls-shift-y,0px));
 }
 
 /* Once the viewport becomes short enough for the 44px minimum touch target to
