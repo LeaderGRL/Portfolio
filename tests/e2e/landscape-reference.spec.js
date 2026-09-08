@@ -14,10 +14,11 @@ async function bootLandscape(page, viewport) {
 }
 
 for (const viewport of [
-  { width: 915, height: 412 },
-  { width: 844, height: 390 },
-  { width: 800, height: 360 },
-  { width: 667, height: 375 },
+  { width: 915, height: 412, minGap: 10 },
+  { width: 844, height: 390, minGap: 10 },
+  { width: 800, height: 360, minGap: 10 },
+  { width: 667, height: 375, minGap: 10 },
+  { width: 915, height: 300, minGap: 5 },
 ]) {
   test(`landscape chassis is full bleed and airy at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
     await bootLandscape(page, viewport)
@@ -37,6 +38,7 @@ for (const viewport of [
         machine,
         gapX: parseFloat(style.getPropertyValue('--landscape-gap-x')) || 0,
         gapY: parseFloat(style.getPropertyValue('--landscape-gap-y')) || 0,
+        navFirstTop: Math.min(...navFaces.map(box => box.top)),
         navLastBottom: Math.max(...navFaces.map(box => box.bottom)),
         actionFirstTop: Math.min(...actionFaces.map(box => box.top)),
         actionLastBottom: Math.max(...actionFaces.map(box => box.bottom)),
@@ -60,9 +62,10 @@ for (const viewport of [
       expect(height).toBeLessThan(34)
     }
 
-    expect(geometry.actionFirstTop - geometry.navLastBottom).toBeGreaterThan(10)
-    expect(geometry.controls.top - geometry.actionLastBottom).toBeGreaterThan(10)
-    expect(geometry.power.top - geometry.controls.bottom).toBeGreaterThan(10)
+    expect(geometry.navFirstTop).toBeGreaterThanOrEqual(-1)
+    expect(geometry.actionFirstTop - geometry.navLastBottom).toBeGreaterThan(viewport.minGap)
+    expect(geometry.controls.top - geometry.actionLastBottom).toBeGreaterThan(viewport.minGap)
+    expect(geometry.power.top - geometry.controls.bottom).toBeGreaterThan(viewport.minGap)
     expect(geometry.power.bottom).toBeLessThanOrEqual(viewport.height + 1)
 
     const screenshot = testInfo.outputPath(`landscape-reference-${viewport.width}x${viewport.height}.png`)
