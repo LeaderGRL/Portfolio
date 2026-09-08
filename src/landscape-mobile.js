@@ -234,6 +234,7 @@ export function installLandscapeMobileLayout(app) {
       '--landscape-center-x',
       '--landscape-center-y',
       '--landscape-controls-shift-x',
+      '--landscape-controls-shift-y',
       '--landscape-edge-top',
       '--landscape-edge-bottom',
       '--landscape-edge-left',
@@ -270,10 +271,16 @@ export function installLandscapeMobileLayout(app) {
     const [left, top, right, bottom] = layout.aperture
 
     const horizontalCrop = Math.max(0, (renderedWidth - viewportWidth) * 0.5)
+    const verticalCrop = Math.max(0, (renderedHeight - viewportHeight) * 0.5)
     const authoredRightMargin = layout.width * (1 - (CONTROL_RIGHT_EDGE[layout.id] || 0.95)) * fit
-    const visibleRightMargin = Math.max(0, authoredRightMargin - horizontalCrop)
+    // Keep this margin signed. A negative value means cover-fit cropping has
+    // already pushed the authored control edge beyond the visible viewport.
+    const visibleRightMargin = authoredRightMargin - horizontalCrop
     const requiredRightMargin = safe.right + CONTROL_SAFE_MARGIN
-    const controlsShift = Math.max(0, requiredRightMargin - visibleRightMargin) / fit
+    const controlsShiftX = Math.max(0, requiredRightMargin - visibleRightMargin) / fit
+    // Vertical cover cropping changes the visible origin of the authored
+    // chassis. Move only the interactive rail back into that visible slice.
+    const controlsShiftY = verticalCrop / fit
 
     machine.classList.remove('is-compact')
     machine.classList.add('is-landscape-mobile')
@@ -296,7 +303,8 @@ export function installLandscapeMobileLayout(app) {
     root.setProperty('--landscape-render-h', `${renderedHeight}px`)
     root.setProperty('--landscape-center-x', `${viewportWidth * 0.5}px`)
     root.setProperty('--landscape-center-y', `${viewportHeight * 0.5}px`)
-    root.setProperty('--landscape-controls-shift-x', `${-controlsShift}px`)
+    root.setProperty('--landscape-controls-shift-x', `${-controlsShiftX}px`)
+    root.setProperty('--landscape-controls-shift-y', `${controlsShiftY}px`)
     root.setProperty('--landscape-gap-x', '0px')
     root.setProperty('--landscape-gap-y', '0px')
     root.setProperty('--landscape-edge-top', layout.edges.top)
