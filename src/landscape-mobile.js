@@ -235,12 +235,15 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     screenRight + screenGap,
     safe.left + CONTROL_DECK.sideMargin,
   )
-  const minimumWidth = clamp(viewportWidth * 0.255, 176, 266)
-  const railLeft = Math.max(
-    safe.left + CONTROL_DECK.sideMargin,
-    Math.min(preferredLeft, railRight - minimumWidth),
-  )
-  const railWidth = Math.max(1, railRight - railLeft)
+
+  /* Do not move the rail back across the CRT merely to satisfy a minimum
+     width. Near-square viewports are better served by the existing compact
+     layout than by an authored landscape chassis with overlapping controls. */
+  const narrowViewport = viewportWidth <= 640
+  const minimumWidth = narrowViewport ? 168 : clamp(viewportWidth * 0.255, 176, 266)
+  const railWidth = railRight - preferredLeft
+  if (railWidth < minimumWidth) return null
+  const railLeft = preferredLeft
 
   // Interpolate from a compact 280px-tall phone to the approved Pixel 7
   // proportions. The 44px targets never shrink; only whitespace compresses.
@@ -261,7 +264,14 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     + controlsPowerGap
     + powerHeight
 
-  const minimumTop = safe.top + 6
+  /* The control stack has a real physical minimum because its touch targets
+     stay 44px high. If that stack plus safe-area padding cannot fit, forcing
+     landscape only clips POWER or navigation; fall back before mutating UI. */
+  const topMargin = 6
+  const requiredHeight = totalHeight + topMargin + CONTROL_DECK.bottomMargin
+  if (requiredHeight > safe.height) return null
+
+  const minimumTop = safe.top + topMargin
   const idealTop = viewportHeight * CONTROL_DECK.topRatio
   const maximumTop = viewportHeight - safe.bottom - CONTROL_DECK.bottomMargin - totalHeight
   const navTop = Math.max(minimumTop, Math.min(idealTop, maximumTop))
@@ -402,6 +412,7 @@ export function installLandscapeMobileLayout(app) {
       renderedWidth,
       renderedHeight,
     )
+    if (!deck) return false
 
     machine.classList.remove('is-compact')
     machine.classList.add('is-landscape-mobile')
@@ -465,6 +476,7 @@ export function installLandscapeMobileLayout(app) {
     layer.hidden = false
     activeLayout = layout.id
     fitLandscapeRaster(app)
+    return true
   }
 
   app._fit = () => {
@@ -479,7 +491,10 @@ export function installLandscapeMobileLayout(app) {
       return
     }
 
-    applyLandscape(width, height, safe)
+    if (!applyLandscape(width, height, safe)) {
+      deactivateLandscape()
+      originalFit()
+    }
   }
 
   app._fit()
