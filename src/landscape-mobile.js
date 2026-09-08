@@ -1,49 +1,13 @@
 import frame3x2 from '../assets/src/chassis-frame-landscape-3x2.webp?inline'
 import frame16x9 from '../assets/src/chassis-frame-landscape-16x9.webp?inline'
 import frame21x9 from '../assets/src/chassis-frame-landscape-21x9.webp?inline'
+import { ASSET_META } from './assets.js'
 import { SRC_H, SRC_W, clamp } from './core.js'
 
-const LANDSCAPE_LAYOUTS = [
-  {
-    id: '3x2',
-    width: 1536,
-    height: 1024,
-    aperture: [0.149740, 0.196289, 0.590495, 0.648438],
-    edges: {
-      top: 'linear-gradient(90deg,#fef6f0 0%,#f0e5d6 25%,#e3d5c5 50%,#d9ccbc 75%,#d0c5b4 100%)',
-      bottom: 'linear-gradient(90deg,#d5c7b7 0%,#d5c8b5 25%,#d0c3b3 50%,#cec0b0 75%,#c9bcac 100%)',
-      left: 'linear-gradient(180deg,#fef6f0 0%,#efe4d5 25%,#e8ddcc 50%,#e1d4c4 75%,#d5c7b7 100%)',
-      right: 'linear-gradient(180deg,#d0c5b4 0%,#d1c6b5 25%,#d1c6b5 50%,#ccc3b3 75%,#c9bcac 100%)',
-    },
-    src: frame3x2,
-  },
-  {
-    id: '16x9',
-    width: 1672,
-    height: 941,
-    aperture: [0.153110, 0.228480, 0.566388, 0.651435],
-    edges: {
-      top: 'linear-gradient(90deg,#fcf4ee 0%,#ede0ce 25%,#e1d2be 50%,#d6c7b3 75%,#cebfab 100%)',
-      bottom: 'linear-gradient(90deg,#d9cab6 0%,#dacbb7 25%,#d6c7b3 50%,#d3c4b0 75%,#cdbfac 100%)',
-      left: 'linear-gradient(180deg,#fcf4ee 0%,#f1e3d3 25%,#ecdac9 50%,#e3d4c0 75%,#d9cab6 100%)',
-      right: 'linear-gradient(180deg,#cebfab 0%,#d0c1ad 25%,#d3c4b0 50%,#d0c1ad 75%,#cdbfac 100%)',
-    },
-    src: frame16x9,
-  },
-  {
-    id: '21x9',
-    width: 1916,
-    height: 821,
-    aperture: [0.140397, 0.200974, 0.536013, 0.685749],
-    edges: {
-      top: 'linear-gradient(90deg,#fbf3ec 0%,#f7ecdb 25%,#e4dac9 50%,#dacdbd 75%,#cec0b0 100%)',
-      bottom: 'linear-gradient(90deg,#ded1c1 0%,#dccebe 25%,#d5c7b7 50%,#cec3b3 75%,#cabdab 100%)',
-      left: 'linear-gradient(180deg,#fbf3ec 0%,#efe4d5 25%,#eadfd1 50%,#e6dbca 75%,#ded1c1 100%)',
-      right: 'linear-gradient(180deg,#cec0b0 0%,#cdc2b1 25%,#cdc2b1 50%,#ccc1b0 75%,#cabdab 100%)',
-    },
-    src: frame21x9,
-  },
-]
+// The build measures each supplied frame, including its alpha and edge colours.
+// A new chassis can never keep the previous artwork's screen coordinates.
+const LANDSCAPE_LAYOUTS = Object.entries({ '3x2': frame3x2, '16x9': frame16x9, '21x9': frame21x9 })
+  .map(([id, src]) => ({ id, src, ...ASSET_META.landscape_chassis[id] }))
 
 const MOBILE_MAX_WIDTH = 1400
 const MOBILE_MAX_HEIGHT = 600
@@ -228,7 +192,6 @@ function fitLandscapeRaster(app) {
 
   app.raster.setViewport(layout)
   app.crt.resize(layout.pixelWidth, layout.pixelHeight, 1)
-  app.documentRuntime?.setViewport?.(layout)
   app.rasterRect = rect
   app.dirty = true
 
@@ -241,6 +204,9 @@ function fitLandscapeRaster(app) {
   tube.style.setProperty('--landscape-reader-font', `${(10 * layout.textScale).toFixed(3)}px`)
   tube.style.setProperty('--landscape-reader-title', `${(18 * layout.textScale).toFixed(3)}px`)
   tube.style.setProperty('--landscape-reader-heading', `${(13 * layout.textScale).toFixed(3)}px`)
+  // Restore reading progress after the semantic reader has its final font
+  // metrics, including when returning from fullscreen or rotating the phone.
+  app.documentRuntime?.setViewport?.(layout)
 }
 
 export function installLandscapeMobileLayout(app) {

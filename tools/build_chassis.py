@@ -12,6 +12,10 @@ SOURCE = ROOT / "assets" / "src" / "chassis-moulding-desktop.png"
 FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-desktop.png"
 MOBILE_SOURCE = ROOT / "assets" / "src" / "chassis-moulding-mobile.png"
 MOBILE_FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-mobile.png"
+LANDSCAPE_SOURCES = {
+    variant: ROOT / "assets" / "src" / f"chassis-frame-landscape-{variant}.webp"
+    for variant in ("3x2", "16x9", "21x9")
+}
 EXPORT = ROOT / "assets" / "chassis"
 BUILD = ROOT / "assets" / "build"
 
@@ -210,6 +214,35 @@ def main():
         "fill_sample_depth": MOBILE_FILL_SAMPLE_DEPTH,
         "fill_extent": MOBILE_FILL_EXTENT,
     }
+    # The user-supplied landscape WebPs carry the exact alpha of the three
+    # September 8 PNGs. Measure the files the browser actually displays; never
+    # reuse coordinates or material colours from an earlier chassis revision.
+    metadata["landscape_chassis"] = {}
+    for variant, path in LANDSCAPE_SOURCES.items():
+        frame = Image.open(path).convert("RGBA")
+        rgba = np.asarray(frame)
+        edge_samples = {
+            "top": rgba[:4, :, :3].mean(axis=0),
+            "bottom": rgba[-4:, :, :3].mean(axis=0),
+            "left": rgba[:, :4, :3].mean(axis=1),
+            "right": rgba[:, -4:, :3].mean(axis=1),
+        }
+        edges = {}
+        for edge, samples in edge_samples.items():
+            stops = []
+            for fraction in (0, .25, .5, .75, 1):
+                index = round(fraction * (len(samples) - 1))
+                rgb = np.rint(samples[max(0, index - 4):index + 5].mean(axis=0))
+                colour = "#" + "".join(f"{int(channel):02x}" for channel in rgb)
+                stops.append(f"{colour} {fraction * 100:g}%")
+            angle = "90deg" if edge in ("top", "bottom") else "180deg"
+            edges[edge] = f"linear-gradient({angle},{','.join(stops)})"
+        metadata["landscape_chassis"][variant] = {
+            "width": frame.width,
+            "height": frame.height,
+            "aperture": aperture_from_mask(Image.fromarray(255 - rgba[:, :, 3])),
+            "edges": edges,
+        }
     metadata_tmp = metadata_path.with_name(metadata_path.name + ".tmp")
     metadata_tmp.write_text(json.dumps(metadata, indent=1), encoding="utf-8")
     replace_with_retry(metadata_tmp, metadata_path)
