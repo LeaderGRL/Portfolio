@@ -383,10 +383,33 @@ body.is-landscape-mobile-stage #stage::after{
   .is-landscape-mobile .power::before{ font-size:17px; }
 }
 
-/* Browser chrome can leave an older phone only 280–320px of height. Raise
-   the navigation tier while retaining the same independent 44px targets. */
+/* Browser chrome can leave an older phone only 280–320px of height. On these
+   short canvases the 44px touch target, not the artwork percentage, determines
+   the vertical rhythm. Derive each tier from the previous one so increasing
+   --landscape-key-h can never make navigation, actions or controls overlap. */
 @media (max-height:340px){
-  .machine.is-landscape-mobile{ --landscape-nav-top:8%; }
+  .machine.is-landscape-mobile{
+    --landscape-nav-top:8%;
+    --landscape-short-gap:calc(6px / var(--fit));
+    --landscape-action-top:calc(
+      var(--landscape-nav-top)
+      + var(--landscape-key-h)
+      + var(--landscape-key-h)
+      + var(--landscape-key-h)
+      + 36px
+      + var(--landscape-short-gap)
+    );
+    --landscape-controls-top:calc(
+      var(--landscape-action-top)
+      + var(--landscape-key-h)
+      + var(--landscape-short-gap)
+    );
+    --landscape-power-top:calc(
+      var(--landscape-controls-top)
+      + 72px
+      + var(--landscape-short-gap)
+    );
+  }
   .is-landscape-mobile .key__legend{
     padding-left:34px;
     padding-right:8px;
