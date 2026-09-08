@@ -14,7 +14,7 @@ async function bootLandscape(page, viewport) {
 }
 
 for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }]) {
-  test(`landscape chassis is full bleed and airy at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+  test(`landscape chassis is full bleed and airy at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
     await bootLandscape(page, viewport)
 
     const geometry = await page.evaluate(() => {
@@ -59,5 +59,12 @@ for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }
     expect(geometry.controls.top - geometry.actionLastBottom).toBeGreaterThan(18)
     expect(geometry.power.top - geometry.controls.bottom).toBeGreaterThan(18)
     expect(geometry.power.bottom).toBeLessThanOrEqual(viewport.height + 1)
+
+    const screenshot = testInfo.outputPath(`landscape-reference-${viewport.width}x${viewport.height}.png`)
+    await page.screenshot({ path: screenshot })
+    await testInfo.attach(`landscape-reference-${viewport.width}x${viewport.height}`, {
+      path: screenshot,
+      contentType: 'image/png',
+    })
   })
 }
