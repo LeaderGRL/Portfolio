@@ -42,7 +42,8 @@ for (const viewport of [
       const targets = boxes('#nav-keys .key, #action-keys .key')
       const navIcons = boxes('#nav-keys .key__icon')
       const actionIcons = boxes('#action-keys .key__icon')
-      const actionLabels = [...document.querySelectorAll('#action-keys .key')].map(node => node.textContent.trim())
+      const actionLabels = [...document.querySelectorAll('#action-keys .key__legend')]
+        .map(node => node.getAttribute('data-landscape-label'))
       const style = getComputedStyle(document.documentElement)
 
       const rowTop = row => Math.min(navFaces[row * 2].top, navFaces[row * 2 + 1].top)
@@ -75,7 +76,6 @@ for (const viewport of [
       }
     })
 
-    // The chassis is material, not a card: it always covers the whole viewport.
     expect(geometry.machine.left).toBeLessThanOrEqual(0.5)
     expect(geometry.machine.top).toBeLessThanOrEqual(0.5)
     expect(geometry.machine.right).toBeGreaterThanOrEqual(viewport.width - 0.5)
@@ -83,24 +83,18 @@ for (const viewport of [
     expect(geometry.gapX).toBe(0)
     expect(geometry.gapY).toBe(0)
 
-    // The approved reference places the right deck around x=68%..96.5%. Keep
-    // it centred in that zone instead of drifting against the right edge.
     expect(geometry.rail.left / viewport.width).toBeGreaterThan(0.64)
     expect(geometry.rail.left / viewport.width).toBeLessThan(0.73)
     expect(geometry.rail.right / viewport.width).toBeGreaterThan(0.92)
     expect(geometry.rail.right / viewport.width).toBeLessThanOrEqual(0.985)
     expect(geometry.rail.left - geometry.screen.right).toBeGreaterThanOrEqual(4)
 
-    // Invisible hit rows stay finger-sized while the moulded visual faces are
-    // intentionally smaller and lighter, matching the supplied target image.
     for (const height of geometry.targetHeights) expect(height).toBeGreaterThanOrEqual(43.9)
     for (const height of geometry.faceHeights) {
       expect(height).toBeGreaterThanOrEqual(23)
       expect(height).toBeLessThanOrEqual(31)
     }
 
-    // HOME→RESUME→ARTICLES is one compact group. The gap after ARTICLES must
-    // be visibly larger, then ENTER/BACK and display controls separate again.
     const largestNavGap = Math.max(...geometry.navRowGaps)
     const navActionGap = geometry.actionFirstTop - geometry.navLastBottom
     const actionControlsGap = geometry.controls.top - geometry.actionLastBottom
@@ -113,8 +107,6 @@ for (const viewport of [
     expect(geometry.navFirstTop).toBeGreaterThanOrEqual(-1)
     expect(geometry.power.bottom).toBeLessThanOrEqual(viewport.height + 1)
 
-    // ENTER/BACK are now first-class hardware keys: same icon language, same
-    // icon scale and clean labels instead of a tiny text arrow on one side.
     expect(geometry.actionLabels).toEqual(['ENTER', 'BACK'])
     expect(geometry.actionIconSizes).toHaveLength(2)
     for (const [width, height] of geometry.actionIconSizes) {
