@@ -20,13 +20,15 @@ body.is-landscape-mobile-stage{ background:#e9d8c2; }
 body.is-landscape-mobile-stage #stage{ background:transparent; }
 
 .machine.is-landscape-mobile{
-  --landscape-controls-left:64.5%;
-  --landscape-controls-width:520px;
-  --landscape-nav-top:11.5%;
-  --landscape-key-h:112px;
-  --landscape-action-top:57%;
-  --landscape-controls-top:74%;
-  --landscape-power-top:86%;
+  --landscape-controls-left:69%;
+  --landscape-controls-width:27%;
+  --landscape-nav-top:17%;
+  --landscape-key-h:max(112px, calc(44px / var(--fit)));
+  --landscape-key-inset:20px;
+  --landscape-action-top:62%;
+  --landscape-controls-top:77%;
+  --landscape-power-top:90%;
+  --landscape-key-surface:#dcd2c1;
   left:var(--landscape-center-x,50%);
   top:var(--landscape-center-y,50%);
   width:var(--landscape-design-w);
@@ -39,27 +41,15 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   box-shadow:none;
 }
 .machine.is-landscape-mobile[data-landscape-variant="3x2"]{
-  --landscape-controls-left:64.5%;
-  --landscape-controls-width:480px;
-  --landscape-nav-top:12%;
-  --landscape-key-h:100px;
-  --landscape-action-top:57%;
-  --landscape-controls-top:74%;
-  --landscape-power-top:86%;
-}
-.machine.is-landscape-mobile[data-landscape-variant="16x9"]{
-  --landscape-controls-left:64.5%;
-  --landscape-controls-width:520px;
+  --landscape-key-h:max(100px, calc(44px / var(--fit)));
+  --landscape-key-inset:19px;
 }
 .machine.is-landscape-mobile[data-landscape-variant="21x9"]{
-  --landscape-controls-left:62.5%;
-  --landscape-controls-width:540px;
-  --landscape-nav-top:11%;
+  --landscape-controls-left:64%;
+  --landscape-controls-width:31%;
   /* 94 design pixels retain a real >=44px target after the 915x412 fit. */
-  --landscape-key-h:94px;
-  --landscape-action-top:55%;
-  --landscape-controls-top:72%;
-  --landscape-power-top:85%;
+  --landscape-key-h:max(94px, calc(44px / var(--fit)));
+  --landscape-key-inset:10px;
 }
 .machine.is-landscape-mobile::after{ display:none; }
 .is-landscape-mobile .machine__background--desktop,
@@ -141,24 +131,30 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
 }
 .is-landscape-mobile .key,
 .is-landscape-mobile .key--sm{
+  --key-surface:var(--landscape-key-surface);
   --key-gap:1.5px;
   width:100%;
   height:var(--landscape-key-h);
   min-width:0;
   min-height:0;
   border-radius:10px;
+  background:none;
+  box-shadow:none;
+}
+/* The complete button remains a generous touch target. Only its moulded
+   face is slimmer, leaving the material and air between the reference keys. */
+.is-landscape-mobile .key::before{
+  inset:var(--landscape-key-inset) 0;
   box-shadow:
     -3px -3px 7px color-mix(in oklab,var(--key-light-glow) 72%,transparent),
     -1px -1px 2px color-mix(in oklab,var(--key-shadow-near) 62%,transparent),
     1px 1px 0 color-mix(in oklab,var(--key-cavity-rim) 70%,transparent),
-    4px 5px 10px color-mix(in oklab,var(--key-shadow-glow) 72%,transparent);
-}
-.is-landscape-mobile .key::before{
-  box-shadow:
+    4px 5px 10px color-mix(in oklab,var(--key-shadow-glow) 72%,transparent),
     inset 1px 1px 2px color-mix(in oklab,var(--key-cavity-deep) 64%,black 36%),
     inset 0 0 3px color-mix(in oklab,var(--key-cavity-deep) 35%,transparent);
 }
 .is-landscape-mobile .key__button{
+  inset:calc(var(--landscape-key-inset) + var(--key-gap)) var(--key-gap);
   border-radius:8px;
   transform:translateY(-1px);
   box-shadow:1px 1.5px 3px color-mix(in oklab,var(--key-shadow-near) 58%,transparent);
@@ -167,7 +163,7 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
 .is-landscape-mobile .key__legend{
   padding-left:45px;
   padding-right:24px;
-  font-size:24px;
+  font-size:max(21px, calc(10px / var(--fit)));
   font-weight:650;
   letter-spacing:.075em;
 }
@@ -247,7 +243,7 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   background:rgba(109,94,68,.24);
   box-shadow:0 1px 0 rgba(255,255,255,.55);
 }
-.is-landscape-mobile .panel--right .stack::before{ top:-36px; }
+.is-landscape-mobile .panel--right .stack::before{ top:-15px; }
 
 .is-landscape-mobile .panel--right .controls-row{
   top:var(--landscape-controls-top);
@@ -257,7 +253,7 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   column-gap:22px;
   align-items:start;
 }
-.is-landscape-mobile .panel--right .controls-row::before{ top:-31px; }
+.is-landscape-mobile .panel--right .controls-row::before{ top:-18px; }
 .is-landscape-mobile .control{
   width:100%;
   min-width:0;
@@ -270,6 +266,8 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   letter-spacing:.075em;
   text-indent:0;
   color:var(--ink-hard);
+  font-family:var(--font-panel);
+  white-space:nowrap;
 }
 .is-landscape-mobile .caption::after{ display:none; }
 .is-landscape-mobile .control:first-child .caption{ font-size:0; }
@@ -294,9 +292,13 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   height:82px;
   display:block;
 }
-.is-landscape-mobile .panel--right .bottom-row::before{ top:-24px; }
+.is-landscape-mobile .panel--right .bottom-row::before{
+  top:16px;
+  background:linear-gradient(90deg,rgba(109,94,68,.3) 0 30%,transparent 30% 70%,rgba(109,94,68,.3) 70%);
+  box-shadow:none;
+}
 .is-landscape-mobile .grille{ display:none; }
-.is-landscape-mobile .power{
+.is-landscape-mobile .panel--right .bottom-row .power{
   width:max-content;
   margin:0 auto;
 }
@@ -310,8 +312,9 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
   font-weight:650;
   letter-spacing:.075em;
   color:var(--ink-hard);
+  font-family:var(--font-panel);
 }
-.is-landscape-mobile .rocker{ width:50px; }
+.is-landscape-mobile .rocker{ width:max(50px, calc(24px / var(--fit))); }
 .is-landscape-mobile .foot{ display:none; }
 
 /* The semantic reader mirrors the logical document scale used by the visible
@@ -374,10 +377,51 @@ body.is-landscape-mobile-stage #stage::after{
 }
 
 @media (max-height:430px){
-  .is-landscape-mobile .key__legend{ font-size:23px; }
+  .is-landscape-mobile[data-landscape-variant="21x9"] .key__legend{ font-size:23px; }
   .is-landscape-mobile .caption,
   .is-landscape-mobile .control:first-child .caption::before{ font-size:18px; }
   .is-landscape-mobile .power::before{ font-size:17px; }
+}
+
+/* Browser chrome can leave an older phone only 280–320px of height. On these
+   short canvases the 44px touch target, not the artwork percentage, determines
+   the vertical rhythm. Derive each tier from the previous one so increasing
+   --landscape-key-h can never make navigation, actions or controls overlap. */
+@media (max-height:340px){
+  .machine.is-landscape-mobile{
+    --landscape-nav-top:8%;
+    --landscape-short-gap:calc(6px / var(--fit));
+    --landscape-action-top:calc(
+      var(--landscape-nav-top)
+      + var(--landscape-key-h)
+      + var(--landscape-key-h)
+      + var(--landscape-key-h)
+      + 36px
+      + var(--landscape-short-gap)
+    );
+    --landscape-controls-top:calc(
+      var(--landscape-action-top)
+      + var(--landscape-key-h)
+      + var(--landscape-short-gap)
+    );
+    --landscape-power-top:calc(
+      var(--landscape-controls-top)
+      + 72px
+      + var(--landscape-short-gap)
+    );
+  }
+  /* Ultrawide phones consume the 44px minimum at this height. Move the whole
+     derived tier stack up slightly instead of squeezing the optical controls. */
+  .machine.is-landscape-mobile[data-landscape-variant="21x9"]{
+    --landscape-nav-top:6%;
+  }
+  .is-landscape-mobile .key__legend{
+    padding-left:34px;
+    padding-right:8px;
+    font-size:max(21px, calc(9px / var(--fit)));
+    letter-spacing:.035em;
+  }
+  .is-landscape-mobile .key__icon{ left:10px; width:20px; height:20px; }
 }
 
 @media (prefers-reduced-motion:reduce){

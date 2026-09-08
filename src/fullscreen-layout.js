@@ -8,7 +8,10 @@ export function fullscreenLayout(width, height, dpr = 1, controlsHeight = 0, max
   const limit = Math.max(1, Math.min(4096, maxDimension))
   const density = Math.min(Math.max(1, dpr), 2, limit / Math.max(width, height), Math.sqrt(8388608 / (width * height)))
   const textScale = clamp(width / 720, 1.5, 2)
-  const bottom = Math.min(height * .35, Math.max(44, controlsHeight + 12))
+  // Wrapped touch controls and safe-area padding can occupy more than 35% of
+  // a short landscape viewport. Reserve their actual height before fitting
+  // either the terminal or documents, so navigation never covers content.
+  const bottom = Math.min(Math.max(0, height - 1), Math.max(44, controlsHeight + 12))
   const scale = Math.min(width / SRC_W, (height - bottom) / SRC_H)
   const terminal = {
     x: (width - SRC_W * scale) / 2,
