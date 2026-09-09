@@ -45,6 +45,9 @@ for (const [viewport, expectedVariant] of [
       const targets = boxes('#nav-keys .key, #action-keys .key')
       const navIcons = boxes('#nav-keys .key__icon')
       const actionIcons = boxes('#action-keys .key__icon')
+      const machineElement = document.querySelector('#machine')
+      const machineScale = machine.width / machineElement.offsetWidth
+      const navLabelFontSize = parseFloat(getComputedStyle(document.querySelector('#nav-keys .key__legend')).fontSize) * machineScale
       const actionLabels = [...document.querySelectorAll('#action-keys .key__legend')]
         .map(node => node.getAttribute('data-landscape-label'))
       const style = getComputedStyle(document.documentElement)
@@ -95,6 +98,7 @@ for (const [viewport, expectedVariant] of [
         navIconSizes: navIcons.map(box => [box.width, box.height]),
         actionIconSizes: actionIcons.map(box => [box.width, box.height]),
         actionLabels,
+        navLabelFontSize,
       }
     })
 
@@ -153,6 +157,11 @@ for (const [viewport, expectedVariant] of [
     expect(geometry.power.bottom).toBeLessThanOrEqual(viewport.height + 1)
 
     expect(geometry.actionLabels).toEqual(['ENTER', 'BACK'])
+    if (viewport.width === 667 && viewport.height === 375) {
+      // Regression guard for the compact 16:9 layout: labels used to jump from
+      // 7.25px to 10px immediately above the old 640px breakpoint.
+      expect(geometry.navLabelFontSize).toBeLessThanOrEqual(8.25)
+    }
     expect(geometry.actionIconSizes).toHaveLength(2)
     for (const [width, height] of geometry.actionIconSizes) {
       expect(width).toBeGreaterThanOrEqual(12)

@@ -292,6 +292,13 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   const railWidth = Math.min(Math.max(desiredWidth, minimumWidth), maximumWidth)
   const railLeft = screenRight + (bayWidth - railWidth) * 0.5
 
+  // Scale typography from the physical width that is actually available to
+  // the control deck. A viewport breakpoint made 641px jump straight from a
+  // 7.25px label to 10px, which was visibly oversized on 667px-wide phones.
+  // Keeping the density tied to the fitted rail makes the transition smooth
+  // across every authored chassis ratio.
+  const deckDensity = clamp((railWidth - 148) / 118, 0, 1)
+
   // Interpolate from a compact 280px-tall phone to the approved Pixel 7
   // proportions. The 44px targets never shrink; only whitespace compresses.
   const rhythm = clamp((viewportHeight - 280) / 132, 0, 1)
@@ -333,7 +340,8 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
 
   const columnGap = narrowViewport ? 8 : mix(14, 18, clamp((viewportWidth - 667) / 248, 0, 1))
   const separatorThickness = 1.25
-  const captionSize = narrowViewport ? 8 : mix(9.5, 11, largeRhythm)
+  const compactCaptionSize = mix(8, 9.5, deckDensity)
+  const captionSize = mix(compactCaptionSize, 11, largeRhythm * deckDensity)
   const powerLabelOffset = captionSize * 1.35
   const powerRuleFreeSpace = controlsPowerGap - powerLabelOffset
   const powerRuleOffset = -(controlsPowerGap + powerLabelOffset) * 0.5
@@ -360,10 +368,10 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     powerSeparatorOffset: sizeToDesign(powerRuleOffset),
     powerSeparatorOpacity: powerRuleFreeSpace >= 4 ? 1 : 0,
     separatorThickness: sizeToDesign(separatorThickness),
-    // Firefox's wider Space Mono metrics need a little more breathing room in
-    // the 76px key columns used by 568px-wide phones. Keep the adjustment
-    // scoped to the narrow deck so larger landscape compositions are unchanged.
-    fontSize: sizeToDesign(narrowViewport ? 7.25 : mix(10, 12, largeRhythm)),
+    // Typography follows the fitted deck width instead of a viewport switch.
+    // This keeps Firefox-safe narrow labels while avoiding an abrupt size jump
+    // on common 667px and 800px landscape phones.
+    fontSize: sizeToDesign(mix(mix(7.25, 10, deckDensity), 12, largeRhythm * deckDensity)),
     captionSize: sizeToDesign(captionSize),
     iconSize: sizeToDesign(narrowViewport ? 12.25 : mix(14, 17, largeRhythm)),
     iconLeft: sizeToDesign(narrowViewport ? 6 : mix(10, 13, largeRhythm)),
