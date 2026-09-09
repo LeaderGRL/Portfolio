@@ -90,7 +90,10 @@ right, then actions, optical controls and power.
 
 The closest photographic aspect is selected without forcing the 16:9 plate
 onto panoramic phones. The dedicated 3:1 plate handles 915 × 300-class browser
-chrome cases. Every plate is fitted uniformly, never stretched, and may expand
+chrome cases. Its rounded exterior corners are allowed to be transparent: the
+asset pipeline identifies the largest enclosed transparent component as the CRT
+opening, so edge transparency can never be mistaken for the glass aperture.
+Every plate is fitted uniformly, never stretched, and may expand
 toward a cover fit only while the complete measured CRT moulding and cream
 screen surround remain inside the viewport. Any crop is therefore limited to
 expendable exterior cream material. A remaining strip is continued from the
@@ -108,10 +111,17 @@ landscape geometry and `--landscape-key-surface` (`#dcd2c1`), feeding the
 existing shared key's cavity, rim, face, legend and LED. Keys retain 44 CSS px
 touch areas with slimmer inset faces. The green-guide composition in
 `goal.png` establishes a nominal 28.5% viewport-wide control deck, but its
-horizontal position is not a fixed percentage: the deck is centred between the
-measured outer CRT recess and the visible safe right edge of the chassis. Both
-material gutters are therefore equal, and the deck may shrink symmetrically on
-narrow near-square landscapes rather than touching the screen surround.
+horizontal position is not a fixed percentage. Up to 21:9 the deck remains
+centred between the measured outer CRT recess and the visible safe right edge.
+Beyond 21:9, `goal2.png` establishes an intentional extra quiet band after the
+CRT and a slightly wider rail; both values interpolate continuously toward the
+3:1 composition instead of switching at one device resolution. Near-square
+landscapes can still shrink the deck rather than touching the screen surround.
+The same measured CRT surround also bounds the control deck vertically. From
+21:9 toward 3:1, the invisible key targets and tier rhythm compact continuously
+until the first visible key and POWER both remain inside the photographed cream
+bevel. The visible key faces keep their authored proportions; this is a
+panoramic geometry rule, not a 915 × 300 viewport exception.
 Navigation/action/display/power tiers keep explicit whitespace boundaries.
 Separators sit only inside free whitespace; the POWER separator is placed above
 its label and is omitted on extremely short viewports when no collision-free

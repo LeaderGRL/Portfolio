@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageFilter
+from scipy import ndimage
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "assets" / "src" / "chassis-moulding-desktop.png"
@@ -36,6 +37,36 @@ def aperture_from_mask(mask):
         round((xs.max() + 1) / width, 6),
         round((ys.max() + 1) / height, 6),
     ]
+
+
+def enclosed_aperture_from_alpha(rgba):
+    """Measure the largest transparent region that does not touch the plate edge.
+
+    Landscape artwork can have transparent antialiased outer corners as well as
+    the intentional CRT cutout. Measuring every transparent pixel makes those
+    corners expand the aperture to the full canvas. Connected-component
+    labelling lets the asset pipeline keep the authored glass opening while
+    ignoring exterior transparency, without any viewport-specific coordinates.
+    """
+    transparent = rgba[:, :, 3] < 128
+    labels, count = ndimage.label(transparent)
+    if count == 0:
+        raise ValueError("landscape chassis has no transparent CRT aperture")
+
+    border_labels = np.unique(np.concatenate([
+        labels[0, :],
+        labels[-1, :],
+        labels[:, 0],
+        labels[:, -1],
+    ]))
+    areas = np.bincount(labels.ravel(), minlength=count + 1)
+    areas[0] = 0
+    areas[border_labels] = 0
+    aperture_label = int(np.argmax(areas))
+    if aperture_label == 0 or areas[aperture_label] == 0:
+        raise ValueError("landscape chassis has no enclosed transparent CRT aperture")
+
+    return normalized_bounds(labels == aperture_label)
 
 
 def normalized_bounds(mask):
@@ -300,7 +331,7 @@ def main():
         metadata["landscape_chassis"][variant] = {
             "width": frame.width,
             "height": frame.height,
-            "aperture": aperture_from_mask(Image.fromarray(255 - rgba[:, :, 3])),
+            "aperture": enclosed_aperture_from_alpha(rgba),
             "moulding": moulding,
             "screen_surround_right": screen_surround_right(rgba, moulding),
             "edges": edges,

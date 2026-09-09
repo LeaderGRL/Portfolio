@@ -37,6 +37,10 @@ const EDGE_FILL_SAMPLE_DEPTH = 8
 // plate uses the moulding-safe fit and extends only its own cream material.
 const CONTROL_DECK = {
   widthRatio: 0.285,
+  panoramaWidthRatio: 0.2955,
+  panoramaStartAspect: 21 / 9,
+  panoramaEndAspect: 3,
+  panoramaScreenGapRatio: 0.044,
   materialGapRatio: 0.015,
   materialGapMin: 8,
   materialGapMax: 18,
@@ -281,9 +285,26 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   const machineRight = machineLeft + renderedWidth
   const moulding = layout.moulding || layout.aperture
   const screenSurroundRight = Math.max(layout.screen_surround_right || moulding[2], moulding[2])
+  const surroundPad = Math.max(0, (screenSurroundRight - moulding[2]) * layout.width * fit)
+  const screenSurroundTop = machineTop + moulding[1] * layout.height * fit - surroundPad
+  const screenSurroundBottom = machineTop + moulding[3] * layout.height * fit + surroundPad
   const screenRight = machineLeft + screenSurroundRight * layout.width * fit
   const bayRight = Math.min(machineRight, viewportWidth - safe.right)
-  const bayWidth = bayRight - screenRight
+  const viewportAspect = viewportWidth / viewportHeight
+  const panorama = clamp(
+    (viewportAspect - CONTROL_DECK.panoramaStartAspect)
+      / (CONTROL_DECK.panoramaEndAspect - CONTROL_DECK.panoramaStartAspect),
+    0,
+    1,
+  )
+  // The approved ultra-wide reference deliberately leaves a larger quiet
+  // material band after the CRT before the control rail begins. Interpolate
+  // that composition from the 21:9 boundary so ordinary landscape ratios keep
+  // their established centred bay, while 3:1-class screens gain the reference
+  // spacing without a viewport-specific breakpoint.
+  const screenSideGap = viewportWidth * CONTROL_DECK.panoramaScreenGapRatio * panorama
+  const bayLeft = screenRight + screenSideGap
+  const bayWidth = bayRight - bayLeft
   const materialGap = clamp(
     viewportWidth * CONTROL_DECK.materialGapRatio,
     CONTROL_DECK.materialGapMin,
@@ -297,9 +318,10 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   const minimumWidth = narrowViewport ? 148 : clamp(viewportWidth * 0.245, 170, 266)
   const maximumWidth = bayWidth - materialGap * 2
   if (maximumWidth < minimumWidth) return null
-  const desiredWidth = viewportWidth * CONTROL_DECK.widthRatio
+  const desiredWidthRatio = mix(CONTROL_DECK.widthRatio, CONTROL_DECK.panoramaWidthRatio, panorama)
+  const desiredWidth = viewportWidth * desiredWidthRatio
   const railWidth = Math.min(Math.max(desiredWidth, minimumWidth), maximumWidth)
-  const railLeft = screenRight + (bayWidth - railWidth) * 0.5
+  const railLeft = bayLeft + (bayWidth - railWidth) * 0.5
 
   // Scale typography from the physical width that is actually available to
   // the control deck. A viewport breakpoint made 641px jump straight from a
@@ -309,19 +331,23 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   const deckDensity = clamp((railWidth - 148) / 118, 0, 1)
 
   // Interpolate from a compact 280px-tall phone to the approved Pixel 7
-  // proportions. The 44px targets never shrink; only whitespace compresses.
+  // proportions. Ultra-wide browser-chrome viewports are a special physical
+  // regime: goal2 keeps the complete control stack inside the CRT recess height,
+  // so the target rows compact continuously after 21:9 instead of protruding
+  // above and below the photographed screen surround.
   const rhythm = clamp((viewportHeight - 280) / 132, 0, 1)
   const largeRhythm = clamp((viewportHeight - 412) / 188, 0, 1)
-  const keyTarget = mix(CONTROL_DECK.keyTarget, 60, largeRhythm)
+  const normalKeyTarget = mix(CONTROL_DECK.keyTarget, 60, largeRhythm)
+  const keyTarget = mix(normalKeyTarget, 38, panorama)
   const faceHeight = mix(mix(27.5, 30, rhythm), 42, largeRhythm)
   // Keep a real one-pixel gutter even on the shortest supported landscape.
   // Zero-gap rows can overlap by a fractional CSS pixel after the design-space
   // values are scaled back into viewport space on Chromium.
-  const rowGap = mix(mix(1, 2, rhythm), 5, largeRhythm)
-  const navActionGap = mix(mix(6, 18, rhythm), 24, largeRhythm)
-  const actionControlsGap = mix(mix(7, 22, rhythm), 30, largeRhythm)
-  const controlsHeight = mix(mix(34, 49, rhythm), 64, largeRhythm)
-  const powerHeight = mix(mix(30, 40, rhythm), 52, largeRhythm)
+  const rowGap = mix(mix(mix(1, 2, rhythm), 5, largeRhythm), 1, panorama)
+  const navActionGap = mix(mix(mix(6, 18, rhythm), 24, largeRhythm), 12, panorama)
+  const actionControlsGap = mix(mix(mix(7, 22, rhythm), 30, largeRhythm), 8, panorama)
+  const controlsHeight = mix(mix(mix(34, 49, rhythm), 64, largeRhythm), 34, panorama)
+  const powerHeight = mix(mix(mix(30, 40, rhythm), 52, largeRhythm), 30, panorama)
   const topMargin = 6
   const baseHeight = keyTarget * 4
     + rowGap * 2
@@ -329,7 +355,7 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     + actionControlsGap
     + controlsHeight
     + powerHeight
-  const desiredControlsPowerGap = mix(mix(18, 22, rhythm), 30, largeRhythm)
+  const desiredControlsPowerGap = mix(mix(mix(18, 22, rhythm), 30, largeRhythm), 17, panorama)
   const powerGapCapacity = safe.height - topMargin - CONTROL_DECK.bottomMargin - baseHeight
   if (powerGapCapacity < 4) return null
   const controlsPowerGap = Math.min(desiredControlsPowerGap, powerGapCapacity)
@@ -342,7 +368,12 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   if (requiredHeight > safe.height) return null
 
   const minimumTop = safe.top + topMargin
-  const idealTop = viewportHeight * CONTROL_DECK.topRatio
+  const normalIdealTop = viewportHeight * CONTROL_DECK.topRatio
+  // The same measured cream recess that protects the CRT crop also owns the
+  // ultra-wide vertical rhythm. At 3:1 this lands the first visible key face
+  // just inside the bevel, matching goal2 without a 915x300 coordinate hack.
+  const panoramaIdealTop = screenSurroundTop + clamp(viewportHeight * .01, 2, 4)
+  const idealTop = mix(normalIdealTop, panoramaIdealTop, panorama)
   const maximumTop = viewportHeight - safe.bottom - CONTROL_DECK.bottomMargin - totalHeight
   const navTop = Math.max(minimumTop, Math.min(idealTop, maximumTop))
   const navHeight = keyTarget * 3 + rowGap * 2

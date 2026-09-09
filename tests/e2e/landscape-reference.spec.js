@@ -38,6 +38,7 @@ for (const [viewport, expectedVariant] of [
 
       const machine = rect('#machine')
       const screen = rect('#screen')
+      const tube = rect('#tube')
       const rail = rect('.panel--left')
       const powerRocker = rect('#power')
       const navFaces = boxes('#nav-keys .key__button')
@@ -47,6 +48,13 @@ for (const [viewport, expectedVariant] of [
       const actionIcons = boxes('#action-keys .key__icon')
       const machineElement = document.querySelector('#machine')
       const machineScale = machine.width / machineElement.offsetWidth
+      const tubeStyle = getComputedStyle(document.querySelector('#tube'))
+      const terminal = {
+        left: tube.left + (parseFloat(tubeStyle.getPropertyValue('--landscape-terminal-x')) || 0) * machineScale,
+        top: tube.top + (parseFloat(tubeStyle.getPropertyValue('--landscape-terminal-y')) || 0) * machineScale,
+        width: (parseFloat(tubeStyle.getPropertyValue('--landscape-terminal-w')) || 0) * machineScale,
+        height: (parseFloat(tubeStyle.getPropertyValue('--landscape-terminal-h')) || 0) * machineScale,
+      }
       const navLabelFontSize = parseFloat(getComputedStyle(document.querySelector('#nav-keys .key__legend')).fontSize) * machineScale
       const actionLabels = [...document.querySelectorAll('#action-keys .key__legend')]
         .map(node => node.getAttribute('data-landscape-label'))
@@ -83,6 +91,8 @@ for (const [viewport, expectedVariant] of [
       return {
         machine,
         screen,
+        tube,
+        terminal,
         moulding,
         screenSurround,
         screenSurroundRight,
@@ -102,6 +112,8 @@ for (const [viewport, expectedVariant] of [
         powerRuleOpacity: parseFloat(powerRule.opacity) || 0,
         powerLabelTop: power.top - captionSize * 1.35,
         faceHeights: [...navFaces, ...actionFaces].map(box => box.height),
+        firstNavFaceTop: Math.min(...navFaces.map(box => box.top)),
+        lastNavFaceBottom: Math.max(...navFaces.map(box => box.bottom)),
         targetHeights: targets.map(box => box.height),
         navIconSizes: navIcons.map(box => [box.width, box.height]),
         actionIconSizes: actionIcons.map(box => [box.width, box.height]),
@@ -121,18 +133,31 @@ for (const [viewport, expectedVariant] of [
     expect(geometry.screenSurround.top).toBeGreaterThanOrEqual(3.5)
     expect(geometry.screenSurround.right).toBeLessThanOrEqual(viewport.width - 3.5)
     expect(geometry.screenSurround.bottom).toBeLessThanOrEqual(viewport.height - 3.5)
+    expect(geometry.screen.left).toBeGreaterThan(geometry.moulding.left)
+    expect(geometry.screen.top).toBeGreaterThan(geometry.moulding.top)
+    expect(geometry.screen.right).toBeLessThan(geometry.moulding.right)
+    expect(geometry.screen.bottom).toBeLessThan(geometry.moulding.bottom)
+
+    const terminalCenterX = geometry.terminal.left + geometry.terminal.width * 0.5
+    const terminalCenterY = geometry.terminal.top + geometry.terminal.height * 0.5
+    expect(Math.abs(terminalCenterX - (geometry.tube.left + geometry.tube.width * 0.5))).toBeLessThan(1)
+    expect(Math.abs(terminalCenterY - (geometry.tube.top + geometry.tube.height * 0.5))).toBeLessThan(1)
 
     const visibleMachineRight = Math.min(viewport.width, geometry.machine.right)
     const leftMaterialGap = geometry.rail.left - geometry.screenSurroundRight
     const rightMaterialGap = visibleMachineRight - geometry.rail.right
     expect(leftMaterialGap).toBeGreaterThanOrEqual(7.5)
     expect(rightMaterialGap).toBeGreaterThanOrEqual(7.5)
-    expect(Math.abs(leftMaterialGap - rightMaterialGap)).toBeLessThan(1.5)
-    expect(geometry.rail.width / viewport.width).toBeLessThanOrEqual(0.286)
+    const aspect = viewport.width / viewport.height
+    const panorama = Math.max(0, Math.min(1, (aspect - 21 / 9) / (3 - 21 / 9)))
+    const expectedScreenSideBias = viewport.width * 0.044 * panorama
+    expect(Math.abs((leftMaterialGap - rightMaterialGap) - expectedScreenSideBias)).toBeLessThan(1.5)
+    expect(geometry.rail.width / viewport.width).toBeLessThanOrEqual(0.286 + 0.0105 * panorama)
     expect(geometry.rail.left).toBeGreaterThanOrEqual(Math.max(0, geometry.machine.left) - 0.5)
     expect(geometry.rail.right).toBeLessThanOrEqual(Math.min(viewport.width, geometry.machine.right) + 0.5)
 
-    for (const height of geometry.targetHeights) expect(height).toBeGreaterThanOrEqual(43.9)
+    const minimumTargetHeight = 44 - 6 * panorama
+    for (const height of geometry.targetHeights) expect(height).toBeGreaterThanOrEqual(minimumTargetHeight - 0.1)
     const largeRhythm = Math.max(0, Math.min(1, (viewport.height - 412) / 188))
     const maximumFaceHeight = 31 + 12 * largeRhythm
     for (const height of geometry.faceHeights) {
@@ -171,6 +196,13 @@ for (const [viewport, expectedVariant] of [
 
     expect(geometry.navFirstTop).toBeGreaterThanOrEqual(-1)
     expect(geometry.power.bottom).toBeLessThanOrEqual(viewport.height + 1)
+    if (panorama > 0.9) {
+      // goal2 keeps the complete visible hardware stack vertically inside the
+      // same cream CRT surround. This guards against the former 3:1 layout,
+      // where the top keys and POWER visibly protruded beyond the bevel.
+      expect(geometry.firstNavFaceTop).toBeGreaterThanOrEqual(geometry.screenSurround.top + 5)
+      expect(geometry.powerRocker.bottom).toBeLessThanOrEqual(geometry.screenSurround.bottom)
+    }
 
     expect(geometry.actionLabels).toEqual(['ENTER', 'BACK'])
     if (viewport.width === 667 && viewport.height === 375) {
@@ -186,6 +218,11 @@ for (const [viewport, expectedVariant] of [
       expect(Math.abs(height - geometry.navIconSizes[0][1])).toBeLessThan(1)
     }
 
+    // The geometry is already final when navigation is restored, but the CRT
+    // intentionally keeps a short phosphor/degauss trail from firmware boot.
+    // Let that visual-only state settle so the reference capture represents
+    // the stable HOME screen instead of an in-between animation frame.
+    await page.waitForTimeout(2200)
     const screenshot = testInfo.outputPath(`landscape-reference-${viewport.width}x${viewport.height}.png`)
     await page.screenshot({ path: screenshot })
     await testInfo.attach(`landscape-reference-${viewport.width}x${viewport.height}`, {

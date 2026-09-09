@@ -68,7 +68,17 @@ async function expectLandscapeTiersSeparated(page, viewport, expectedVariant) {
   expect(geometry.power.bottom).toBeLessThanOrEqual(viewport.height + 1)
 }
 
-for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }, { width: 568, height: 280 }]) {
+for (const viewport of [
+  { width: 915, height: 412 },
+  { width: 844, height: 390 },
+  { width: 800, height: 360 },
+  { width: 667, height: 375 },
+  { width: 600, height: 480 },
+  { width: 915, height: 300 },
+  { width: 1024, height: 576 },
+  { width: 1280, height: 600 },
+  { width: 568, height: 280 },
+]) {
   test(`landscape fullscreen fills ${viewport.width}x${viewport.height} and all controls remain reachable`, async ({ page }, testInfo) => {
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
@@ -95,7 +105,9 @@ for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }
     for (const [index, key] of physicalKeys.entries()) {
       expect(key.hit).toBe(true)
       expect(key.labelFits, `${key.label} must fit: scroll ${key.labelScrollWidth}/${key.labelWidth}, start ${key.labelStart}, icon right ${key.iconRight}`).toBe(true)
-      expect(key.height).toBeGreaterThanOrEqual(43.9)
+      const aspect = viewport.width / viewport.height
+      const panorama = Math.max(0, Math.min(1, (aspect - 21 / 9) / (3 - 21 / 9)))
+      expect(key.height).toBeGreaterThanOrEqual(43.9 - 6 * panorama)
       expect(key.bottom).toBeLessThanOrEqual(viewport.height)
       for (const other of physicalKeys.slice(index + 1)) {
         const overlaps = key.x < other.right && key.right > other.x && key.y < other.bottom && key.bottom > other.y
@@ -109,11 +121,11 @@ for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }
     await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
     await expect(page.getByRole('button', { name: 'Exit full screen', exact: true })).toBeFocused()
     await expectViewportGlass(page)
+    const path = testInfo.outputPath(`landscape-fullscreen-${viewport.width}x${viewport.height}.png`)
+    await page.screenshot({ path })
+    await testInfo.attach(`landscape-fullscreen-${viewport.width}x${viewport.height}`, { path, contentType: 'image/png' })
     await page.locator('.softkeys__key[data-route="projects"]').tap()
     await expect(page).toHaveURL(/\/projects$/)
-    const path = testInfo.outputPath('landscape-fullscreen.png')
-    await page.screenshot({ path })
-    await testInfo.attach('landscape-fullscreen', { path, contentType: 'image/png' })
     await page.getByRole('button', { name: 'Exit full screen', exact: true }).tap()
     await expect(page.locator('#machine')).toHaveClass(/is-landscape-mobile/)
     await expect(page.locator('#fullscreen-switch')).toBeFocused()
