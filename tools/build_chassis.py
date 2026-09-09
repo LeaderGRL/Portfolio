@@ -14,7 +14,7 @@ MOBILE_SOURCE = ROOT / "assets" / "src" / "chassis-moulding-mobile.png"
 MOBILE_FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-mobile.png"
 LANDSCAPE_SOURCES = {
     variant: ROOT / "assets" / "src" / f"chassis-frame-landscape-{variant}.webp"
-    for variant in ("5x4", "4x3", "3x2", "16x10", "16x9", "20x9", "21x9")
+    for variant in ("5x4", "4x3", "3x2", "16x10", "16x9", "20x9", "21x9", "3x1")
 }
 EXPORT = ROOT / "assets" / "chassis"
 BUILD = ROOT / "assets" / "build"
@@ -55,7 +55,7 @@ def normalized_bounds(mask):
 def moulding_bounds(rgba):
     """Measure the complete black CRT moulding, excluding transparent glass.
 
-    The seven supplied landscape plates use a stable near-black moulding and a
+    The supplied landscape plates use a stable near-black moulding and a
     transparent screen aperture. Measuring the opaque low-luminance pixels
     gives layout code the outside edge it actually has to avoid; the aperture
     alone is not a sufficient collision boundary for the control deck.

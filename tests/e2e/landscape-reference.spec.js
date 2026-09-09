@@ -19,7 +19,7 @@ for (const [viewport, expectedVariant] of [
   [{ width: 800, height: 360 }, '20x9'],
   [{ width: 667, height: 375 }, '16x9'],
   [{ width: 600, height: 480 }, '5x4'], // near-square touch viewport
-  [{ width: 915, height: 300 }, '21x9'], // extreme browser-chrome case
+  [{ width: 915, height: 300 }, '3x1'], // dedicated extreme browser-chrome chassis
   [{ width: 1024, height: 576 }, '16x9'], // small landscape tablet
   [{ width: 1280, height: 600 }, '20x9'], // upper landscape activation bound
 ]) {
@@ -59,6 +59,13 @@ for (const [viewport, expectedVariant] of [
       }
       const screenSurroundRight = machine.left
         + (parseFloat(style.getPropertyValue('--landscape-screen-surround-r')) || 0) * machine.width
+      const screenSurroundPad = Math.max(0, screenSurroundRight - moulding.right)
+      const screenSurround = {
+        left: moulding.left - screenSurroundPad,
+        top: moulding.top - screenSurroundPad,
+        right: screenSurroundRight,
+        bottom: moulding.bottom + screenSurroundPad,
+      }
 
       const rowTop = row => Math.min(navFaces[row * 2].top, navFaces[row * 2 + 1].top)
       const rowBottom = row => Math.max(navFaces[row * 2].bottom, navFaces[row * 2 + 1].bottom)
@@ -77,6 +84,7 @@ for (const [viewport, expectedVariant] of [
         machine,
         screen,
         moulding,
+        screenSurround,
         screenSurroundRight,
         rail,
         variant: document.querySelector('#machine').dataset.landscapeVariant,
@@ -109,6 +117,10 @@ for (const [viewport, expectedVariant] of [
     expect(geometry.moulding.top).toBeGreaterThanOrEqual(4)
     expect(geometry.moulding.right).toBeLessThanOrEqual(viewport.width - 4)
     expect(geometry.moulding.bottom).toBeLessThanOrEqual(viewport.height - 4)
+    expect(geometry.screenSurround.left).toBeGreaterThanOrEqual(3.5)
+    expect(geometry.screenSurround.top).toBeGreaterThanOrEqual(3.5)
+    expect(geometry.screenSurround.right).toBeLessThanOrEqual(viewport.width - 3.5)
+    expect(geometry.screenSurround.bottom).toBeLessThanOrEqual(viewport.height - 3.5)
 
     const visibleMachineRight = Math.min(viewport.width, geometry.machine.right)
     const leftMaterialGap = geometry.rail.left - geometry.screenSurroundRight
@@ -147,6 +159,10 @@ for (const [viewport, expectedVariant] of [
       expect(actionControlsGap).toBeGreaterThan(largestNavGap + 7)
     }
     expect(controlsPowerGap).toBeGreaterThanOrEqual(3)
+    if (viewport.height <= 320) {
+      expect(controlsPowerGap).toBeGreaterThanOrEqual(14)
+      expect(geometry.powerRuleOpacity).toBeGreaterThan(0.5)
+    }
     if (geometry.powerRuleOpacity > 0.5) {
       expect(geometry.powerRuleY).toBeGreaterThan(geometry.controls.bottom + 1)
       expect(geometry.powerRuleY).toBeLessThan(geometry.powerLabelTop - 1)

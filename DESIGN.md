@@ -76,11 +76,11 @@ rail is a centred 430px-wide column with a 10px rhythm between the six keys;
 it begins noticeably below the CRT instead of visually attaching to its frame.
 CRT/Volume form a second lower tier, while Power sits on a distinct final tier.
 
-## Landscape mobile reference (September 8, 2026)
+## Landscape mobile reference (September 9, 2026)
 
-Touch-first landscape devices use seven supplied photographic plates in
-`assets/src/chassis-frame-landscape-{5x4,4x3,3x2,16x10,16x9,20x9,21x9}.webp`.
-They retain their authored 1402 × 1122 through 1916 × 821 dimensions, so common
+Touch-first landscape devices use eight supplied photographic plates in
+`assets/src/chassis-frame-landscape-{5x4,4x3,3x2,16x10,16x9,20x9,21x9,3x1}.webp`.
+They retain their authored 1402 × 1122 through 2172 × 724 dimensions, so common
 phone and small-tablet ratios select a near-exact chassis instead of materially
 cropping a generic plate. Only the exterior transparency from generation is
 filled from adjacent cream material; the artist-cut CRT aperture and its
@@ -89,11 +89,13 @@ reference: a generous CRT on the left, a quiet two-column bank of keys on the
 right, then actions, optical controls and power.
 
 The closest photographic aspect is selected without forcing the 16:9 plate
-onto panoramic phones. It is fitted uniformly, never stretched, and may expand
-toward a cover fit only while the complete measured black CRT moulding remains
-inside the viewport. Any crop is therefore limited to expendable exterior cream
-material. A remaining strip is continued from the exact cream edge material.
-This keeps extreme ratios visually full without sacrificing the CRT moulding.
+onto panoramic phones. The dedicated 3:1 plate handles 915 × 300-class browser
+chrome cases. Every plate is fitted uniformly, never stretched, and may expand
+toward a cover fit only while the complete measured CRT moulding and cream
+screen surround remain inside the viewport. Any crop is therefore limited to
+expendable exterior cream material. A remaining strip is continued from the
+exact cream edge material. This keeps extreme ratios visually full without
+sacrificing the screen bevel.
 `tools/build_chassis.py` measures each actual WebP aperture, outer black
 moulding, and the softer right edge of the cream CRT recess into
 `assets/build/meta.json` → `ASSET_META.landscape_chassis` → the

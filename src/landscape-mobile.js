@@ -5,6 +5,7 @@ import frame16x10 from '../assets/src/chassis-frame-landscape-16x10.webp?inline'
 import frame16x9 from '../assets/src/chassis-frame-landscape-16x9.webp?inline'
 import frame20x9 from '../assets/src/chassis-frame-landscape-20x9.webp?inline'
 import frame21x9 from '../assets/src/chassis-frame-landscape-21x9.webp?inline'
+import frame3x1 from '../assets/src/chassis-frame-landscape-3x1.webp?inline'
 import { ASSET_META } from './assets.js'
 import { SRC_H, SRC_W, clamp } from './core.js'
 
@@ -18,6 +19,7 @@ const LANDSCAPE_LAYOUTS = Object.entries({
   '16x9': frame16x9,
   '20x9': frame20x9,
   '21x9': frame21x9,
+  '3x1': frame3x1,
 })
   .map(([id, src]) => ({ id, src, ...ASSET_META.landscape_chassis[id] }))
 
@@ -27,6 +29,7 @@ const LANDSCAPE_MIN_ASPECT = 1.05
 const SAFE_AREA_PROPERTIES = ['left', 'right', 'top', 'bottom']
 const MOULDING_VIEWPORT_MARGIN_MIN = 4
 const MOULDING_VIEWPORT_MARGIN_MAX = 10
+const EDGE_FILL_SAMPLE_DEPTH = 8
 
 // The control deck follows the approved reference in viewport space instead of
 // inheriting arbitrary percentages from each chassis artwork. This keeps the
@@ -97,6 +100,12 @@ function mouldingSafeFit(viewportWidth, viewportHeight, layout) {
   const contain = Math.min(viewportWidth / layout.width, viewportHeight / layout.height)
   const cover = Math.max(viewportWidth / layout.width, viewportHeight / layout.height)
   const [left, top, right, bottom] = layout.moulding || layout.aperture
+  const surroundRight = Math.max(layout.screen_surround_right || right, right)
+  const surroundPadPixels = Math.max(0, (surroundRight - right) * layout.width)
+  const protectedLeft = Math.max(0, left - surroundPadPixels / layout.width)
+  const protectedTop = Math.max(0, top - surroundPadPixels / layout.height)
+  const protectedRight = Math.min(1, surroundRight)
+  const protectedBottom = Math.min(1, bottom + surroundPadPixels / layout.height)
   const margin = clamp(
     Math.min(viewportWidth, viewportHeight) * .015,
     MOULDING_VIEWPORT_MARGIN_MIN,
@@ -106,10 +115,10 @@ function mouldingSafeFit(viewportWidth, viewportHeight, layout) {
   const horizontalRadius = Math.max(1, viewportWidth * .5 - margin)
   const verticalRadius = Math.max(1, viewportHeight * .5 - margin)
   const limits = [
-    horizontalRadius / (Math.max(.0001, .5 - left) * layout.width),
-    horizontalRadius / (Math.max(.0001, right - .5) * layout.width),
-    verticalRadius / (Math.max(.0001, .5 - top) * layout.height),
-    verticalRadius / (Math.max(.0001, bottom - .5) * layout.height),
+    horizontalRadius / (Math.max(.0001, .5 - protectedLeft) * layout.width),
+    horizontalRadius / (Math.max(.0001, protectedRight - .5) * layout.width),
+    verticalRadius / (Math.max(.0001, .5 - protectedTop) * layout.height),
+    verticalRadius / (Math.max(.0001, protectedBottom - .5) * layout.height),
   ]
   const safeMaximum = Math.min(...limits.filter(Number.isFinite))
 
@@ -312,20 +321,23 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   const navActionGap = mix(mix(6, 18, rhythm), 24, largeRhythm)
   const actionControlsGap = mix(mix(7, 22, rhythm), 30, largeRhythm)
   const controlsHeight = mix(mix(34, 49, rhythm), 64, largeRhythm)
-  const controlsPowerGap = mix(mix(4, 22, rhythm), 30, largeRhythm)
   const powerHeight = mix(mix(30, 40, rhythm), 52, largeRhythm)
-  const totalHeight = keyTarget * 4
+  const topMargin = 6
+  const baseHeight = keyTarget * 4
     + rowGap * 2
     + navActionGap
     + actionControlsGap
     + controlsHeight
-    + controlsPowerGap
     + powerHeight
+  const desiredControlsPowerGap = mix(mix(18, 22, rhythm), 30, largeRhythm)
+  const powerGapCapacity = safe.height - topMargin - CONTROL_DECK.bottomMargin - baseHeight
+  if (powerGapCapacity < 4) return null
+  const controlsPowerGap = Math.min(desiredControlsPowerGap, powerGapCapacity)
+  const totalHeight = baseHeight + controlsPowerGap
 
   /* The control stack has a real physical minimum because its touch targets
      stay 44px high. If that stack plus safe-area padding cannot fit, forcing
      landscape only clips POWER or navigation; fall back before mutating UI. */
-  const topMargin = 6
   const requiredHeight = totalHeight + topMargin + CONTROL_DECK.bottomMargin
   if (requiredHeight > safe.height) return null
 
@@ -446,6 +458,9 @@ export function installLandscapeMobileLayout(app) {
       '--landscape-edge-bottom',
       '--landscape-edge-left',
       '--landscape-edge-right',
+      '--landscape-fill-image',
+      '--landscape-edge-fill-w',
+      '--landscape-edge-fill-h',
     ]) root.removeProperty(property)
   }
 
@@ -517,12 +532,20 @@ export function installLandscapeMobileLayout(app) {
     root.setProperty('--landscape-render-h', `${renderedHeight}px`)
     root.setProperty('--landscape-center-x', `${viewportWidth * 0.5}px`)
     root.setProperty('--landscape-center-y', `${viewportHeight * 0.5}px`)
-    root.setProperty('--landscape-gap-x', `${Math.max(0, (viewportWidth - renderedWidth) * .5)}px`)
-    root.setProperty('--landscape-gap-y', `${Math.max(0, (viewportHeight - renderedHeight) * .5)}px`)
+    const gapX = Math.max(0, (viewportWidth - renderedWidth) * .5)
+    const gapY = Math.max(0, (viewportHeight - renderedHeight) * .5)
+    root.setProperty('--landscape-gap-x', `${gapX}px`)
+    root.setProperty('--landscape-gap-y', `${gapY}px`)
     root.setProperty('--landscape-edge-top', layout.edges.top)
     root.setProperty('--landscape-edge-bottom', layout.edges.bottom)
     root.setProperty('--landscape-edge-left', layout.edges.left)
     root.setProperty('--landscape-edge-right', layout.edges.right)
+    root.setProperty('--landscape-fill-image', `url("${layout.src}")`)
+    // Magnify only a tiny outer strip of source pixels across each continuation
+    // region. CSS mirrors the strip so the seam itself is always source pixel
+    // zero: plate and continuation therefore meet on identical material.
+    root.setProperty('--landscape-edge-fill-w', `${Math.max(1, gapX * layout.width / EDGE_FILL_SAMPLE_DEPTH)}px`)
+    root.setProperty('--landscape-edge-fill-h', `${Math.max(1, gapY * layout.height / EDGE_FILL_SAMPLE_DEPTH)}px`)
 
     for (const [property, value] of [
       ['--landscape-controls-left', deck.railLeft],
