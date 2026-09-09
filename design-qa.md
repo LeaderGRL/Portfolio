@@ -259,6 +259,72 @@ No actionable P0, P1 or P2 findings remain.
 
 final result: passed
 
+## Landscape mobile reference refinement — 2026-09-09
+
+### Source truth and normalization
+
+- Source visual truth: `C:/Users/jorda/Downloads/goal.png`, 1672 × 941 px.
+- Primary implementation evidence:
+  `C:/Users/jorda/.codex/visualizations/2026/08/24/01a03439-850c-7012-90c3-29be629e11cb/pr15-landscape-final/915x412-home.png`,
+  915 × 412 CSS px and image px, DPR 1, HOME state.
+- Full-view comparison:
+  `C:/Users/jorda/.codex/visualizations/2026/08/24/01a03439-850c-7012-90c3-29be629e11cb/pr15-landscape-final/comparison-goal-915x412.png`.
+  The source was centre-cover-cropped to the same 915:412 viewport without
+  stretching before being placed beside the implementation.
+- Narrow implementation evidence:
+  `C:/Users/jorda/.codex/visualizations/2026/08/24/01a03439-850c-7012-90c3-29be629e11cb/pr15-landscape-final/568x280-home.png`,
+  568 × 280 CSS px and image px, DPR 1, HOME state.
+- Large implementation evidence:
+  `C:/Users/jorda/.codex/visualizations/2026/08/24/01a03439-850c-7012-90c3-29be629e11cb/pr15-landscape-final/1280x600-home.png`,
+  1280 × 600 CSS px and image px, DPR 1, HOME state.
+
+### Required fidelity surfaces
+
+- Fonts and typography: the industrial panel type remains unchanged above
+  640px. At the 568px narrow tier only, the rendered legend size and start
+  inset are reduced enough to contain `PROJECTS` under Firefox's wider font
+  metrics while remaining readable in the native-size capture.
+- Spacing and layout rhythm: the goal's large left CRT and right two-column
+  control deck are preserved from 568 × 280 through 1280 × 600. Navigation,
+  actions, display controls and power remain separate tiers; all twelve target
+  centres are reachable and the document has zero overflow in every capture.
+- Colors and visual tokens: cream chassis, black CRT moulding, green phosphor,
+  shadows and selected-state LED match the supplied reference palette.
+- Image quality and asset fidelity: seven authored chassis ratios cover the
+  tested landscape range without stretching. Exterior alpha corners are
+  reconstructed from neighbouring chassis material while CRT apertures retain
+  their authored transparency.
+- Copy and content: HOME, ABOUT, RESUME, PROJECTS, ARTICLES, CONTACT, ENTER,
+  BACK, CRT, FULL SCREEN, VOLUME and POWER remain intact.
+
+### Comparison history and fixes
+
+- Earlier P1 — transparent exterior chassis corners could reveal the page
+  behind the asset. Fix: reconstruct only exterior alpha from adjacent cream
+  material and preserve the inner CRT aperture. Post-fix evidence: the 915 ×
+  412 comparison has continuous full-bleed chassis material.
+- Earlier P2 — three chassis ratios produced avoidable crop and proportion
+  drift across common phone/tablet landscapes. Fix: expand to seven measured
+  variants and select the closest authored composition, with 16:9 retained for
+  ordinary phone ratios to match the approved target.
+- Earlier P2 — fixed control sizing made short and tall landscapes diverge.
+  Fix: interpolate deck rhythm and control sizes from 280px through 600px
+  height while preserving 44px targets or falling back safely when the stack
+  cannot fit.
+- CI P2 — Firefox at 568 × 280 reported `PROJECTS` overflowing its legend by
+  16 internal pixels. Fix: narrow-tier legend size 8.25 → 7.25px and inset 21
+  → 19.5px. Post-fix evidence: the native 568 × 280 capture plus 24/24
+  sequential landscape/full-screen tests across all four browser profiles.
+
+The narrow viewport itself is the focused control-region evidence; a further
+crop was unnecessary because the labels and control boundaries are legible at
+native 1:1 scale and are also checked with real `clientWidth`/`scrollWidth`
+browser metrics.
+
+No actionable P0, P1 or P2 findings remain.
+
+final result: passed
+
 ## Mobile vertical-rhythm refinement — 2026-08-25
 
 - Prior implementation:
@@ -292,5 +358,14 @@ final result: passed
   more breathable; controls remain separated and no overlap is visible.
 
 No actionable P0, P1 or P2 findings remain.
+
+final result: passed
+
+## Latest handoff status — 2026-09-09
+
+The landscape-mobile comparison and post-CI Firefox correction documented
+above are the current implementation. The regenerated 568 × 280, 915 × 412
+and 1280 × 600 evidence shows no remaining fidelity or usability regression,
+and the complete 24-case landscape/full-screen browser matrix passes.
 
 final result: passed

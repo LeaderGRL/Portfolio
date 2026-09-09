@@ -23,7 +23,7 @@ The deliberately unsupported near-square 480×400 and extremely short 568×240 c
 
 - Production build and runtime suite: passed.
 - Playwright matrix: 131 passed, 89 intentionally skipped by project capability, 0 failed across Chromium, Firefox, WebKit and the Pixel 7 profile.
-- Post-CI narrow-label regression: Chromium, WebKit and mobile Chromium pass all 18 applicable landscape/full-screen scenarios. Firefox validation is currently blocked by a Playwright 1.62.1 runtime failure in `browserContext.newPage()` that reproduces in a minimal script before any application code runs.
+- Post-CI narrow-label regression: all 24 landscape/full-screen scenarios pass sequentially across Chromium, Firefox, WebKit and mobile Chromium, including Firefox at 568×280.
 - Landscape reference coverage includes the eight primary geometry viewports plus short-height, safe-area and rotation cases.
 - Axe checks pass on representative routes and full-screen mode.
 - Full-screen CRT, CRT bypass, no-WebGL and GPU-failure fallbacks preserve navigation, media and article reading position.
