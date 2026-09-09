@@ -324,11 +324,14 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     controlsSeparatorOffset: sizeToDesign(-actionControlsGap * 0.5),
     powerSeparatorOffset: sizeToDesign(-controlsPowerGap * 0.5),
     separatorThickness: sizeToDesign(separatorThickness),
-    fontSize: sizeToDesign(narrowViewport ? 8.25 : mix(10, 12, largeRhythm)),
+    // Firefox's wider Space Mono metrics need a little more breathing room in
+    // the 76px key columns used by 568px-wide phones. Keep the adjustment
+    // scoped to the narrow deck so larger landscape compositions are unchanged.
+    fontSize: sizeToDesign(narrowViewport ? 7.25 : mix(10, 12, largeRhythm)),
     captionSize: sizeToDesign(narrowViewport ? 8 : mix(9.5, 11, largeRhythm)),
     iconSize: sizeToDesign(narrowViewport ? 12.25 : mix(14, 17, largeRhythm)),
     iconLeft: sizeToDesign(narrowViewport ? 6 : mix(10, 13, largeRhythm)),
-    legendLeft: sizeToDesign(narrowViewport ? 21 : mix(34, 42, largeRhythm)),
+    legendLeft: sizeToDesign(narrowViewport ? 19.5 : mix(34, 42, largeRhythm)),
     ledSize: sizeToDesign(narrowViewport ? 4 : mix(4.5, 6, largeRhythm)),
     ledTop: sizeToDesign(narrowViewport ? 5 : mix(5, 7, largeRhythm)),
     ledRight: sizeToDesign(narrowViewport ? 4 : mix(6, 8, largeRhythm)),
