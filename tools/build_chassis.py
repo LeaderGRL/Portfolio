@@ -14,7 +14,7 @@ MOBILE_SOURCE = ROOT / "assets" / "src" / "chassis-moulding-mobile.png"
 MOBILE_FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-mobile.png"
 LANDSCAPE_SOURCES = {
     variant: ROOT / "assets" / "src" / f"chassis-frame-landscape-{variant}.webp"
-    for variant in ("3x2", "16x9", "21x9")
+    for variant in ("5x4", "4x3", "3x2", "16x10", "16x9", "20x9", "21x9")
 }
 EXPORT = ROOT / "assets" / "chassis"
 BUILD = ROOT / "assets" / "build"

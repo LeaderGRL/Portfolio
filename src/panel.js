@@ -1,7 +1,7 @@
 import { ASSETS, ASSET_META } from './assets.js'
 import { foley } from './audio.js'
 import { REDUCED, clamp, lerp } from './core.js'
-import { ICONS } from './icons.js'
+import { createIcon, ICONS } from './icons.js'
 
 /* ==========================================================================
  * 7. PANEL — sprite-backed DOM controls
@@ -73,14 +73,20 @@ export function makeKey(label, cls, icon = '') {
   const b = document.createElement("button");
   b.className = "key" + (cls ? " " + cls : "");
   b.type = "button";
-  b.innerHTML =
-    '<span class="key__button">' +
-      '<span class="key__face">' +
-        (icon ? `<span class="key__icon" aria-hidden="true">${icon}</span>` : '') +
-        `<span class="key__legend">${label}</span>` +
-      '</span>' +
-      '<span class="key__led" aria-hidden="true"></span>' +
-    '</span>';
+  const button = document.createElement('span');
+  const face = document.createElement('span');
+  const legend = document.createElement('span');
+  const led = document.createElement('span');
+  button.className = 'key__button';
+  face.className = 'key__face';
+  legend.className = 'key__legend';
+  legend.textContent = label;
+  led.className = 'key__led';
+  led.setAttribute('aria-hidden', 'true');
+  if (icon) face.appendChild(createIcon(icon));
+  face.appendChild(legend);
+  button.append(face, led);
+  b.appendChild(button);
   // Press feedback is driven manually so keyboard activation feels identical
   // to a pointer press rather than relying on :active.
   const down = () => { b.classList.add("is-down"); foley.ensure(); foley.key(true); };

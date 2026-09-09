@@ -78,17 +78,19 @@ CRT/Volume form a second lower tier, while Power sits on a distinct final tier.
 
 ## Landscape mobile reference (September 8, 2026)
 
-Touch-first landscape devices use the three supplied photographic plates in
-`assets/src/chassis-frame-landscape-{3x2,16x9,21x9}.webp`. They are WebP
-conversions of the user's `14_12_34 (1)`, `14_12_35 (2)` and `14_12_35 (3)`
-PNGs respectively, at their original 1536 × 1024, 1672 × 941 and 1916 × 821
-dimensions. Alpha is preserved exactly after normalising near-opaque material
-to opaque, following the existing chassis pipeline. The fourth supplied image,
-`00_02_50`, is the composition reference: a generous CRT on the left, a quiet
-two-column bank of keys on the right, then actions, optical controls and power.
+Touch-first landscape devices use seven supplied photographic plates in
+`assets/src/chassis-frame-landscape-{5x4,4x3,3x2,16x10,16x9,20x9,21x9}.webp`.
+They retain their authored 1402 × 1122 through 1916 × 821 dimensions, so common
+phone and small-tablet ratios select a near-exact chassis instead of materially
+cropping a generic plate. Only the exterior transparency from generation is
+filled from adjacent cream material; the artist-cut CRT aperture and its
+antialiasing remain transparent. The user's `goal.png` is the composition
+reference: a generous CRT on the left, a quiet two-column bank of keys on the
+right, then actions, optical controls and power.
 
-The closest photographic aspect is contain-fitted inside the safe area, never
-stretched. `tools/build_chassis.py` measures each actual WebP into
+The closest photographic aspect cover-fills the viewport uniformly, never
+stretched. The expanded ratio family keeps that cover crop negligible.
+`tools/build_chassis.py` measures each actual WebP into
 `assets/build/meta.json` → `ASSET_META.landscape_chassis` → the
 `--landscape-ap-*` / edge properties in `src/landscape-mobile.js`. Source
 replacement therefore updates the aperture and material continuation together.

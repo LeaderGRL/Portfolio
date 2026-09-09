@@ -19,6 +19,7 @@
 
 body.is-landscape-mobile-stage{ background:#e9d8c2; }
 body.is-landscape-mobile-stage #stage{ background:transparent; }
+body.is-landscape-mobile-stage #hint{ display:none; }
 
 .machine.is-landscape-mobile{
   --landscape-key-surface:#dcd2c1;
@@ -120,7 +121,7 @@ body.is-landscape-mobile-stage #stage{ background:transparent; }
 .is-landscape-mobile .key,
 .is-landscape-mobile .key--sm{
   --key-surface:var(--landscape-key-surface);
-  --key-gap:1.5px;
+  --key-gap:.5px;
   width:100%;
   height:var(--landscape-key-h);
   min-width:0;

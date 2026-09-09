@@ -1,12 +1,24 @@
+import frame5x4 from '../assets/src/chassis-frame-landscape-5x4.webp?inline'
+import frame4x3 from '../assets/src/chassis-frame-landscape-4x3.webp?inline'
 import frame3x2 from '../assets/src/chassis-frame-landscape-3x2.webp?inline'
+import frame16x10 from '../assets/src/chassis-frame-landscape-16x10.webp?inline'
 import frame16x9 from '../assets/src/chassis-frame-landscape-16x9.webp?inline'
+import frame20x9 from '../assets/src/chassis-frame-landscape-20x9.webp?inline'
 import frame21x9 from '../assets/src/chassis-frame-landscape-21x9.webp?inline'
 import { ASSET_META } from './assets.js'
 import { SRC_H, SRC_W, clamp } from './core.js'
 
 // The build measures each supplied frame, including its alpha and edge colours.
 // A new chassis can never keep the previous artwork's screen coordinates.
-const LANDSCAPE_LAYOUTS = Object.entries({ '3x2': frame3x2, '16x9': frame16x9, '21x9': frame21x9 })
+const LANDSCAPE_LAYOUTS = Object.entries({
+  '5x4': frame5x4,
+  '4x3': frame4x3,
+  '3x2': frame3x2,
+  '16x10': frame16x10,
+  '16x9': frame16x9,
+  '20x9': frame20x9,
+  '21x9': frame21x9,
+})
   .map(([id, src]) => ({ id, src, ...ASSET_META.landscape_chassis[id] }))
 
 const MOBILE_MAX_WIDTH = 1400
@@ -28,6 +40,13 @@ const CONTROL_DECK = {
 }
 
 function closestLayout(viewportAspect) {
+  // goal.png is the approved composition at 16:9. Its larger CRT remains the
+  // better visual match on ordinary phone landscapes up to 20:9; the modest
+  // vertical cover crop stays entirely in the blank cream field. The wider
+  // authored plates take over only when that crop would touch the bezel.
+  if (viewportAspect >= 1.68 && viewportAspect <= 2.23) {
+    return LANDSCAPE_LAYOUTS.find(layout => layout.id === '16x9')
+  }
   return LANDSCAPE_LAYOUTS.reduce((best, candidate) => {
     const candidateAspect = candidate.width / candidate.height
     const bestAspect = best.width / best.height
@@ -240,7 +259,7 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
      width. Near-square viewports are better served by the existing compact
      layout than by an authored landscape chassis with overlapping controls. */
   const narrowViewport = viewportWidth <= 640
-  const minimumWidth = narrowViewport ? 168 : clamp(viewportWidth * 0.255, 176, 266)
+  const minimumWidth = narrowViewport ? 160 : clamp(viewportWidth * 0.245, 170, 266)
   const railWidth = railRight - preferredLeft
   if (railWidth < minimumWidth) return null
   const railLeft = preferredLeft
@@ -248,14 +267,15 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   // Interpolate from a compact 280px-tall phone to the approved Pixel 7
   // proportions. The 44px targets never shrink; only whitespace compresses.
   const rhythm = clamp((viewportHeight - 280) / 132, 0, 1)
-  const keyTarget = CONTROL_DECK.keyTarget
-  const faceHeight = mix(24, 30, rhythm)
-  const rowGap = mix(0, 2, rhythm)
-  const navActionGap = mix(6, 18, rhythm)
-  const actionControlsGap = mix(6, 22, rhythm)
-  const controlsHeight = mix(34, 49, rhythm)
-  const controlsPowerGap = mix(4, 14, rhythm)
-  const powerHeight = mix(30, 40, rhythm)
+  const largeRhythm = clamp((viewportHeight - 412) / 188, 0, 1)
+  const keyTarget = mix(CONTROL_DECK.keyTarget, 60, largeRhythm)
+  const faceHeight = mix(mix(27.5, 30, rhythm), 42, largeRhythm)
+  const rowGap = mix(mix(0, 2, rhythm), 5, largeRhythm)
+  const navActionGap = mix(mix(6, 18, rhythm), 24, largeRhythm)
+  const actionControlsGap = mix(mix(6, 22, rhythm), 30, largeRhythm)
+  const controlsHeight = mix(mix(34, 49, rhythm), 64, largeRhythm)
+  const controlsPowerGap = mix(mix(4, 14, rhythm), 18, largeRhythm)
+  const powerHeight = mix(mix(30, 40, rhythm), 52, largeRhythm)
   const totalHeight = keyTarget * 4
     + rowGap * 2
     + navActionGap
@@ -280,7 +300,7 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   const controlsTop = actionTop + keyTarget + actionControlsGap
   const powerTop = controlsTop + controlsHeight + controlsPowerGap
 
-  const columnGap = mix(14, 18, clamp((viewportWidth - 667) / 248, 0, 1))
+  const columnGap = narrowViewport ? 8 : mix(14, 18, clamp((viewportWidth - 667) / 248, 0, 1))
   const separatorThickness = 1.25
 
   const xToDesign = value => (value - machineLeft) / fit
@@ -304,17 +324,17 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     controlsSeparatorOffset: sizeToDesign(-actionControlsGap * 0.5),
     powerSeparatorOffset: sizeToDesign(-controlsPowerGap * 0.5),
     separatorThickness: sizeToDesign(separatorThickness),
-    fontSize: sizeToDesign(10),
-    captionSize: sizeToDesign(9.5),
-    iconSize: sizeToDesign(14),
-    iconLeft: sizeToDesign(10),
-    legendLeft: sizeToDesign(34),
-    ledSize: sizeToDesign(4.5),
-    ledTop: sizeToDesign(5),
-    ledRight: sizeToDesign(6),
-    switchWidth: sizeToDesign(50),
-    sliderWidth: sizeToDesign(52),
-    rockerWidth: sizeToDesign(24),
+    fontSize: sizeToDesign(narrowViewport ? 8.25 : mix(10, 12, largeRhythm)),
+    captionSize: sizeToDesign(narrowViewport ? 8 : mix(9.5, 11, largeRhythm)),
+    iconSize: sizeToDesign(narrowViewport ? 12.25 : mix(14, 17, largeRhythm)),
+    iconLeft: sizeToDesign(narrowViewport ? 6 : mix(10, 13, largeRhythm)),
+    legendLeft: sizeToDesign(narrowViewport ? 21 : mix(34, 42, largeRhythm)),
+    ledSize: sizeToDesign(narrowViewport ? 4 : mix(4.5, 6, largeRhythm)),
+    ledTop: sizeToDesign(narrowViewport ? 5 : mix(5, 7, largeRhythm)),
+    ledRight: sizeToDesign(narrowViewport ? 4 : mix(6, 8, largeRhythm)),
+    switchWidth: sizeToDesign(narrowViewport ? 44 : mix(50, 65, largeRhythm)),
+    sliderWidth: sizeToDesign(narrowViewport ? 46 : mix(52, 68, largeRhythm)),
+    rockerWidth: sizeToDesign(mix(24, 30, largeRhythm)),
   }
 }
 

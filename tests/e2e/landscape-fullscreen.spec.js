@@ -45,7 +45,7 @@ async function expectViewportGlass(page) {
   expect(reserved.bottom).toBeGreaterThanOrEqual(reserved.controls + 12)
 }
 
-async function expectLandscapeTiersSeparated(page, viewport) {
+async function expectLandscapeTiersSeparated(page, viewport, expectedVariant) {
   const geometry = await page.evaluate(() => {
     const rect = selector => {
       const node = document.querySelector(selector)
@@ -61,7 +61,7 @@ async function expectLandscapeTiersSeparated(page, viewport) {
     }
   })
 
-  expect(geometry.variant).toBe('21x9')
+  expect(geometry.variant).toBe(expectedVariant)
   expect(geometry.nav.bottom).toBeLessThanOrEqual(geometry.actions.top)
   expect(geometry.actions.bottom).toBeLessThanOrEqual(geometry.controls.top)
   expect(geometry.controls.bottom).toBeLessThanOrEqual(geometry.power.top)
@@ -77,19 +77,24 @@ for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }
       const rect = key.getBoundingClientRect()
       const owner = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
       const face = key.querySelector('.key__face').getBoundingClientRect()
-      const text = document.createRange()
-      text.selectNodeContents(key.querySelector('.key__legend'))
-      const label = text.getBoundingClientRect()
+      const label = key.querySelector('.key__legend')
       const icon = key.querySelector('.key__icon')?.getBoundingClientRect()
+      const labelStyle = getComputedStyle(label)
+      const labelStart = label.getBoundingClientRect().left + parseFloat(labelStyle.paddingLeft)
       return {
         x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom, height: rect.height,
         hit: owner === key || key.contains(owner),
-        labelFits: label.right <= face.right && label.left >= (icon?.right || face.left),
+        label: label.textContent,
+        labelWidth: label.clientWidth,
+        labelScrollWidth: label.scrollWidth,
+        labelStart,
+        iconRight: icon?.right || face.left,
+        labelFits: label.scrollWidth <= label.clientWidth + 1 && labelStart >= (icon?.right || face.left) - 1,
       }
     }))
     for (const [index, key] of physicalKeys.entries()) {
       expect(key.hit).toBe(true)
-      expect(key.labelFits).toBe(true)
+      expect(key.labelFits, `${key.label} must fit: scroll ${key.labelScrollWidth}/${key.labelWidth}, start ${key.labelStart}, icon right ${key.iconRight}`).toBe(true)
       expect(key.height).toBeGreaterThanOrEqual(43.9)
       expect(key.bottom).toBeLessThanOrEqual(viewport.height)
       for (const other of physicalKeys.slice(index + 1)) {
@@ -113,12 +118,15 @@ for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }
   })
 }
 
-for (const viewport of [{ width: 600, height: 280 }, { width: 640, height: 280 }]) {
-  test(`short 21:9 landscape keeps all hardware tiers separated at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
+for (const [viewport, variant] of [
+  [{ width: 600, height: 280 }, '16x9'],
+  [{ width: 640, height: 280 }, '21x9'],
+]) {
+  test(`short landscape keeps all hardware tiers separated at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
     await boot(page, viewport)
-    await expectLandscapeTiersSeparated(page, viewport)
+    await expectLandscapeTiersSeparated(page, viewport, variant)
 
     const physicalKeys = await page.locator('#nav-keys .key, #action-keys .key').evaluateAll(keys => keys.map(key => {
       const rect = key.getBoundingClientRect()

@@ -19,3 +19,14 @@ export const ICONS = {
   enter: arrowRight,
   back: arrowLeft,
 }
+
+export function createIcon(svg, className = 'key__icon') {
+  const wrapper = document.createElement('span')
+  wrapper.className = className
+  wrapper.setAttribute('aria-hidden', 'true')
+
+  const parsed = new DOMParser().parseFromString(svg, 'image/svg+xml')
+  const icon = parsed.documentElement
+  if (icon?.nodeName.toLowerCase() === 'svg') wrapper.appendChild(document.importNode(icon, true))
+  return wrapper
+}

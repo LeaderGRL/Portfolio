@@ -1,4 +1,4 @@
-import { ICONS } from './icons.js'
+import { createIcon, ICONS } from './icons.js'
 
 const ACTIONS = [
   { label: 'ENTER', icon: ICONS.enter },
@@ -17,10 +17,7 @@ export function installLandscapeActionKeys() {
     const previousLabel = legend.getAttribute('data-landscape-label')
     legend.setAttribute('data-landscape-label', action.label)
 
-    const icon = document.createElement('span')
-    icon.className = 'key__icon key__icon--action'
-    icon.setAttribute('aria-hidden', 'true')
-    icon.innerHTML = action.icon
+    const icon = createIcon(action.icon, 'key__icon key__icon--action')
     key.appendChild(icon)
 
     cleanups.push(() => {

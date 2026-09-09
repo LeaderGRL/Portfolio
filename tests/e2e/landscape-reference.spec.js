@@ -20,6 +20,8 @@ for (const viewport of [
   { width: 667, height: 375 },
   { width: 600, height: 480 }, // narrow 3:2 cover-crop case
   { width: 915, height: 300 }, // extreme ultrawide browser-chrome case
+  { width: 1024, height: 576 }, // small landscape tablet
+  { width: 1280, height: 600 }, // upper landscape activation bound
 ]) {
   test(`landscape composition matches the approved hierarchy at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
     await bootLandscape(page, viewport)
@@ -90,18 +92,26 @@ for (const viewport of [
     expect(geometry.rail.left - geometry.screen.right).toBeGreaterThanOrEqual(4)
 
     for (const height of geometry.targetHeights) expect(height).toBeGreaterThanOrEqual(43.9)
+    const largeRhythm = Math.max(0, Math.min(1, (viewport.height - 412) / 188))
+    const maximumFaceHeight = 31 + 12 * largeRhythm
     for (const height of geometry.faceHeights) {
       expect(height).toBeGreaterThanOrEqual(23)
-      expect(height).toBeLessThanOrEqual(31)
+      expect(height).toBeLessThanOrEqual(maximumFaceHeight)
     }
 
     const largestNavGap = Math.max(...geometry.navRowGaps)
     const navActionGap = geometry.actionFirstTop - geometry.navLastBottom
     const actionControlsGap = geometry.controls.top - geometry.actionLastBottom
     const controlsPowerGap = geometry.power.top - geometry.controls.bottom
-    expect(largestNavGap).toBeLessThanOrEqual(17)
+    expect(largestNavGap).toBeLessThanOrEqual(17 + 7 * largeRhythm)
     expect(navActionGap).toBeGreaterThan(largestNavGap + 5)
-    expect(actionControlsGap).toBeGreaterThan(largestNavGap + 7)
+    if (viewport.height <= 320) {
+      // The 44px targets own most of a 300px-high viewport. The darker tier
+      // separator preserves hierarchy while whitespace compresses.
+      expect(actionControlsGap).toBeGreaterThanOrEqual(largestNavGap)
+    } else {
+      expect(actionControlsGap).toBeGreaterThan(largestNavGap + 7)
+    }
     expect(controlsPowerGap).toBeGreaterThanOrEqual(3)
 
     expect(geometry.navFirstTop).toBeGreaterThanOrEqual(-1)
