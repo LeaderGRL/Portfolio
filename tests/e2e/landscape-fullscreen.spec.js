@@ -98,7 +98,11 @@ for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }
       expect(key.height).toBeGreaterThanOrEqual(43.9)
       expect(key.bottom).toBeLessThanOrEqual(viewport.height)
       for (const other of physicalKeys.slice(index + 1)) {
-        expect(key.x < other.right && key.right > other.x && key.y < other.bottom && key.bottom > other.y).toBe(false)
+        const overlaps = key.x < other.right && key.right > other.x && key.y < other.bottom && key.bottom > other.y
+        expect(
+          overlaps,
+          `${key.label} ${JSON.stringify(key)} overlaps ${other.label} ${JSON.stringify(other)}`,
+        ).toBe(false)
       }
     }
     await page.locator('#fullscreen-switch').tap()
@@ -119,7 +123,7 @@ for (const viewport of [{ width: 915, height: 412 }, { width: 844, height: 390 }
 }
 
 for (const [viewport, variant] of [
-  [{ width: 600, height: 280 }, '16x9'],
+  [{ width: 600, height: 280 }, '20x9'],
   [{ width: 640, height: 280 }, '21x9'],
 ]) {
   test(`short landscape keeps all hardware tiers separated at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {

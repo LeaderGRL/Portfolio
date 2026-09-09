@@ -1,11 +1,10 @@
 /* ============================================================================
    MOBILE LANDSCAPE
 
-   The chassis artwork stays full bleed. The live CRT follows the measured
-   transparent aperture, while the entire control deck is positioned from
-   viewport-space geometry published by landscape-mobile.js. This deliberately
-   avoids per-artwork percentage offsets: cover cropping must never move the
-   controls away from the approved composition.
+   The live CRT follows the measured transparent aperture, while the control
+   deck is positioned from viewport-space geometry published by
+   landscape-mobile.js. The plate can trim only expendable exterior cream; the
+   photographed black CRT moulding always remains inside the viewport.
    ========================================================================== */
 :root{
   --safe-area-left:env(safe-area-inset-left,0px);
@@ -288,12 +287,8 @@ body.is-landscape-mobile-stage #hint{ display:none; }
 }
 .is-landscape-mobile .panel--right .bottom-row::before{
   top:var(--landscape-power-separator-offset);
-  background:linear-gradient(
-    90deg,
-    rgba(85,72,52,.58) 0 31%,
-    transparent 31% 69%,
-    rgba(85,72,52,.58) 69%
-  );
+  opacity:var(--landscape-power-separator-opacity,1);
+  background:rgba(85,72,52,.58);
   box-shadow:0 1px 0 rgba(255,255,255,.66);
 }
 .is-landscape-mobile .grille{ display:none; }
@@ -305,10 +300,11 @@ body.is-landscape-mobile-stage #hint{ display:none; }
   content:"POWER";
   position:absolute;
   left:50%;
-  top:calc(var(--landscape-caption-size) * -1.8);
+  top:calc(var(--landscape-caption-size) * -1.35);
   translate:-50% 0;
   font-size:var(--landscape-caption-size);
   font-weight:650;
+  line-height:1;
   letter-spacing:.075em;
   color:var(--ink-hard);
   font-family:var(--font-panel);
@@ -328,8 +324,10 @@ body.is-landscape-mobile-stage #hint{ display:none; }
   font-size:var(--landscape-reader-heading,20px);
 }
 
-/* Cover fitting should leave no continuation strips. The zero-sized layers are
-   retained only for compatibility with the compact/desktop stage contract. */
+/* When an authored ratio cannot reach an extreme viewport without touching the
+   CRT moulding, continue the exact sampled edge material through the remaining
+   strip. The machine sits above these layers, so controls can never disappear
+   beneath the continuation material. */
 body.is-landscape-mobile-stage::before,
 body.is-landscape-mobile-stage::after{
   content:"";
@@ -363,6 +361,10 @@ body.is-landscape-mobile-stage #stage::before{
 body.is-landscape-mobile-stage #stage::after{
   right:0;
   background:var(--landscape-edge-right,#e9d8c2);
+}
+
+.machine.is-landscape-mobile{
+  z-index:1;
 }
 
 @media (prefers-reduced-motion:reduce){

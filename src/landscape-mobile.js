@@ -25,28 +25,27 @@ const MOBILE_MAX_WIDTH = 1400
 const MOBILE_MAX_HEIGHT = 600
 const LANDSCAPE_MIN_ASPECT = 1.05
 const SAFE_AREA_PROPERTIES = ['left', 'right', 'top', 'bottom']
+const MOULDING_VIEWPORT_MARGIN_MIN = 4
+const MOULDING_VIEWPORT_MARGIN_MAX = 10
 
 // The control deck follows the approved reference in viewport space instead of
 // inheriting arbitrary percentages from each chassis artwork. This keeps the
-// hardware centred, breathable and visually stable while the image cover-crops.
+// hardware centred, breathable and visually stable while the closest supplied
+// plate uses the moulding-safe fit and extends only its own cream material.
 const CONTROL_DECK = {
-  leftRatio: 0.68,
-  rightRatio: 0.965,
-  screenGapRatio: 0.035,
+  widthRatio: 0.285,
+  materialGapRatio: 0.015,
+  materialGapMin: 8,
+  materialGapMax: 18,
   topRatio: 0.185,
-  sideMargin: 14,
   bottomMargin: 8,
   keyTarget: 44,
 }
 
 function closestLayout(viewportAspect) {
-  // goal.png is the approved composition at 16:9. Its larger CRT remains the
-  // better visual match on ordinary phone landscapes up to 20:9; the modest
-  // vertical cover crop stays entirely in the blank cream field. The wider
-  // authored plates take over only when that crop would touch the bezel.
-  if (viewportAspect >= 1.68 && viewportAspect <= 2.23) {
-    return LANDSCAPE_LAYOUTS.find(layout => layout.id === '16x9')
-  }
+  // Every supplied plate is an authored composition. Choose the nearest ratio
+  // rather than forcing the 16:9 goal plate onto panoramic phones: doing so
+  // discarded the wider assets and could crop all the way to the CRT moulding.
   return LANDSCAPE_LAYOUTS.reduce((best, candidate) => {
     const candidateAspect = candidate.width / candidate.height
     const bestAspect = best.width / best.height
@@ -92,6 +91,32 @@ function readSafeArea(width, height) {
 
 function mix(a, b, t) {
   return a + (b - a) * t
+}
+
+function mouldingSafeFit(viewportWidth, viewportHeight, layout) {
+  const contain = Math.min(viewportWidth / layout.width, viewportHeight / layout.height)
+  const cover = Math.max(viewportWidth / layout.width, viewportHeight / layout.height)
+  const [left, top, right, bottom] = layout.moulding || layout.aperture
+  const margin = clamp(
+    Math.min(viewportWidth, viewportHeight) * .015,
+    MOULDING_VIEWPORT_MARGIN_MIN,
+    MOULDING_VIEWPORT_MARGIN_MAX,
+  )
+
+  const horizontalRadius = Math.max(1, viewportWidth * .5 - margin)
+  const verticalRadius = Math.max(1, viewportHeight * .5 - margin)
+  const limits = [
+    horizontalRadius / (Math.max(.0001, .5 - left) * layout.width),
+    horizontalRadius / (Math.max(.0001, right - .5) * layout.width),
+    verticalRadius / (Math.max(.0001, .5 - top) * layout.height),
+    verticalRadius / (Math.max(.0001, bottom - .5) * layout.height),
+  ]
+  const safeMaximum = Math.min(...limits.filter(Number.isFinite))
+
+  // Move toward full bleed only while the complete photographed black
+  // moulding remains inside the viewport. Any crop is therefore restricted to
+  // the expendable cream perimeter of the authored plate.
+  return Math.max(contain, Math.min(cover, safeMaximum))
 }
 
 function installBackground(machine) {
@@ -244,25 +269,28 @@ function fitLandscapeRaster(app) {
 function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, renderedWidth, renderedHeight) {
   const machineLeft = (viewportWidth - renderedWidth) * 0.5
   const machineTop = (viewportHeight - renderedHeight) * 0.5
-  const screenRight = machineLeft + layout.aperture[2] * layout.width * fit
-
-  const rightMargin = Math.max(CONTROL_DECK.sideMargin + safe.right, viewportWidth * (1 - CONTROL_DECK.rightRatio))
-  const railRight = viewportWidth - rightMargin
-  const screenGap = viewportWidth * CONTROL_DECK.screenGapRatio
-  const preferredLeft = Math.max(
-    viewportWidth * CONTROL_DECK.leftRatio,
-    screenRight + screenGap,
-    safe.left + CONTROL_DECK.sideMargin,
+  const machineRight = machineLeft + renderedWidth
+  const moulding = layout.moulding || layout.aperture
+  const screenSurroundRight = Math.max(layout.screen_surround_right || moulding[2], moulding[2])
+  const screenRight = machineLeft + screenSurroundRight * layout.width * fit
+  const bayRight = Math.min(machineRight, viewportWidth - safe.right)
+  const bayWidth = bayRight - screenRight
+  const materialGap = clamp(
+    viewportWidth * CONTROL_DECK.materialGapRatio,
+    CONTROL_DECK.materialGapMin,
+    CONTROL_DECK.materialGapMax,
   )
 
   /* Do not move the rail back across the CRT merely to satisfy a minimum
      width. Near-square viewports are better served by the existing compact
      layout than by an authored landscape chassis with overlapping controls. */
   const narrowViewport = viewportWidth <= 640
-  const minimumWidth = narrowViewport ? 160 : clamp(viewportWidth * 0.245, 170, 266)
-  const railWidth = railRight - preferredLeft
-  if (railWidth < minimumWidth) return null
-  const railLeft = preferredLeft
+  const minimumWidth = narrowViewport ? 148 : clamp(viewportWidth * 0.245, 170, 266)
+  const maximumWidth = bayWidth - materialGap * 2
+  if (maximumWidth < minimumWidth) return null
+  const desiredWidth = viewportWidth * CONTROL_DECK.widthRatio
+  const railWidth = Math.min(Math.max(desiredWidth, minimumWidth), maximumWidth)
+  const railLeft = screenRight + (bayWidth - railWidth) * 0.5
 
   // Interpolate from a compact 280px-tall phone to the approved Pixel 7
   // proportions. The 44px targets never shrink; only whitespace compresses.
@@ -270,11 +298,14 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   const largeRhythm = clamp((viewportHeight - 412) / 188, 0, 1)
   const keyTarget = mix(CONTROL_DECK.keyTarget, 60, largeRhythm)
   const faceHeight = mix(mix(27.5, 30, rhythm), 42, largeRhythm)
-  const rowGap = mix(mix(0, 2, rhythm), 5, largeRhythm)
+  // Keep a real one-pixel gutter even on the shortest supported landscape.
+  // Zero-gap rows can overlap by a fractional CSS pixel after the design-space
+  // values are scaled back into viewport space on Chromium.
+  const rowGap = mix(mix(1, 2, rhythm), 5, largeRhythm)
   const navActionGap = mix(mix(6, 18, rhythm), 24, largeRhythm)
-  const actionControlsGap = mix(mix(6, 22, rhythm), 30, largeRhythm)
+  const actionControlsGap = mix(mix(7, 22, rhythm), 30, largeRhythm)
   const controlsHeight = mix(mix(34, 49, rhythm), 64, largeRhythm)
-  const controlsPowerGap = mix(mix(4, 14, rhythm), 18, largeRhythm)
+  const controlsPowerGap = mix(mix(4, 22, rhythm), 30, largeRhythm)
   const powerHeight = mix(mix(30, 40, rhythm), 52, largeRhythm)
   const totalHeight = keyTarget * 4
     + rowGap * 2
@@ -302,6 +333,10 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
 
   const columnGap = narrowViewport ? 8 : mix(14, 18, clamp((viewportWidth - 667) / 248, 0, 1))
   const separatorThickness = 1.25
+  const captionSize = narrowViewport ? 8 : mix(9.5, 11, largeRhythm)
+  const powerLabelOffset = captionSize * 1.35
+  const powerRuleFreeSpace = controlsPowerGap - powerLabelOffset
+  const powerRuleOffset = -(controlsPowerGap + powerLabelOffset) * 0.5
 
   const xToDesign = value => (value - machineLeft) / fit
   const yToDesign = value => (value - machineTop) / fit
@@ -322,13 +357,14 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     powerHeight: sizeToDesign(powerHeight),
     actionSeparatorOffset: sizeToDesign(-navActionGap * 0.5),
     controlsSeparatorOffset: sizeToDesign(-actionControlsGap * 0.5),
-    powerSeparatorOffset: sizeToDesign(-controlsPowerGap * 0.5),
+    powerSeparatorOffset: sizeToDesign(powerRuleOffset),
+    powerSeparatorOpacity: powerRuleFreeSpace >= 4 ? 1 : 0,
     separatorThickness: sizeToDesign(separatorThickness),
     // Firefox's wider Space Mono metrics need a little more breathing room in
     // the 76px key columns used by 568px-wide phones. Keep the adjustment
     // scoped to the narrow deck so larger landscape compositions are unchanged.
     fontSize: sizeToDesign(narrowViewport ? 7.25 : mix(10, 12, largeRhythm)),
-    captionSize: sizeToDesign(narrowViewport ? 8 : mix(9.5, 11, largeRhythm)),
+    captionSize: sizeToDesign(captionSize),
     iconSize: sizeToDesign(narrowViewport ? 12.25 : mix(14, 17, largeRhythm)),
     iconLeft: sizeToDesign(narrowViewport ? 6 : mix(10, 13, largeRhythm)),
     legendLeft: sizeToDesign(narrowViewport ? 19.5 : mix(34, 42, largeRhythm)),
@@ -359,6 +395,11 @@ export function installLandscapeMobileLayout(app) {
       '--landscape-ap-t',
       '--landscape-ap-r',
       '--landscape-ap-b',
+      '--landscape-mould-l',
+      '--landscape-mould-t',
+      '--landscape-mould-r',
+      '--landscape-mould-b',
+      '--landscape-screen-surround-r',
       '--landscape-render-w',
       '--landscape-render-h',
       '--landscape-gap-x',
@@ -380,6 +421,7 @@ export function installLandscapeMobileLayout(app) {
       '--landscape-action-separator-offset',
       '--landscape-controls-separator-offset',
       '--landscape-power-separator-offset',
+      '--landscape-power-separator-opacity',
       '--landscape-separator-thickness',
       '--landscape-font-size',
       '--landscape-caption-size',
@@ -420,12 +462,16 @@ export function installLandscapeMobileLayout(app) {
 
   const applyLandscape = (viewportWidth, viewportHeight, safe) => {
     const layout = closestLayout(viewportWidth / viewportHeight)
-    // The photographic chassis deliberately covers the complete viewport. Safe
-    // areas constrain controls, not the material surface, so there are no bars.
-    const fit = Math.max(viewportWidth / layout.width, viewportHeight / layout.height)
+    // Fill as much of the viewport as the artwork safely allows. The fitted
+    // plate may lose only its exterior cream perimeter; the measured black CRT
+    // moulding is never allowed to cross a viewport edge. Any remaining strip
+    // is extended from the exact edge material.
+    const fit = mouldingSafeFit(viewportWidth, viewportHeight, layout)
     const renderedWidth = layout.width * fit
     const renderedHeight = layout.height * fit
     const [left, top, right, bottom] = layout.aperture
+    const [mouldLeft, mouldTop, mouldRight, mouldBottom] = layout.moulding || layout.aperture
+    const screenSurroundRight = Math.max(layout.screen_surround_right ?? mouldRight, mouldRight)
     const deck = controlDeckGeometry(
       viewportWidth,
       viewportHeight,
@@ -454,12 +500,17 @@ export function installLandscapeMobileLayout(app) {
     root.setProperty('--landscape-ap-t', String(top))
     root.setProperty('--landscape-ap-r', String(right))
     root.setProperty('--landscape-ap-b', String(bottom))
+    root.setProperty('--landscape-mould-l', String(mouldLeft))
+    root.setProperty('--landscape-mould-t', String(mouldTop))
+    root.setProperty('--landscape-mould-r', String(mouldRight))
+    root.setProperty('--landscape-mould-b', String(mouldBottom))
+    root.setProperty('--landscape-screen-surround-r', String(screenSurroundRight))
     root.setProperty('--landscape-render-w', `${renderedWidth}px`)
     root.setProperty('--landscape-render-h', `${renderedHeight}px`)
     root.setProperty('--landscape-center-x', `${viewportWidth * 0.5}px`)
     root.setProperty('--landscape-center-y', `${viewportHeight * 0.5}px`)
-    root.setProperty('--landscape-gap-x', '0px')
-    root.setProperty('--landscape-gap-y', '0px')
+    root.setProperty('--landscape-gap-x', `${Math.max(0, (viewportWidth - renderedWidth) * .5)}px`)
+    root.setProperty('--landscape-gap-y', `${Math.max(0, (viewportHeight - renderedHeight) * .5)}px`)
     root.setProperty('--landscape-edge-top', layout.edges.top)
     root.setProperty('--landscape-edge-bottom', layout.edges.bottom)
     root.setProperty('--landscape-edge-left', layout.edges.left)
@@ -494,6 +545,7 @@ export function installLandscapeMobileLayout(app) {
       ['--landscape-slider-width', deck.sliderWidth],
       ['--landscape-rocker-width', deck.rockerWidth],
     ]) root.setProperty(property, `${value.toFixed(3)}px`)
+    root.setProperty('--landscape-power-separator-opacity', String(deck.powerSeparatorOpacity))
 
     if (activeLayout !== layout.id) loadBackground(image, layout)
     layer.hidden = false

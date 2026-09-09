@@ -42,7 +42,7 @@ async function expectInsideViewport(locator, width, height, tolerance = 1) {
 for (const viewport of [
   { width: 740, height: 480, variant: '3x2' },
   { width: 667, height: 375, variant: '16x9' },
-  { width: 915, height: 412, variant: '16x9' },
+  { width: 915, height: 412, variant: '20x9' },
 ]) {
   test(`landscape ${viewport.width}x${viewport.height} uses the ${viewport.variant} authored chassis`, async ({ page }, testInfo) => {
     test.skip(!isChromiumDesktop(testInfo), 'Geometry regression only needs one browser engine')

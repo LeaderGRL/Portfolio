@@ -88,23 +88,33 @@ antialiasing remain transparent. The user's `goal.png` is the composition
 reference: a generous CRT on the left, a quiet two-column bank of keys on the
 right, then actions, optical controls and power.
 
-The closest photographic aspect cover-fills the viewport uniformly, never
-stretched. The expanded ratio family keeps that cover crop negligible.
-`tools/build_chassis.py` measures each actual WebP into
+The closest photographic aspect is selected without forcing the 16:9 plate
+onto panoramic phones. It is fitted uniformly, never stretched, and may expand
+toward a cover fit only while the complete measured black CRT moulding remains
+inside the viewport. Any crop is therefore limited to expendable exterior cream
+material. A remaining strip is continued from the exact cream edge material.
+This keeps extreme ratios visually full without sacrificing the CRT moulding.
+`tools/build_chassis.py` measures each actual WebP aperture, outer black
+moulding, and the softer right edge of the cream CRT recess into
 `assets/build/meta.json` → `ASSET_META.landscape_chassis` → the
-`--landscape-ap-*` / edge properties in `src/landscape-mobile.js`. Source
-replacement therefore updates the aperture and material continuation together.
+`--landscape-ap-*` / screen-safe / edge properties in
+`src/landscape-mobile.js`. Source replacement therefore updates the aperture,
+control safe-zone, and material continuation together.
 
 Runtime CSS remains the token owner. `src/landscape-mobile.css` owns the
 landscape geometry and `--landscape-key-surface` (`#dcd2c1`), feeding the
 existing shared key's cavity, rim, face, legend and LED. Keys retain 44 CSS px
-touch areas with slimmer inset faces; navigation/action/optical/power tiers sit
-at 17/62/77/90% of the plate height. On viewports at most 340px high navigation
-moves to 8% to retain separate targets. On these short viewports, tighter icon
-padding and 9px minimum legends keep complete section names visible within
-the narrower faces. The 16:9 and 3:2 control field starts at 69% with 27% width;
-the panoramic field starts at 64% with 31% width. Identity
-stays on the CRT. Desktop and portrait keep their existing compositions.
+touch areas with slimmer inset faces. The green-guide composition in
+`goal.png` establishes a nominal 28.5% viewport-wide control deck, but its
+horizontal position is not a fixed percentage: the deck is centred between the
+measured outer CRT recess and the visible safe right edge of the chassis. Both
+material gutters are therefore equal, and the deck may shrink symmetrically on
+narrow near-square landscapes rather than touching the screen surround.
+Navigation/action/display/power tiers keep explicit whitespace boundaries.
+Separators sit only inside free whitespace; the POWER separator is placed above
+its label and is omitted on extremely short viewports when no collision-free
+rule can fit. Identity stays on the CRT. Desktop and portrait keep their
+existing compositions.
 
 Fullscreen starts at viewport origin on every aspect. Decorative desktop
 offsets never apply to it. The document and terminal reserve the actual
