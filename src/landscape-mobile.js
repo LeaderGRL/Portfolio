@@ -37,10 +37,9 @@ const EDGE_FILL_SAMPLE_DEPTH = 8
 // plate uses the moulding-safe fit and extends only its own cream material.
 const CONTROL_DECK = {
   widthRatio: 0.285,
-  panoramaWidthRatio: 0.2955,
+  panoramaWidthRatio: 0.315,
   panoramaStartAspect: 21 / 9,
   panoramaEndAspect: 3,
-  panoramaScreenGapRatio: 0.044,
   materialGapRatio: 0.015,
   materialGapMin: 8,
   materialGapMax: 18,
@@ -297,13 +296,10 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     0,
     1,
   )
-  // The approved ultra-wide reference deliberately leaves a larger quiet
-  // material band after the CRT before the control rail begins. Interpolate
-  // that composition from the 21:9 boundary so ordinary landscape ratios keep
-  // their established centred bay, while 3:1-class screens gain the reference
-  // spacing without a viewport-specific breakpoint.
-  const screenSideGap = viewportWidth * CONTROL_DECK.panoramaScreenGapRatio * panorama
-  const bayLeft = screenRight + screenSideGap
+  // The rail stays centred in the real cream material bay between the measured
+  // CRT surround and the visible right edge. Only its width grows toward 3:1;
+  // adding a panorama-only left bias made the controls look shifted right.
+  const bayLeft = screenRight
   const bayWidth = bayRight - bayLeft
   const materialGap = clamp(
     viewportWidth * CONTROL_DECK.materialGapRatio,
@@ -355,7 +351,7 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     + actionControlsGap
     + controlsHeight
     + powerHeight
-  const desiredControlsPowerGap = mix(mix(mix(18, 22, rhythm), 30, largeRhythm), 17, panorama)
+  const desiredControlsPowerGap = mix(mix(mix(18, 22, rhythm), 30, largeRhythm), 15, panorama)
   const powerGapCapacity = safe.height - topMargin - CONTROL_DECK.bottomMargin - baseHeight
   if (powerGapCapacity < 4) return null
   const controlsPowerGap = Math.min(desiredControlsPowerGap, powerGapCapacity)
@@ -372,7 +368,7 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   // The same measured cream recess that protects the CRT crop also owns the
   // ultra-wide vertical rhythm. At 3:1 this lands the first visible key face
   // just inside the bevel, matching goal2 without a 915x300 coordinate hack.
-  const panoramaIdealTop = screenSurroundTop + clamp(viewportHeight * .01, 2, 4)
+  const panoramaIdealTop = screenSurroundTop + clamp(viewportHeight * .017, 4, 6)
   const idealTop = mix(normalIdealTop, panoramaIdealTop, panorama)
   const maximumTop = viewportHeight - safe.bottom - CONTROL_DECK.bottomMargin - totalHeight
   const navTop = Math.max(minimumTop, Math.min(idealTop, maximumTop))
@@ -409,7 +405,7 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     actionSeparatorOffset: sizeToDesign(-navActionGap * 0.5),
     controlsSeparatorOffset: sizeToDesign(-actionControlsGap * 0.5),
     powerSeparatorOffset: sizeToDesign(powerRuleOffset),
-    powerSeparatorOpacity: powerRuleFreeSpace >= 4 ? 1 : 0,
+    powerSeparatorOpacity: powerRuleFreeSpace >= 2 ? 1 : 0,
     separatorThickness: sizeToDesign(separatorThickness),
     // Typography follows the fitted deck width instead of a viewport switch.
     // This keeps Firefox-safe narrow labels while avoiding an abrupt size jump

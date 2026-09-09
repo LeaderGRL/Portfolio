@@ -113,10 +113,11 @@ touch areas with slimmer inset faces. The green-guide composition in
 `goal.png` establishes a nominal 28.5% viewport-wide control deck, but its
 horizontal position is not a fixed percentage. Up to 21:9 the deck remains
 centred between the measured outer CRT recess and the visible safe right edge.
-Beyond 21:9, `goal2.png` establishes an intentional extra quiet band after the
-CRT and a slightly wider rail; both values interpolate continuously toward the
-3:1 composition instead of switching at one device resolution. Near-square
-landscapes can still shrink the deck rather than touching the screen surround.
+Beyond 21:9, `goal2.png` establishes a slightly wider rail that still remains
+centred in the measured cream bay between the CRT surround and the visible
+right edge. Its width interpolates continuously toward the 3:1 composition
+instead of switching at one device resolution. Near-square landscapes can
+still shrink the deck rather than touching the screen surround.
 The same measured CRT surround also bounds the control deck vertically. From
 21:9 toward 3:1, the invisible key targets and tier rhythm compact continuously
 until the first visible key and POWER both remain inside the photographed cream
@@ -127,6 +128,11 @@ Separators sit only inside free whitespace; the POWER separator is placed above
 its label and is omitted on extremely short viewports when no collision-free
 rule can fit. Identity stays on the CRT. Desktop and portrait keep their
 existing compositions.
+
+The landscape optical-control tier has two vertical dividers, each centred in
+the grid gap between CRT / FULL SCREEN / VOLUME. The volume slider keeps its
+own longer track, but its movable thumb uses the same physical height as the CRT
+and FULL SCREEN switch thumbs at every landscape size.
 
 Fullscreen starts at viewport origin on every aspect. Decorative desktop
 offsets never apply to it. The document and terminal reserve the actual

@@ -82,6 +82,17 @@ for (const [viewport, expectedVariant] of [
       const actionFirstTop = Math.min(...actionFaces.map(box => box.top))
       const actionLastBottom = Math.max(...actionFaces.map(box => box.bottom))
       const controls = rect('.panel--right .controls-row')
+      const controlThumbHeights = boxes('.panel--right .controls-row .switch__thumb, .panel--right .controls-row .slider__thumb')
+        .map(box => box.height)
+      const controlSeparators = [...document.querySelectorAll('.panel--right .controls-row .control + .control')]
+        .map(node => {
+          const separator = getComputedStyle(node, '::before')
+          return {
+            content: separator.content,
+            width: parseFloat(separator.width) * machineScale,
+            height: parseFloat(separator.height) * machineScale,
+          }
+        })
       const power = rect('.panel--right .bottom-row')
       const powerRule = getComputedStyle(document.querySelector('.panel--right .bottom-row'), '::before')
       const fit = parseFloat(style.getPropertyValue('--fit')) || 1
@@ -106,6 +117,8 @@ for (const [viewport, expectedVariant] of [
         actionFirstTop,
         actionLastBottom,
         controls,
+        controlThumbHeights,
+        controlSeparators,
         power,
         powerRocker,
         powerRuleY,
@@ -150,11 +163,20 @@ for (const [viewport, expectedVariant] of [
     expect(rightMaterialGap).toBeGreaterThanOrEqual(7.5)
     const aspect = viewport.width / viewport.height
     const panorama = Math.max(0, Math.min(1, (aspect - 21 / 9) / (3 - 21 / 9)))
-    const expectedScreenSideBias = viewport.width * 0.044 * panorama
-    expect(Math.abs((leftMaterialGap - rightMaterialGap) - expectedScreenSideBias)).toBeLessThan(1.5)
-    expect(geometry.rail.width / viewport.width).toBeLessThanOrEqual(0.286 + 0.0105 * panorama)
+    expect(Math.abs(leftMaterialGap - rightMaterialGap)).toBeLessThan(1.5)
+    expect(geometry.rail.width / viewport.width).toBeLessThanOrEqual(0.286 + 0.03 * panorama)
+    if (panorama > 0.9) expect(geometry.rail.width / viewport.width).toBeGreaterThanOrEqual(0.31)
     expect(geometry.rail.left).toBeGreaterThanOrEqual(Math.max(0, geometry.machine.left) - 0.5)
     expect(geometry.rail.right).toBeLessThanOrEqual(Math.min(viewport.width, geometry.machine.right) + 0.5)
+
+    expect(geometry.controlThumbHeights).toHaveLength(3)
+    expect(Math.max(...geometry.controlThumbHeights) - Math.min(...geometry.controlThumbHeights)).toBeLessThan(0.35)
+    expect(geometry.controlSeparators).toHaveLength(2)
+    for (const separator of geometry.controlSeparators) {
+      expect(separator.content).not.toBe('none')
+      expect(separator.width).toBeGreaterThanOrEqual(0.8)
+      expect(separator.height).toBeGreaterThan(12)
+    }
 
     const minimumTargetHeight = 44 - 6 * panorama
     for (const height of geometry.targetHeights) expect(height).toBeGreaterThanOrEqual(minimumTargetHeight - 0.1)
