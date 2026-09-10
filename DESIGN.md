@@ -76,33 +76,66 @@ rail is a centred 430px-wide column with a 10px rhythm between the six keys;
 it begins noticeably below the CRT instead of visually attaching to its frame.
 CRT/Volume form a second lower tier, while Power sits on a distinct final tier.
 
-## Landscape mobile reference (September 8, 2026)
+## Landscape mobile reference (September 9, 2026)
 
-Touch-first landscape devices use the three supplied photographic plates in
-`assets/src/chassis-frame-landscape-{3x2,16x9,21x9}.webp`. They are WebP
-conversions of the user's `14_12_34 (1)`, `14_12_35 (2)` and `14_12_35 (3)`
-PNGs respectively, at their original 1536 × 1024, 1672 × 941 and 1916 × 821
-dimensions. Alpha is preserved exactly after normalising near-opaque material
-to opaque, following the existing chassis pipeline. The fourth supplied image,
-`00_02_50`, is the composition reference: a generous CRT on the left, a quiet
-two-column bank of keys on the right, then actions, optical controls and power.
+Touch-first landscape devices use eight supplied photographic plates in
+`assets/src/chassis-frame-landscape-{5x4,4x3,3x2,16x10,16x9,20x9,21x9,3x1}.webp`.
+They retain their authored 1402 × 1122 through 2172 × 724 dimensions, so common
+phone and small-tablet ratios select a near-exact chassis instead of materially
+cropping a generic plate. Only the exterior transparency from generation is
+filled from adjacent cream material; the artist-cut CRT aperture and its
+antialiasing remain transparent. The user's `goal.png` is the composition
+reference: a generous CRT on the left, a quiet two-column bank of keys on the
+right, then actions, optical controls and power.
 
-The closest photographic aspect is contain-fitted inside the safe area, never
-stretched. `tools/build_chassis.py` measures each actual WebP into
+The closest photographic aspect is selected without forcing the 16:9 plate
+onto panoramic phones. The dedicated 3:1 plate handles 915 × 300-class browser
+chrome cases. Its rounded exterior corners are allowed to be transparent: the
+asset pipeline identifies the largest enclosed transparent component as the CRT
+opening, so edge transparency can never be mistaken for the glass aperture.
+Every plate is fitted uniformly, never stretched, and may expand
+toward a cover fit only while the complete measured CRT moulding and cream
+screen surround remain inside the viewport. Any crop is therefore limited to
+expendable exterior cream material. A remaining strip is continued from the
+exact cream edge material. This keeps extreme ratios visually full without
+sacrificing the screen bevel.
+`tools/build_chassis.py` measures each actual WebP aperture, outer black
+moulding, and the softer right edge of the cream CRT recess into
 `assets/build/meta.json` → `ASSET_META.landscape_chassis` → the
-`--landscape-ap-*` / edge properties in `src/landscape-mobile.js`. Source
-replacement therefore updates the aperture and material continuation together.
+`--landscape-ap-*` / screen-safe / edge properties in
+`src/landscape-mobile.js`. Source replacement therefore updates the aperture,
+control safe-zone, and material continuation together.
 
 Runtime CSS remains the token owner. `src/landscape-mobile.css` owns the
 landscape geometry and `--landscape-key-surface` (`#dcd2c1`), feeding the
-existing shared key's cavity, rim, face, legend and LED. Keys retain 44 CSS px
-touch areas with slimmer inset faces; navigation/action/optical/power tiers sit
-at 17/62/77/90% of the plate height. On viewports at most 340px high navigation
-moves to 8% to retain separate targets. On these short viewports, tighter icon
-padding and 9px minimum legends keep complete section names visible within
-the narrower faces. The 16:9 and 3:2 control field starts at 69% with 27% width;
-the panoramic field starts at 64% with 31% width. Identity
-stays on the CRT. Desktop and portrait keep their existing compositions.
+existing shared key's cavity, rim, face, legend and LED. Standard landscapes
+retain 44 CSS px touch areas with slimmer inset faces; the extreme 3:1 regime
+compacts those targets only as much as required to keep all hardware inside the
+authored CRT surround. The green-guide composition in
+`goal.png` establishes a nominal 28.5% viewport-wide control deck, but its
+horizontal position is not a fixed percentage. Up to 21:9 the deck remains
+centred between the measured outer CRT recess and the visible safe right edge.
+Beyond 21:9, `goal2.png` establishes a slightly wider rail that still remains
+centred in the measured cream bay between the CRT surround and the visible
+right edge. Its width interpolates continuously toward the 3:1 composition
+instead of switching at one device resolution. Near-square landscapes can
+still shrink the deck rather than touching the screen surround.
+The same measured CRT surround also bounds the control deck vertically. From
+21:9 toward 3:1, the invisible key targets and tier rhythm compact continuously
+until the first visible key and POWER both remain inside the photographed cream
+bevel. The visible key faces and their typography slim continuously toward 3:1
+while preserving the larger underlying hit targets; this remains a panoramic
+geometry rule, not a 915 × 300 viewport exception.
+Navigation/action/display/power tiers keep explicit whitespace boundaries.
+Separators sit only inside free whitespace; the POWER separator is placed above
+its label and is omitted on extremely short viewports when no collision-free
+rule can fit. Identity stays on the CRT. Desktop and portrait keep their
+existing compositions.
+
+The landscape optical-control tier has two vertical dividers, each centred in
+the grid gap between CRT / FULL SCREEN / VOLUME. The volume slider keeps its
+own longer track, but its movable thumb uses the same physical height as the CRT
+and FULL SCREEN switch thumbs at every landscape size.
 
 Fullscreen starts at viewport origin on every aspect. Decorative desktop
 offsets never apply to it. The document and terminal reserve the actual

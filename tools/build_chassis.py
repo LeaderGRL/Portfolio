@@ -5,7 +5,8 @@ import time
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
+from scipy import ndimage
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "assets" / "src" / "chassis-moulding-desktop.png"
@@ -14,7 +15,7 @@ MOBILE_SOURCE = ROOT / "assets" / "src" / "chassis-moulding-mobile.png"
 MOBILE_FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-mobile.png"
 LANDSCAPE_SOURCES = {
     variant: ROOT / "assets" / "src" / f"chassis-frame-landscape-{variant}.webp"
-    for variant in ("3x2", "16x9", "21x9")
+    for variant in ("5x4", "4x3", "3x2", "16x10", "16x9", "20x9", "21x9", "3x1")
 }
 EXPORT = ROOT / "assets" / "chassis"
 BUILD = ROOT / "assets" / "build"
@@ -36,6 +37,95 @@ def aperture_from_mask(mask):
         round((xs.max() + 1) / width, 6),
         round((ys.max() + 1) / height, 6),
     ]
+
+
+def enclosed_aperture_from_alpha(rgba):
+    """Measure the largest transparent region that does not touch the plate edge.
+
+    Landscape artwork can have transparent antialiased outer corners as well as
+    the intentional CRT cutout. Measuring every transparent pixel makes those
+    corners expand the aperture to the full canvas. Connected-component
+    labelling lets the asset pipeline keep the authored glass opening while
+    ignoring exterior transparency, without any viewport-specific coordinates.
+    """
+    transparent = rgba[:, :, 3] < 128
+    labels, count = ndimage.label(transparent)
+    if count == 0:
+        raise ValueError("landscape chassis has no transparent CRT aperture")
+
+    border_labels = np.unique(np.concatenate([
+        labels[0, :],
+        labels[-1, :],
+        labels[:, 0],
+        labels[:, -1],
+    ]))
+    areas = np.bincount(labels.ravel(), minlength=count + 1)
+    areas[0] = 0
+    areas[border_labels] = 0
+    aperture_label = int(np.argmax(areas))
+    if aperture_label == 0 or areas[aperture_label] == 0:
+        raise ValueError("landscape chassis has no enclosed transparent CRT aperture")
+
+    return normalized_bounds(labels == aperture_label)
+
+
+def normalized_bounds(mask):
+    """Return the normalized bounding box of a boolean pixel mask."""
+    ys, xs = np.nonzero(mask)
+    if not len(xs) or not len(ys):
+        raise ValueError("cannot measure an empty chassis feature mask")
+    height, width = mask.shape
+    return [
+        round(xs.min() / width, 6),
+        round(ys.min() / height, 6),
+        round((xs.max() + 1) / width, 6),
+        round((ys.max() + 1) / height, 6),
+    ]
+
+
+def moulding_bounds(rgba):
+    """Measure the complete black CRT moulding, excluding transparent glass.
+
+    The supplied landscape plates use a stable near-black moulding and a
+    transparent screen aperture. Measuring the opaque low-luminance pixels
+    gives layout code the outside edge it actually has to avoid; the aperture
+    alone is not a sufficient collision boundary for the control deck.
+    """
+    alpha = rgba[:, :, 3]
+    rgb = rgba[:, :, :3].astype(np.float32)
+    luminance = rgb[:, :, 0] * .2126 + rgb[:, :, 1] * .7152 + rgb[:, :, 2] * .0722
+    return normalized_bounds((alpha > 127) & (luminance < 130))
+
+
+def screen_surround_right(rgba, moulding):
+    """Measure the right edge of the cream CRT recess around the black moulding.
+
+    Control hardware must clear the complete screen assembly, not only the
+    near-black moulding. The outer cream recess is a softer edge, so detect the
+    strongest smoothed vertical luminance transition immediately to the right
+    of the measured moulding. Keeping this measurement in the asset pipeline
+    makes replacement landscape artwork update the control safe-zone as well.
+    """
+    rgb = rgba[:, :, :3].astype(np.float32)
+    luminance = rgb[:, :, 0] * .2126 + rgb[:, :, 1] * .7152 + rgb[:, :, 2] * .0722
+    smooth = np.asarray(
+        Image.fromarray(np.clip(luminance, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(5)),
+        dtype=np.float32,
+    )
+    gradient_x = np.abs(np.diff(smooth, axis=1))
+    height, width = luminance.shape
+    y0 = int(height * .08)
+    y1 = int(height * .92)
+    score = np.percentile(gradient_x[y0:y1], 90, axis=0)
+
+    moulding_right = int(round(moulding[2] * width))
+    search_start = max(0, moulding_right + int(round(width * .01)))
+    search_end = min(len(score), moulding_right + int(round(width * .05)))
+    if search_end <= search_start:
+        return moulding[2]
+
+    edge = search_start + int(np.argmax(score[search_start:search_end]))
+    return round((edge + 1) / width, 6)
 
 
 def supplied_frame(path):
@@ -237,10 +327,13 @@ def main():
                 stops.append(f"{colour} {fraction * 100:g}%")
             angle = "90deg" if edge in ("top", "bottom") else "180deg"
             edges[edge] = f"linear-gradient({angle},{','.join(stops)})"
+        moulding = moulding_bounds(rgba)
         metadata["landscape_chassis"][variant] = {
             "width": frame.width,
             "height": frame.height,
-            "aperture": aperture_from_mask(Image.fromarray(255 - rgba[:, :, 3])),
+            "aperture": enclosed_aperture_from_alpha(rgba),
+            "moulding": moulding,
+            "screen_surround_right": screen_surround_right(rgba, moulding),
             "edges": edges,
         }
     metadata_tmp = metadata_path.with_name(metadata_path.name + ".tmp")

@@ -1,0 +1,16 @@
+/* ENTER/BACK use the same visual grammar as the six navigation keys without
+   changing their existing desktop/portrait labels. */
+.is-landscape-mobile #action-keys .key__legend{
+  font-size:0;
+}
+
+.is-landscape-mobile #action-keys .key__legend::after{
+  content:attr(data-landscape-label);
+  font-size:var(--landscape-font-size);
+  font-weight:650;
+  letter-spacing:.075em;
+}
+
+.is-landscape-mobile #action-keys .key__icon--action{
+  display:grid;
+}
