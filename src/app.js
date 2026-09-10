@@ -573,6 +573,10 @@ export class App {
     this.documentRuntime?.syncSource?.();
 
     this.term.scroll = retype ? 0 : Math.min(keepScroll, this.term.maxScroll);
+    const tube = document.getElementById("tube");
+    if (tube) {
+      tube.dataset.terminalScroll = String(this.term.scroll);
+    }
     this.total = this.term.countGlyphs();
     if (retype) { this.reveal = 0; this._announce(); }
     this.revealTarget = this.total;

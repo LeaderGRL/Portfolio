@@ -31,6 +31,7 @@ const INTERACTIVE_SELECTOR = [
 const MIN_TARGET_PX = 24
 const LIST_FIRST_ROW = 3
 const TAP_SLOP_PX = 12
+const TERMINAL_DRAG_SLOP_PX = 6
 
 function closestInteractive(target) {
   return target instanceof Element ? target.closest(INTERACTIVE_SELECTOR) : null
@@ -196,6 +197,124 @@ function bindScreenListingPointer(app) {
   }
 }
 
+function bindTerminalTouchScroll(app) {
+  const tube = document.getElementById('tube')
+  if (!tube) return () => {}
+
+  const activePointers = new Set()
+  let gesture = null
+
+  const canStart = event => {
+    if (!event.pointerType || event.pointerType === 'mouse' || event.button > 0) return false
+    if (closestInteractive(event.target)) return false
+    if (tube.dataset.displayMode !== 'terminal') return false
+    if (!app.term?.maxScroll) return false
+
+    const rect = app.rasterClientRect?.() || tube.getBoundingClientRect()
+    if (!rect.width || !rect.height || !containsClientRect(rect, event.clientX, event.clientY)) return false
+    return rect
+  }
+
+  const endGesture = event => {
+    const current = gesture
+    if (current && current.pointerId === event.pointerId) {
+      if (current.moved) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+      if (event.isTrusted && tube.hasPointerCapture?.(event.pointerId)) {
+        tube.releasePointerCapture?.(event.pointerId)
+      }
+      if (gesture === current) gesture = null
+    }
+    activePointers.delete(event.pointerId)
+  }
+
+  const onPointerDown = event => {
+    if (!event.pointerType || event.pointerType === 'mouse' || event.button > 0) return
+
+    // A second contact cancels manual row scrolling and remains available to
+    // the browser for pinch zoom. Irrelevant single contacts are not tracked,
+    // so releasing one outside the tube cannot poison the next gesture.
+    if (gesture && gesture.pointerId !== event.pointerId) {
+      activePointers.add(event.pointerId)
+      gesture = null
+      return
+    }
+
+    const rect = canStart(event)
+    if (!rect) return
+
+    activePointers.add(event.pointerId)
+    if (activePointers.size > 1) {
+      gesture = null
+      return
+    }
+
+    gesture = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      lastY: event.clientY,
+      carryRows: 0,
+      rowHeight: Math.max(1, rect.height * CHAR_H / SRC_H),
+      moved: false,
+    }
+
+    // Native pointer capture keeps a drag alive when the finger leaves the
+    // curved glass. Synthetic regression events are not active pointers and
+    // therefore deliberately skip capture.
+    if (event.isTrusted) tube.setPointerCapture?.(event.pointerId)
+  }
+
+  const onPointerMove = event => {
+    const current = gesture
+    if (!current || current.pointerId !== event.pointerId) return
+    if (activePointers.size > 1) {
+      if (gesture === current) gesture = null
+      return
+    }
+
+    const total = current.startY - event.clientY
+    if (!current.moved && Math.abs(total) < TERMINAL_DRAG_SLOP_PX) return
+
+    const delta = current.lastY - event.clientY
+    current.lastY = event.clientY
+    current.moved = true
+    current.carryRows += delta / current.rowHeight
+
+    const rows = current.carryRows > 0
+      ? Math.floor(current.carryRows)
+      : Math.ceil(current.carryRows)
+    if (rows) {
+      app.scrollBy(rows)
+      current.carryRows -= rows
+    }
+
+    event.preventDefault()
+  }
+
+  const onBlur = () => {
+    activePointers.clear()
+    gesture = null
+  }
+
+  tube.addEventListener('pointerdown', onPointerDown)
+  tube.addEventListener('pointermove', onPointerMove, { passive: false })
+  tube.addEventListener('pointerup', endGesture)
+  tube.addEventListener('pointercancel', endGesture)
+  addEventListener('blur', onBlur)
+
+  return () => {
+    tube.removeEventListener('pointerdown', onPointerDown)
+    tube.removeEventListener('pointermove', onPointerMove)
+    tube.removeEventListener('pointerup', endGesture)
+    tube.removeEventListener('pointercancel', endGesture)
+    removeEventListener('blur', onBlur)
+    activePointers.clear()
+    gesture = null
+  }
+}
+
 function bindContactLinkLayer(app) {
   const nav = document.getElementById('nav-keys')
   if (!nav) return () => {}
@@ -216,6 +335,7 @@ function bindContactLinkLayer(app) {
 export function installRuntimeControls(app) {
   const cleanups = [
     bindCompactTargetExpansion(),
+    bindTerminalTouchScroll(app),
     bindScreenListingPointer(app),
     bindContactLinkLayer(app),
   ]

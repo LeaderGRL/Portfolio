@@ -36,6 +36,13 @@
   pointer-events:none;
 }
 
+/* Terminal pages render into a canvas, so the browser has no native scroll
+   container to own a one-finger pan. Keep pinch zoom available while pointer
+   events translate vertical drags into terminal rows. */
+.tube[data-display-mode="terminal"]{
+  touch-action:pinch-zoom;
+}
+
 .tube.is-fallback[data-display-mode="article"] #fallback2d{
   opacity:0;
 }
