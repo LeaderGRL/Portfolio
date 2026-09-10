@@ -85,10 +85,14 @@ for (const viewport of [
       const rect = element.getBoundingClientRect()
       return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }
     }))
+    const aspect = viewport.width / viewport.height
+    const panorama = Math.max(0, Math.min(1, (aspect - 21 / 9) / (3 - 21 / 9)))
     for (const box of keyBoxes) {
-      // Layout values are converted from source-image coordinates and can
-      // land a tiny fraction below 44 CSS px after browser rounding.
-      expect(box.height).toBeGreaterThanOrEqual(43.9)
+      // Ultra-wide browser-chrome layouts intentionally compact the target to
+      // 38px so the full physical stack remains inside the CRT surround. The
+      // dedicated landscape composition test separately verifies the visible
+      // cap size and tier spacing.
+      expect(box.height).toBeGreaterThanOrEqual(43.9 - 6 * panorama)
     }
 
     const navKeysOwnTheirCentres = await page.locator('#nav-keys .key').evaluateAll(keys => keys.map(key => {

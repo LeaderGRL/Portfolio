@@ -199,9 +199,11 @@ for (const [viewport, expectedVariant] of [
     expect(largestNavGap).toBeLessThanOrEqual(18 + 7 * largeRhythm)
     expect(navActionGap).toBeGreaterThan(largestNavGap + 5)
     if (viewport.height <= 320) {
-      // The 44px targets own most of a 300px-high viewport. The darker tier
-      // separator preserves hierarchy while whitespace compresses.
-      expect(actionControlsGap).toBeGreaterThanOrEqual(largestNavGap)
+      // Touch targets own most of a 300px-high viewport. The darker tier
+      // separator preserves hierarchy while whitespace compresses. Slimmer
+      // panoramic key faces can make the visible-row gap fractionally larger
+      // than the fixed action/display gap after browser rounding.
+      expect(actionControlsGap).toBeGreaterThanOrEqual(largestNavGap - 0.5)
     } else {
       expect(actionControlsGap).toBeGreaterThan(largestNavGap + 7)
     }
@@ -223,6 +225,8 @@ for (const [viewport, expectedVariant] of [
       // same cream CRT surround. This guards against the former 3:1 layout,
       // where the top keys and POWER visibly protruded beyond the bevel.
       expect(geometry.firstNavFaceTop).toBeGreaterThanOrEqual(geometry.screenSurround.top + 5)
+      expect(Math.max(...geometry.faceHeights)).toBeLessThanOrEqual(24.5)
+      expect(geometry.navLabelFontSize).toBeLessThanOrEqual(8.75)
       expect(geometry.powerRocker.bottom).toBeLessThanOrEqual(geometry.screenSurround.bottom)
     }
 

@@ -108,8 +108,10 @@ control safe-zone, and material continuation together.
 
 Runtime CSS remains the token owner. `src/landscape-mobile.css` owns the
 landscape geometry and `--landscape-key-surface` (`#dcd2c1`), feeding the
-existing shared key's cavity, rim, face, legend and LED. Keys retain 44 CSS px
-touch areas with slimmer inset faces. The green-guide composition in
+existing shared key's cavity, rim, face, legend and LED. Standard landscapes
+retain 44 CSS px touch areas with slimmer inset faces; the extreme 3:1 regime
+compacts those targets only as much as required to keep all hardware inside the
+authored CRT surround. The green-guide composition in
 `goal.png` establishes a nominal 28.5% viewport-wide control deck, but its
 horizontal position is not a fixed percentage. Up to 21:9 the deck remains
 centred between the measured outer CRT recess and the visible safe right edge.
@@ -121,8 +123,9 @@ still shrink the deck rather than touching the screen surround.
 The same measured CRT surround also bounds the control deck vertically. From
 21:9 toward 3:1, the invisible key targets and tier rhythm compact continuously
 until the first visible key and POWER both remain inside the photographed cream
-bevel. The visible key faces keep their authored proportions; this is a
-panoramic geometry rule, not a 915 × 300 viewport exception.
+bevel. The visible key faces and their typography slim continuously toward 3:1
+while preserving the larger underlying hit targets; this remains a panoramic
+geometry rule, not a 915 × 300 viewport exception.
 Navigation/action/display/power tiers keep explicit whitespace boundaries.
 Separators sit only inside free whitespace; the POWER separator is placed above
 its label and is omitted on extremely short viewports when no collision-free

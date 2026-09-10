@@ -335,7 +335,12 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   const largeRhythm = clamp((viewportHeight - 412) / 188, 0, 1)
   const normalKeyTarget = mix(CONTROL_DECK.keyTarget, 60, largeRhythm)
   const keyTarget = mix(normalKeyTarget, 38, panorama)
-  const faceHeight = mix(mix(27.5, 30, rhythm), 42, largeRhythm)
+  const normalFaceHeight = mix(mix(27.5, 30, rhythm), 42, largeRhythm)
+  // The 3:1 reference uses noticeably slimmer physical key caps while the
+  // invisible touch targets keep their existing reachability. Interpolating
+  // the cap height avoids a viewport-specific override and naturally lowers
+  // the visible face inside the unchanged hit area.
+  const faceHeight = mix(normalFaceHeight, 23.5, panorama)
   // Keep a real one-pixel gutter even on the shortest supported landscape.
   // Zero-gap rows can overlap by a fractional CSS pixel after the design-space
   // values are scaled back into viewport space on Chromium.
@@ -381,6 +386,8 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   const separatorThickness = 1.25
   const compactCaptionSize = mix(8, 9.5, deckDensity)
   const captionSize = mix(compactCaptionSize, 11, largeRhythm * deckDensity)
+  const normalFontSize = mix(mix(6.7, 8.6, deckDensity), 10.5, largeRhythm * deckDensity)
+  const fontSize = mix(normalFontSize, 8.4, panorama)
   const powerLabelOffset = captionSize * 1.35
   const powerRuleFreeSpace = controlsPowerGap - powerLabelOffset
   const powerRuleOffset = -(controlsPowerGap + powerLabelOffset) * 0.5
@@ -410,7 +417,7 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     // Typography follows the fitted deck width instead of a viewport switch.
     // This keeps Firefox-safe narrow labels while avoiding an abrupt size jump
     // on common 667px and 800px landscape phones.
-    fontSize: sizeToDesign(mix(mix(7.25, 10, deckDensity), 12, largeRhythm * deckDensity)),
+    fontSize: sizeToDesign(fontSize),
     captionSize: sizeToDesign(captionSize),
     iconSize: sizeToDesign(narrowViewport ? 12.25 : mix(14, 17, largeRhythm)),
     iconLeft: sizeToDesign(narrowViewport ? 6 : mix(10, 13, largeRhythm)),
