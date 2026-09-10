@@ -22,11 +22,7 @@ jobs:
   build-and-test:
     name: Build and test
     runs-on: ubuntu-latest
-    # Browser coverage runs across four projects with one worker so
-    # software-GL fullscreen tests do not compete for the hosted runner GPU.
-    # The previous limit could cancel an otherwise progressing suite before
-    # the final mobile-chromium cases completed.
-    timeout-minutes: 35
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -48,9 +44,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Audit repository assets
         run: npm run audit:assets
@@ -78,14 +71,74 @@ jobs:
       - name: Run runtime tests
         run: npm run test:runtime
 
+      - name: Upload production bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-dist
+          path: dist/
+          retention-days: 1
+
+  browser-tests:
+    name: Browser tests (${{ matrix.project }})
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: chromium
+            browser: chromium
+          - project: firefox
+            browser: firefox
+          - project: webkit
+            browser: webkit
+          - project: mobile-chromium
+            browser: chromium
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore Playwright browser cache
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ matrix.browser }}
+
+      - name: Install Playwright system dependencies
+        run: npx playwright install-deps ${{ matrix.browser }}
+
+      - name: Install Playwright browser
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install ${{ matrix.browser }}
+
+      - name: Download production bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: production-dist
+          path: dist/
+
+      # Each browser project gets its own runner. This keeps software-GL tests
+      # isolated while reducing wall-clock CI time from one long serial suite.
       - name: Run browser tests
-        run: npm run test:e2e
+        run: npm run test:e2e -- --project=${{ matrix.project }}
 
       - name: Upload Playwright diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.project }}
           path: |
             playwright-report/
             test-results/
@@ -94,7 +147,9 @@ jobs:
 
   publish-image:
     name: Publish production image
-    needs: build-and-test
+    needs:
+      - build-and-test
+      - browser-tests
 
     # Only publish production after a successful push to master.
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'

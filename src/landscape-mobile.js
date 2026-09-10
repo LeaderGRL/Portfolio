@@ -388,6 +388,12 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   const captionSize = mix(compactCaptionSize, 11, largeRhythm * deckDensity)
   const normalFontSize = mix(mix(6.7, 8.6, deckDensity), 10.5, largeRhythm * deckDensity)
   const fontSize = mix(normalFontSize, 8.4, panorama)
+  // Padding must follow the fitted rail just like typography. Keeping the
+  // desktop-sized 34px label inset immediately above 640px left PROJECTS with
+  // almost no font-metric tolerance on Firefox/Linux. Interpolating from the
+  // compact inset removes that breakpoint and preserves readable text size.
+  const compactLegendLeft = mix(19.5, 34, deckDensity)
+  const legendLeft = mix(compactLegendLeft, 42, largeRhythm * deckDensity)
   const powerLabelOffset = captionSize * 1.35
   const powerRuleFreeSpace = controlsPowerGap - powerLabelOffset
   const powerRuleOffset = -(controlsPowerGap + powerLabelOffset) * 0.5
@@ -421,7 +427,7 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     captionSize: sizeToDesign(captionSize),
     iconSize: sizeToDesign(narrowViewport ? 12.25 : mix(14, 17, largeRhythm)),
     iconLeft: sizeToDesign(narrowViewport ? 6 : mix(10, 13, largeRhythm)),
-    legendLeft: sizeToDesign(narrowViewport ? 19.5 : mix(34, 42, largeRhythm)),
+    legendLeft: sizeToDesign(legendLeft),
     ledSize: sizeToDesign(narrowViewport ? 4 : mix(4.5, 6, largeRhythm)),
     ledTop: sizeToDesign(narrowViewport ? 5 : mix(5, 7, largeRhythm)),
     ledRight: sizeToDesign(narrowViewport ? 4 : mix(6, 8, largeRhythm)),
