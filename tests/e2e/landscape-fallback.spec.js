@@ -29,6 +29,8 @@ async function expectLandscapeFallback(page, viewport) {
   const machine = page.locator('#machine')
   await expect(machine).toBeVisible()
   await expect(machine).not.toHaveClass(/is-landscape-mobile/)
+  await expect(machine).toHaveClass(/is-compact/)
+  await expect(page.locator('body')).toHaveClass(/is-compact-stage/)
   await expect(page.locator('body')).not.toHaveClass(/is-landscape-mobile-stage/)
   await expect(page.locator('.machine__background--landscape')).toBeHidden()
   await expect(page.locator('#tube')).not.toHaveAttribute('data-raster-layout', 'landscape')
@@ -40,4 +42,8 @@ test('near-square touch viewport falls back instead of overlapping the CRT', asy
 
 test('very short touch viewport falls back instead of clipping the control stack', async ({ page }) => {
   await expectLandscapeFallback(page, { width: 568, height: 240 })
+})
+
+test('exact 3:1 viewport falls back when the control deck cannot fit inside the CRT surround', async ({ page }) => {
+  await expectLandscapeFallback(page, { width: 768, height: 256 })
 })

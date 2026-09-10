@@ -329,13 +329,13 @@ export class App {
     if (owned && this.state.fullscreen) this.setFullscreen(false);
   }
 
-  _fit() {
+  _fit({ forceCompact = false } = {}) {
     const machine = document.getElementById("machine");
 
     // The 941x1672 chassis is an authored portrait composition. Selecting it
     // merely because a phone is narrow collapses it to unreadable scale in
     // landscape; landscape viewports use the horizontal desktop composition.
-    const compact = innerWidth / innerHeight < 1.05;
+    const compact = forceCompact || innerWidth / innerHeight < 1.05;
     machine.classList.toggle("is-compact", compact);
     document.body.classList.toggle("is-compact-stage", compact);
 

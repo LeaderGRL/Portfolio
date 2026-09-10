@@ -349,6 +349,9 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   const actionControlsGap = mix(mix(mix(7, 22, rhythm), 30, largeRhythm), 8, panorama)
   const controlsHeight = mix(mix(mix(34, 49, rhythm), 64, largeRhythm), 34, panorama)
   const powerHeight = mix(mix(mix(30, 40, rhythm), 52, largeRhythm), 30, panorama)
+  const rockerWidth = mix(24, 30, largeRhythm)
+  const rockerAspect = Number(ASSET_META.rocker?.aspect) || 1
+  const rockerHeight = rockerWidth / rockerAspect
   const topMargin = 6
   const baseHeight = keyTarget * 4
     + rowGap * 2
@@ -368,14 +371,27 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
   const requiredHeight = totalHeight + topMargin + CONTROL_DECK.bottomMargin
   if (requiredHeight > safe.height) return null
 
-  const minimumTop = safe.top + topMargin
+  const viewportMinimumTop = safe.top + topMargin
   const normalIdealTop = viewportHeight * CONTROL_DECK.topRatio
   // The same measured cream recess that protects the CRT crop also owns the
   // ultra-wide vertical rhythm. At 3:1 this lands the first visible key face
   // just inside the bevel, matching goal2 without a 915x300 coordinate hack.
-  const panoramaIdealTop = screenSurroundTop + clamp(viewportHeight * .017, 4, 6)
+  const surroundInset = clamp(viewportHeight * .017, 4, 6)
+  const panoramaMinimumTop = Math.max(viewportMinimumTop, screenSurroundTop + surroundInset)
+  const viewportMaximumTop = viewportHeight - safe.bottom - CONTROL_DECK.bottomMargin - totalHeight
+  // The panorama contract applies to visible hardware, not to the larger
+  // invisible hit rows. Bound the actual POWER rocker against the photographed
+  // surround while keeping its full touch row available for interaction.
+  const powerHardwareBottomOffset = totalHeight - powerHeight + rockerHeight
+  const panoramaMaximumTop = Math.min(
+    viewportMaximumTop,
+    screenSurroundBottom - powerHardwareBottomOffset,
+  )
+  const minimumTop = mix(viewportMinimumTop, panoramaMinimumTop, panorama)
+  const maximumTop = mix(viewportMaximumTop, panoramaMaximumTop, panorama)
+  if (maximumTop < minimumTop) return null
+  const panoramaIdealTop = panoramaMinimumTop
   const idealTop = mix(normalIdealTop, panoramaIdealTop, panorama)
-  const maximumTop = viewportHeight - safe.bottom - CONTROL_DECK.bottomMargin - totalHeight
   const navTop = Math.max(minimumTop, Math.min(idealTop, maximumTop))
   const navHeight = keyTarget * 3 + rowGap * 2
   const actionTop = navTop + navHeight + navActionGap
@@ -433,7 +449,7 @@ function controlDeckGeometry(viewportWidth, viewportHeight, safe, layout, fit, r
     ledRight: sizeToDesign(narrowViewport ? 4 : mix(6, 8, largeRhythm)),
     switchWidth: sizeToDesign(narrowViewport ? 44 : mix(50, 65, largeRhythm)),
     sliderWidth: sizeToDesign(narrowViewport ? 46 : mix(52, 68, largeRhythm)),
-    rockerWidth: sizeToDesign(mix(24, 30, largeRhythm)),
+    rockerWidth: sizeToDesign(rockerWidth),
   }
 }
 
@@ -639,7 +655,7 @@ export function installLandscapeMobileLayout(app) {
 
     if (!applyLandscape(width, height, safe)) {
       deactivateLandscape()
-      originalFit()
+      originalFit({ forceCompact: true })
     }
   }
 
