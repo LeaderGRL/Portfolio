@@ -2,6 +2,13 @@ import { test, expect } from '@playwright/test'
 
 test.use({ hasTouch: true, deviceScaleFactor: 1 })
 
+test.beforeEach(({}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'mobile-chromium',
+    'Terminal touch scrolling is a mobile-device regression test.',
+  )
+})
+
 const VIEWPORTS = [
   { name: 'portrait', width: 412, height: 915 },
   { name: 'landscape', width: 915, height: 412 },
