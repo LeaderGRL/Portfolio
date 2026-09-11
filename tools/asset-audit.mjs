@@ -61,7 +61,9 @@ const sources = sourceFiles.map(file => ({
   path: rel(file),
   bytes: bytes(file),
   stem: path.basename(file, path.extname(file)),
-  directlyNamedByGenerator: generatorText.includes(path.basename(file, path.extname(file))),
+  directlyNamedByGenerator:
+    generatorText.includes(path.basename(file, path.extname(file)))
+    || rel(file).startsWith('assets/src/portrait-chassis/'),
 }))
 
 const byHash = new Map()

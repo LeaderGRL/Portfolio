@@ -1,5 +1,6 @@
 """Prepare the supplied moulded desktop/mobile chassis without distortion."""
 import json
+import re
 import shutil
 import time
 from pathlib import Path
@@ -13,6 +14,7 @@ SOURCE = ROOT / "assets" / "src" / "chassis-moulding-desktop.png"
 FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-desktop.png"
 MOBILE_SOURCE = ROOT / "assets" / "src" / "chassis-moulding-mobile.png"
 MOBILE_FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-mobile.png"
+PORTRAIT_SOURCE_DIR = ROOT / "assets" / "src" / "portrait-chassis"
 LANDSCAPE_SOURCES = {
     variant: ROOT / "assets" / "src" / f"chassis-frame-landscape-{variant}.webp"
     for variant in ("5x4", "4x3", "3x2", "16x10", "16x9", "20x9", "21x9", "3x1")
@@ -26,6 +28,7 @@ BUILD = ROOT / "assets" / "build"
 # colour, grain and lighting identical at the machine boundary.
 MOBILE_FILL_SAMPLE_DEPTH = 128
 MOBILE_FILL_EXTENT = 512
+PORTRAIT_PROFILE_RE = re.compile(r"^(\d+)x(\d+)$")
 
 
 def aperture_from_mask(mask):
@@ -142,6 +145,110 @@ def supplied_frame(path):
     return Image.fromarray(rgba)
 
 
+def material_mask(rgb):
+    """Return the warm, light moulded-plastic region without touching bezel black."""
+    values = rgb.astype(np.int16)
+    red, green, blue = values[:, :, 0], values[:, :, 1], values[:, :, 2]
+    luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+    chroma = np.maximum.reduce([red, green, blue]) - np.minimum.reduce([red, green, blue])
+    return (
+        (luma >= 108)
+        & (red >= green - 14)
+        & (green >= blue - 20)
+        & (red >= blue + 4)
+        & (chroma <= 105)
+    )
+
+
+def material_median(rgb):
+    mask = material_mask(rgb)
+    pixels = rgb[mask]
+    if len(pixels) < 1024:
+        raise ValueError("not enough moulded material pixels to normalize portrait chassis")
+    return np.rint(np.median(pixels, axis=0)).astype(np.int16)
+
+
+def normalize_portrait_material(image, target):
+    """Shift only cream plastic toward the desktop material reference."""
+    rgba = np.asarray(image.convert("RGBA")).copy()
+    rgb = rgba[:, :, :3]
+    before = material_median(rgb)
+    delta = target.astype(np.float32) - before.astype(np.float32)
+
+    values = rgb.astype(np.float32)
+    luma = 0.2126 * values[:, :, 0] + 0.7152 * values[:, :, 1] + 0.0722 * values[:, :, 2]
+    feather = np.clip((luma - 92.0) / 72.0, 0.0, 1.0) * material_mask(rgb).astype(np.float32)
+    adjusted = values + feather[:, :, None] * delta[None, None, :]
+    rgba[:, :, :3] = np.clip(np.rint(adjusted), 0, 255).astype(np.uint8)
+    normalized = Image.fromarray(rgba)
+    after = material_median(np.asarray(normalized)[:, :, :3])
+    return normalized, before, after
+
+
+def portrait_opening(image):
+    """Detect the dominant central black glass opening from a portrait plate."""
+    rgb = np.asarray(image.convert("RGB"), dtype=np.int16)
+    height, width = rgb.shape[:2]
+    luma = 0.2126 * rgb[:, :, 0] + 0.7152 * rgb[:, :, 1] + 0.0722 * rgb[:, :, 2]
+    labels, count = ndimage.label(luma < 28)
+    if count == 0:
+        raise ValueError("portrait chassis has no detectable CRT opening")
+
+    focus = np.zeros((height, width), dtype=bool)
+    focus[int(height * .06):int(height * .56), int(width * .07):int(width * .93)] = True
+    areas = np.bincount(labels[focus].ravel(), minlength=count + 1)
+    areas[0] = 0
+    aperture_label = int(np.argmax(areas))
+    if aperture_label == 0 or areas[aperture_label] < width * height * .04:
+        raise ValueError("portrait CRT opening component is too small")
+
+    opening = labels == aperture_label
+    opening = ndimage.binary_closing(opening, iterations=2)
+    opening = ndimage.binary_fill_holes(opening)
+    opening = ndimage.binary_erosion(opening, iterations=1)
+    soft = ndimage.gaussian_filter(opening.astype(np.float32), sigma=1.0)
+    return Image.fromarray(np.rint(np.clip(soft, 0.0, 1.0) * 255).astype(np.uint8), mode="L")
+
+
+def portrait_frame(image, opening):
+    rgba = np.asarray(image.convert("RGBA")).copy()
+    original_alpha = rgba[:, :, 3].astype(np.float32) / 255.0
+    hole = np.asarray(opening, dtype=np.float32) / 255.0
+    rgba[:, :, 3] = np.rint(original_alpha * (1.0 - hole) * 255).astype(np.uint8)
+    return Image.fromarray(rgba)
+
+
+def build_portrait_profiles(target_material):
+    profiles = []
+    if not PORTRAIT_SOURCE_DIR.exists():
+        return profiles
+
+    for source_path in sorted(PORTRAIT_SOURCE_DIR.glob("*.png")):
+        match = PORTRAIT_PROFILE_RE.fullmatch(source_path.stem)
+        if not match:
+            raise ValueError(f"portrait chassis source must be named WIDTHxHEIGHT.png: {source_path.name}")
+        viewport_width, viewport_height = (int(value) for value in match.groups())
+        source = Image.open(source_path).convert("RGBA")
+        normalized, before, after = normalize_portrait_material(source, target_material)
+        opening = portrait_opening(normalized)
+        frame = portrait_frame(normalized, opening)
+        output_name = f"chassis-frame-portrait-{source_path.stem}.webp"
+        save_webp_atomic(frame, BUILD / output_name)
+
+        profiles.append({
+            "id": source_path.stem,
+            "viewport": [viewport_width, viewport_height],
+            "source_size": [source.width, source.height],
+            "source_aspect": round(source.width / source.height, 6),
+            "aperture": aperture_from_mask(opening),
+            "asset": output_name.removesuffix(".webp"),
+            "cream_before": [int(value) for value in before],
+            "cream_after": [int(value) for value in after],
+        })
+
+    return profiles
+
+
 def save_webp_atomic(image, path):
     """Encode off-path, then publish the complete staged WebP for Vite HMR."""
     temporary = path.with_name(path.name + ".tmp")
@@ -242,6 +349,7 @@ def main():
     EXPORT.mkdir(parents=True, exist_ok=True)
     BUILD.mkdir(parents=True, exist_ok=True)
     source = Image.open(SOURCE).convert("RGB")
+    desktop_material = material_median(np.asarray(source))
     width, height = source.size
     crop_width = height * 16 / 9
     if width >= crop_width:
@@ -304,6 +412,10 @@ def main():
         "fill_sample_depth": MOBILE_FILL_SAMPLE_DEPTH,
         "fill_extent": MOBILE_FILL_EXTENT,
     }
+    metadata["portrait_chassis"] = {
+        "cream_reference": [int(value) for value in desktop_material],
+        "profiles": build_portrait_profiles(desktop_material),
+    }
     # The user-supplied landscape WebPs carry the exact alpha of the three
     # September 8 PNGs. Measure the files the browser actually displays; never
     # reuse coordinates or material colours from an earlier chassis revision.
@@ -341,6 +453,7 @@ def main():
     replace_with_retry(metadata_tmp, metadata_path)
     print(json.dumps(metadata["chassis"], indent=2))
     print(json.dumps(metadata["mobile_chassis"], indent=2))
+    print(json.dumps(metadata["portrait_chassis"], indent=2))
     for path in sorted(EXPORT.glob("chassis-*.webp")):
         print(f"{path.name}: {path.stat().st_size / 1024:.1f} KB")
     for path in sorted(BUILD.glob("chassis-frame-*.webp")):
