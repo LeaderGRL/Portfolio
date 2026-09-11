@@ -15,6 +15,7 @@ FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-desktop.png"
 MOBILE_SOURCE = ROOT / "assets" / "src" / "chassis-moulding-mobile.png"
 MOBILE_FRAME_SOURCE = ROOT / "assets" / "src" / "chassis-frame-mobile.png"
 PORTRAIT_SOURCE_DIR = ROOT / "assets" / "src" / "portrait-chassis"
+PORTRAIT_REFERENCE_GEOMETRY = ROOT / "assets" / "src" / "portrait-reference-geometry.json"
 LANDSCAPE_SOURCES = {
     variant: ROOT / "assets" / "src" / f"chassis-frame-landscape-{variant}.webp"
     for variant in ("5x4", "4x3", "3x2", "16x10", "16x9", "20x9", "21x9", "3x1")
@@ -222,6 +223,7 @@ def build_portrait_profiles(target_material):
     profiles = []
     if not PORTRAIT_SOURCE_DIR.exists():
         return profiles
+    reference_geometry = json.loads(PORTRAIT_REFERENCE_GEOMETRY.read_text(encoding="utf-8"))
 
     for source_path in sorted(PORTRAIT_SOURCE_DIR.glob("*.png")):
         match = PORTRAIT_PROFILE_RE.fullmatch(source_path.stem)
@@ -231,6 +233,19 @@ def build_portrait_profiles(target_material):
         source = Image.open(source_path).convert("RGBA")
         normalized, before, after = normalize_portrait_material(source, target_material)
         opening = portrait_opening(normalized)
+        source_aperture = aperture_from_mask(opening)
+        reference = reference_geometry.get(source_path.stem)
+        if not reference:
+            raise ValueError(f"missing portrait reference geometry for {source_path.stem}")
+        reference_aperture = reference["aperture"]
+        source_width = source_aperture[2] - source_aperture[0]
+        source_height = source_aperture[3] - source_aperture[1]
+        target_width = reference_aperture[2] - reference_aperture[0]
+        target_height = reference_aperture[3] - reference_aperture[1]
+        frame_scale_x = target_width / source_width
+        frame_scale_y = target_height / source_height
+        frame_offset_x = reference_aperture[0] - frame_scale_x * source_aperture[0]
+        frame_offset_y = reference_aperture[1] - frame_scale_y * source_aperture[1]
         frame = portrait_frame(normalized, opening)
         output_name = f"chassis-frame-portrait-{source_path.stem}.webp"
         save_webp_atomic(frame, BUILD / output_name)
@@ -240,7 +255,14 @@ def build_portrait_profiles(target_material):
             "viewport": [viewport_width, viewport_height],
             "source_size": [source.width, source.height],
             "source_aspect": round(source.width / source.height, 6),
-            "aperture": aperture_from_mask(opening),
+            "aperture": source_aperture,
+            "reference_aperture": reference_aperture,
+            "frame_transform": [
+                round(frame_offset_x, 6),
+                round(frame_offset_y, 6),
+                round(frame_scale_x, 6),
+                round(frame_scale_y, 6),
+            ],
             "asset": output_name.removesuffix(".webp"),
             "cream_before": [int(value) for value in before],
             "cream_after": [int(value) for value in after],
