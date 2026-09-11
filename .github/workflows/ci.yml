@@ -62,7 +62,7 @@ jobs:
           path: assets/build
           key: >-
             generated-assets-${{ runner.os }}-
-            ${{ hashFiles('assets/src/**', 'tools/assets.mjs', 'tools/build_chassis.py') }}
+            ${{ hashFiles('assets/src/**', 'tools/assets.mjs', 'tools/build_*.py') }}
 
       - name: Generate assets
         if: steps.generated-assets-cache.outputs.cache-hit != 'true'

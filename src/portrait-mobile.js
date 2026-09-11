@@ -36,29 +36,49 @@ export function portraitDeckGeometry(width, height) {
   const railWidth = Math.max(120, width - railMargin * 2)
   const keyWidth = (railWidth - columnGap) * .5
   const keyHeight = clamp(width * .125 - 11, 28, 44)
-  // Portrait keeps the same physical key construction as the approved
-  // landscape rail: the touch row is taller than the visible cap. Compressing
-  // the desktop cavity itself to 28-44px made its fixed-radius shadows dominate
-  // and turned the keys into dark outlined pills.
-  const keyInset = clamp(keyHeight * .035, 1, 1.5)
+  // Match the approved landscape hardware contract: the complete row remains
+  // the touch target while a shorter physical cap sits inside it. Keeping the
+  // cavity almost as tall as the hit target made narrow portrait keys read as
+  // heavy outlined pills even though they shared the desktop materials.
+  const keyFaceReduction = clamp(width * .025, 7, 11)
+  const keyFaceHeight = clamp(keyHeight - keyFaceReduction, 23.5, 31)
+  const keyInset = Math.max(0, (keyHeight - keyFaceHeight) * .5)
   const rowGap = clamp(width * .035 - 4, 7, 13)
   const actionGap = clamp(width * .04 - 6, 8, 14)
   const navHeight = keyHeight * 3 + rowGap * 2
   const actionTop = deckTop + navHeight + actionGap
   const controlsHeight = clamp(width * .09, 29, 40)
   const powerHeight = clamp(width * .13, 42, 58)
+  const captionSize = clamp(width * .026, 8.5, 12)
   const fixedBottom = actionTop + keyHeight + controlsHeight + powerHeight
-  const remaining = Math.max(20, deckBottom - fixedBottom)
-  const actionControlsGap = remaining * .45
-  const controlsPowerGap = remaining * .55
+  const availableSpacing = deckBottom - fixedBottom
+  // POWER owns a label above the rocker. Reserve enough real space for that
+  // label plus a visible divider gutter before deciding the portrait can fit.
+  // Without this contract the 414x736 profile technically fit, but its divider
+  // landed against the display-control tier instead of between both groups.
+  const minimumActionControlsGap = 6
+  const minimumControlsPowerGap = captionSize * 1.7 + 8
+  const minimumSpacing = minimumActionControlsGap + minimumControlsPowerGap
+  const fits = availableSpacing >= minimumSpacing
+  const remaining = Math.max(minimumSpacing, availableSpacing)
+  const controlsPowerGap = clamp(
+    remaining * .55,
+    minimumControlsPowerGap,
+    remaining - minimumActionControlsGap,
+  )
+  const actionControlsGap = remaining - controlsPowerGap
   const controlsTop = actionTop + keyHeight + actionControlsGap
   const powerTop = controlsTop + controlsHeight + controlsPowerGap
+  const controlsBottom = controlsTop + controlsHeight
+  const powerLabelTop = powerTop - captionSize * 1.7
+  const powerSeparatorTop = controlsBottom + Math.max(0, powerLabelTop - controlsBottom) * .5
 
   return {
     railLeft: railMargin,
     railWidth,
     keyWidth,
     keyHeight,
+    keyFaceHeight,
     keyInset,
     columnGap,
     rowGap,
@@ -68,8 +88,10 @@ export function portraitDeckGeometry(width, height) {
     controlsHeight,
     powerTop,
     powerHeight,
+    powerSeparatorOffset: powerSeparatorTop - powerTop,
+    fits,
     fontSize: clamp(width * .029, 9, 13),
-    captionSize: clamp(width * .026, 8.5, 12),
+    captionSize,
     iconSize: clamp(width * .047, 15, 21),
     iconLeft: clamp(width * .035, 10, 16),
     legendLeft: clamp(width * .12, 38, 53),
@@ -103,8 +125,9 @@ export function installPortraitMobileLayout(app) {
     for (const name of [
       'ap-l', 'ap-t', 'ap-r', 'ap-b',
       'frame-x', 'frame-y', 'frame-scale-x', 'frame-scale-y',
+      'gap-top', 'gap-right', 'gap-bottom', 'gap-left',
       'rail-left', 'rail-width', 'key-width', 'key-height', 'key-inset', 'column-gap', 'row-gap',
-      'nav-top', 'action-top', 'controls-top', 'controls-height', 'power-top', 'power-height',
+      'nav-top', 'action-top', 'controls-top', 'controls-height', 'power-top', 'power-height', 'power-separator-offset',
       'font-size', 'caption-size', 'icon-size', 'icon-left', 'legend-left',
       'led-size', 'led-top', 'led-right', 'switch-width', 'slider-width', 'rocker-width',
       'separator-thickness',
@@ -121,12 +144,15 @@ export function installPortraitMobileLayout(app) {
     activeProfile = null
   }
 
-  const apply = (width, height) => {
+  const apply = (width, height, geometry = portraitDeckGeometry(width, height)) => {
     const profile = resolvePortraitProfile(width, height)
     if (!profile) return false
-    const geometry = portraitDeckGeometry(width, height)
     const [left, top, right, bottom] = profile.reference_aperture || profile.aperture
     const [frameX, frameY, frameScaleX, frameScaleY] = profile.frame_transform || [0, 0, 1, 1]
+    const gapTop = Math.max(0, frameY * height)
+    const gapRight = Math.max(0, (1 - frameX - frameScaleX) * width)
+    const gapBottom = Math.max(0, (1 - frameY - frameScaleY) * height)
+    const gapLeft = Math.max(0, frameX * width)
 
     machine.classList.add('is-compact', 'is-portrait-profile')
     machine.dataset.portraitProfile = profile.id
@@ -155,6 +181,7 @@ export function installPortraitMobileLayout(app) {
       'controls-height': geometry.controlsHeight,
       'power-top': geometry.powerTop,
       'power-height': geometry.powerHeight,
+      'power-separator-offset': geometry.powerSeparatorOffset,
       'font-size': geometry.fontSize,
       'caption-size': geometry.captionSize,
       'icon-size': geometry.iconSize,
@@ -167,6 +194,10 @@ export function installPortraitMobileLayout(app) {
       'slider-width': geometry.sliderWidth,
       'rocker-width': geometry.rockerWidth,
       'separator-thickness': geometry.separatorThickness,
+      'gap-top': gapTop > 0 ? gapTop + 2 : 0,
+      'gap-right': gapRight > 0 ? gapRight + 2 : 0,
+      'gap-bottom': gapBottom > 0 ? gapBottom + 2 : 0,
+      'gap-left': gapLeft > 0 ? gapLeft + 2 : 0,
     })
 
     if (activeProfile !== profile.id) image.src = profile.src
@@ -195,10 +226,17 @@ export function installPortraitMobileLayout(app) {
       return
     }
 
+    const geometry = portraitDeckGeometry(width, height)
+    if (!geometry.fits) {
+      deactivate()
+      originalFit({ forceCompact: true })
+      return
+    }
+
     // Let the inner landscape/base fitter clear any state from the previous
     // orientation exactly once before the portrait profile takes ownership.
     if (!activeProfile) originalFit({ forceCompact: true })
-    apply(width, height)
+    apply(width, height, geometry)
   }
 
   app._fit()

@@ -5,6 +5,7 @@ const projectsKey = page => page.getByRole('button', { name: 'PROJECTS' })
 const articlesKey = page => page.getByRole('button', { name: 'ARTICLES' })
 const isMobileProject = testInfo => testInfo.project.name.includes('mobile')
 const isChromiumDesktop = testInfo => testInfo.project.name === 'chromium'
+const PORTRAIT_TARGETS = ['320x568','360x640','360x720','360x740','360x780','360x800','375x667','375x812','390x844','393x852','393x873','412x869','412x884','412x915','414x736','414x896','428x926','430x932','440x956']
 
 async function boot(page, path = '/') {
   await page.goto(path)
@@ -144,11 +145,46 @@ test('tablet portrait geometry uses the nearest full-bleed profile', async ({ pa
   expectFullBleedPortraitGeometry(await compactGeometry(page))
 })
 
+test('short portrait falls back before the control deck can clip', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Fallback geometry only needs one browser engine')
+  await page.setViewportSize({ width: 375, height: 500 })
+  await boot(page)
+
+  await expect(page.locator('#machine')).toHaveClass(/is-compact/)
+  await expect(page.locator('#machine')).not.toHaveClass(/is-portrait-profile/)
+  await expect(page.locator('body')).toHaveClass(/is-compact-stage/)
+
+  const viewportHeight = await page.evaluate(() => innerHeight)
+  const power = await page.getByRole('button', { name: 'Power' }).boundingBox()
+  expect(power).not.toBeNull()
+  expect(power.y + power.height).toBeLessThanOrEqual(viewportHeight + 1)
+})
+
+test('portrait frame gaps are continued with photographed chassis material', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Material continuation only needs one browser engine')
+  await page.setViewportSize({ width: 360, height: 780 })
+  await boot(page)
+  await expect(page.locator('#machine')).toHaveAttribute('data-portrait-profile', '360x780')
+
+  const continuation = await page.locator('.machine__background--mobile').evaluate(background => {
+    const root = getComputedStyle(document.documentElement)
+    const overlay = getComputedStyle(background, '::after')
+    return {
+      bottomGap: Number.parseFloat(root.getPropertyValue('--portrait-gap-bottom')) || 0,
+      images: overlay.backgroundImage,
+      sizes: overlay.backgroundSize,
+    }
+  })
+
+  expect(continuation.bottomGap).toBeGreaterThan(80)
+  expect(continuation.images).toContain('data:image/webp')
+  expect(continuation.sizes).toContain(`${continuation.bottomGap}px`)
+})
+
 test('all authored portrait resolutions select their exact profile', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Profile selection is engine-independent')
-  const targets = ['320x568','360x640','360x720','360x740','360x780','360x800','375x667','375x812','390x844','393x852','393x873','412x869','412x884','412x915','414x736','414x896','428x926','430x932','440x956']
   await page.goto('/')
-  for (const id of targets) {
+  for (const id of PORTRAIT_TARGETS) {
     const [width, height] = id.split('x').map(Number)
     await page.setViewportSize({ width, height })
     await expect(page.locator('#machine')).toHaveAttribute('data-portrait-profile', id)
@@ -158,30 +194,76 @@ test('all authored portrait resolutions select their exact profile', async ({ pa
 
 test('portrait keeps the shared tactile key hardware', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Computed hardware styling only needs one engine')
-  await page.setViewportSize({ width: 412, height: 915 })
-  await boot(page)
+  test.setTimeout(90_000)
+  await page.goto('/')
+  for (const id of PORTRAIT_TARGETS) {
+    const [width, height] = id.split('x').map(Number)
+    const viewport = { width, height }
+    await page.setViewportSize(viewport)
+    await expect(page.locator('#machine')).toHaveAttribute('data-portrait-profile', id)
+    await expect(page.locator('#nav-keys .key.is-on')).toHaveAttribute('aria-label', 'HOME')
 
-  const hardware = await page.getByRole('button', { name: 'HOME' }).evaluate(key => {
-    const button = key.querySelector('.key__button')
-    const face = key.querySelector('.key__face')
-    const led = key.querySelector('.key__led')
-    const root = getComputedStyle(document.documentElement)
-    const keyStyle = getComputedStyle(key)
-    return {
-      keySurface: keyStyle.getPropertyValue('--key-surface').trim(),
-      sharedCream: root.getPropertyValue('--cream-2').trim(),
-      cavity: getComputedStyle(key, '::before').backgroundImage,
-      cap: button ? getComputedStyle(button).backgroundImage : 'none',
-      face: face ? getComputedStyle(face).backgroundImage : 'none',
-      ledShadow: led ? getComputedStyle(led).boxShadow : 'none',
-    }
-  })
+    const hardware = await page.getByRole('button', { name: 'HOME' }).evaluate(key => {
+      const button = key.querySelector('.key__button')
+      const face = key.querySelector('.key__face')
+      const led = key.querySelector('.key__led')
+      const root = getComputedStyle(document.documentElement)
+      const keyStyle = getComputedStyle(key)
+      const cavityStyle = getComputedStyle(key, '::before')
+      const inset = Number.parseFloat(cavityStyle.top) || 0
+      return {
+        keySurface: keyStyle.getPropertyValue('--key-surface').trim(),
+        sharedCream: root.getPropertyValue('--cream-2').trim(),
+        keyHeight: key.getBoundingClientRect().height,
+        inset,
+        cavity: cavityStyle.backgroundImage,
+        cap: button ? getComputedStyle(button).backgroundImage : 'none',
+        face: face ? getComputedStyle(face).backgroundImage : 'none',
+        ledShadow: led ? getComputedStyle(led).boxShadow : 'none',
+      }
+    })
 
-  expect(hardware.keySurface).toBe(hardware.sharedCream)
-  expect(hardware.cavity).toContain('linear-gradient')
-  expect(hardware.cap).toContain('linear-gradient')
-  expect(hardware.face).toContain('radial-gradient')
-  expect(hardware.ledShadow).not.toBe('none')
+    expect(hardware.keySurface).toBe(hardware.sharedCream)
+    expect(hardware.cavity).toContain('linear-gradient')
+    expect(hardware.cap).toContain('linear-gradient')
+    expect(hardware.face).toContain('radial-gradient')
+    expect(hardware.ledShadow).not.toBe('none')
+    expect(hardware.inset, id).toBeGreaterThanOrEqual(2.25)
+    expect((hardware.keyHeight - hardware.inset * 2) / hardware.keyHeight).toBeLessThanOrEqual(.84)
+  }
+})
+
+test('portrait power separator stays between display controls and power hardware', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Portrait geometry only needs one browser engine')
+  test.setTimeout(90_000)
+  await page.goto('/')
+  for (const id of PORTRAIT_TARGETS) {
+    const [width, height] = id.split('x').map(Number)
+    const viewport = { width, height }
+    await page.setViewportSize(viewport)
+    await expect(page.locator('#machine')).toHaveAttribute('data-portrait-profile', id)
+
+    const geometry = await page.locator('.panel--right').evaluate(panel => {
+      const root = getComputedStyle(document.documentElement)
+      const value = name => Number.parseFloat(root.getPropertyValue(name)) || 0
+      const controlsTop = value('--portrait-controls-top')
+      const controlsHeight = value('--portrait-controls-height')
+      const powerTop = value('--portrait-power-top')
+      const captionSize = value('--portrait-caption-size')
+      const separatorOffset = value('--portrait-power-separator-offset')
+      return {
+        controlsBottom: controlsTop + controlsHeight,
+        powerLabelTop: powerTop - captionSize * 1.7,
+        separatorTop: powerTop + separatorOffset,
+        separatorOffset,
+        pseudoTop: Number.parseFloat(getComputedStyle(panel.querySelector('.bottom-row'), '::before').top) || 0,
+      }
+    })
+
+    expect(geometry.pseudoTop, id).toBeCloseTo(geometry.separatorOffset, 1)
+    expect(geometry.separatorTop, id).toBeGreaterThan(geometry.controlsBottom + 1)
+    expect(geometry.separatorTop, id).toBeLessThan(geometry.powerLabelTop - 1)
+  }
 })
 
 test('semantic article focus has a visible CRT proxy', async ({ page }, testInfo) => {

@@ -37,6 +37,30 @@ body.is-portrait-profile-stage #stage{
   object-fit:fill;
 }
 
+/* Some authored aperture mappings intentionally shrink or offset the source
+   frame. Extend the photographed material over any exposed outer strip instead
+   of revealing the flat machine fallback or an interior source-image edge.
+   The shared fill sprites contain blank chassis material only, so this layer
+   cannot duplicate the CRT or cover the live glass. */
+.is-portrait-profile .machine__background--mobile::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background-image:
+    var(--compact-fill-top,none),
+    var(--compact-fill-bottom,none),
+    var(--compact-fill-left,none),
+    var(--compact-fill-right,none);
+  background-repeat:no-repeat;
+  background-position:center top,center bottom,left center,right center;
+  background-size:
+    100% var(--portrait-gap-top),
+    100% var(--portrait-gap-bottom),
+    var(--portrait-gap-left) 100%,
+    var(--portrait-gap-right) 100%;
+}
+
 .is-portrait-profile .plate-row{
   display:none;
 }
@@ -275,7 +299,7 @@ body.is-portrait-profile-stage #stage{
   position:absolute;
   left:0;
   right:0;
-  top:calc(var(--portrait-caption-size) + 17px);
+  top:var(--portrait-power-separator-offset);
   height:var(--portrait-separator-thickness);
   background:
     linear-gradient(90deg,
