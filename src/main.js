@@ -12,6 +12,7 @@ import './contact-links.css'
 import './release-fixes.css'
 import './landscape-mobile.css'
 import './landscape-action-keys.css'
+import './portrait-mobile.css'
 import './fullscreen.css'
 import { start } from './app.js'
 import { attachArticleCRT } from './article-crt-bridge.js'
@@ -20,11 +21,13 @@ import { installRuntimeControls } from './runtime-controls.js'
 import { installSemanticFocusProxy } from './semantic-focus.js'
 import { installLandscapeMobileLayout } from './landscape-mobile.js'
 import { installLandscapeActionKeys } from './landscape-action-keys.js'
+import { installPortraitMobileLayout } from './portrait-mobile.js'
 
 const boot = () => {
   const app = start()
   installLandscapeActionKeys()
   installLandscapeMobileLayout(app)
+  installPortraitMobileLayout(app)
   installRuntimeControls(app)
   attachArticleCRT(app)
   installSemanticFocusProxy()

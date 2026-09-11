@@ -1,0 +1,340 @@
+/* Portrait phones use the authored profile selected by portrait-mobile.js.
+   Geometry is published once in viewport pixels so the 19 references and
+   intermediate sizes share one layout model instead of per-device media rules. */
+body.is-portrait-profile-stage,
+body.is-portrait-profile-stage #stage{
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:var(--compact-material,#dcc8b3);
+}
+
+.machine.is-compact.is-portrait-profile{
+  --portrait-key-surface:var(--cream-2);
+  inset:0;
+  width:100vw;
+  height:100dvh;
+  transform:none;
+  transform-origin:50% 50%;
+  border-radius:0;
+  background:var(--compact-material,#dcc8b3);
+  overflow:hidden;
+}
+
+.is-portrait-profile .machine__background--mobile{
+  display:block;
+  inset:0;
+  width:100%;
+  height:100%;
+}
+
+.is-portrait-profile .machine__background--mobile img{
+  position:absolute;
+  left:calc(var(--portrait-frame-x) * 100%);
+  top:calc(var(--portrait-frame-y) * 100%);
+  width:calc(var(--portrait-frame-scale-x) * 100%);
+  height:calc(var(--portrait-frame-scale-y) * 100%);
+  object-fit:fill;
+}
+
+/* Some authored aperture mappings intentionally shrink or offset the source
+   frame. Extend the photographed material over any exposed outer strip instead
+   of revealing the flat machine fallback or an interior source-image edge.
+   The shared fill sprites contain blank chassis material only, so this layer
+   cannot duplicate the CRT or cover the live glass. */
+.is-portrait-profile .machine__background--mobile::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background-image:
+    var(--compact-fill-top,none),
+    var(--compact-fill-bottom,none),
+    var(--compact-fill-left,none),
+    var(--compact-fill-right,none);
+  background-repeat:no-repeat;
+  background-position:center top,center bottom,left center,right center;
+  background-size:
+    100% var(--portrait-gap-top),
+    100% var(--portrait-gap-bottom),
+    var(--portrait-gap-left) 100%,
+    var(--portrait-gap-right) 100%;
+}
+
+.is-portrait-profile .plate-row{
+  display:none;
+}
+
+.is-portrait-profile .screen{
+  left:calc(var(--portrait-ap-l) * 100% - var(--tube-bleed-x));
+  top:calc(var(--portrait-ap-t) * 100% - var(--tube-bleed-y));
+  width:calc((var(--portrait-ap-r) - var(--portrait-ap-l)) * 100% + var(--tube-bleed-x) * 2);
+  height:calc((var(--portrait-ap-b) - var(--portrait-ap-t)) * 100% + var(--tube-bleed-y) * 2);
+}
+
+.is-portrait-profile .panel--left{
+  left:var(--portrait-rail-left);
+  top:var(--portrait-nav-top);
+  width:var(--portrait-rail-width);
+  height:auto;
+  padding:0;
+}
+
+.is-portrait-profile #nav-keys{
+  display:grid;
+  grid-template-columns:repeat(2,var(--portrait-key-width));
+  grid-auto-rows:var(--portrait-key-height);
+  column-gap:var(--portrait-column-gap);
+  row-gap:var(--portrait-row-gap);
+}
+
+.is-portrait-profile .panel--right{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  padding:0;
+  display:block;
+  pointer-events:none;
+}
+
+.is-portrait-profile #action-keys,
+.is-portrait-profile .controls-row,
+.is-portrait-profile .bottom-row{
+  pointer-events:auto;
+}
+
+.is-portrait-profile #action-keys{
+  position:absolute;
+  left:var(--portrait-rail-left);
+  top:var(--portrait-action-top);
+  width:var(--portrait-rail-width);
+  transform:none;
+  display:grid;
+  grid-template-columns:repeat(2,var(--portrait-key-width));
+  column-gap:var(--portrait-column-gap);
+}
+
+.is-portrait-profile .key,
+.is-portrait-profile .key--sm{
+  --key-surface:var(--portrait-key-surface);
+  --key-gap:.5px;
+  width:var(--portrait-key-width);
+  height:var(--portrait-key-height);
+  min-width:0;
+  min-height:0;
+  border-radius:10px;
+  background:none;
+  box-shadow:none;
+}
+
+/* Keep the approved desktop/landscape key hardware. On small portrait rows the
+   outer .key is only the touch target; the actual cavity/cap is inset exactly
+   like landscape-mobile.css. This preserves the shared gradients, LED,
+   materials and press travel instead of squashing the 62px desktop cavity. */
+.is-portrait-profile .key::before{
+  inset:var(--portrait-key-inset) 0;
+  box-shadow:
+    -3px -3px 7px color-mix(in oklab,var(--key-light-glow) 72%,transparent),
+    -1px -1px 2px color-mix(in oklab,var(--key-shadow-near) 62%,transparent),
+    1px 1px 0 color-mix(in oklab,var(--key-cavity-rim) 70%,transparent),
+    4px 5px 10px color-mix(in oklab,var(--key-shadow-glow) 72%,transparent),
+    inset 1px 1px 2px color-mix(in oklab,var(--key-cavity-deep) 64%,black 36%),
+    inset 0 0 3px color-mix(in oklab,var(--key-cavity-deep) 35%,transparent);
+}
+
+.is-portrait-profile .key__button{
+  inset:calc(var(--portrait-key-inset) + var(--key-gap)) var(--key-gap);
+  border-radius:8px;
+  transform:translateY(-1px);
+  box-shadow:1px 1.5px 3px color-mix(in oklab,var(--key-shadow-near) 58%,transparent);
+}
+
+.is-portrait-profile .key__face{
+  border-radius:7px;
+}
+
+.is-portrait-profile .key__legend,
+.is-portrait-profile .key--sm .key__legend{
+  justify-content:flex-start;
+  padding-left:var(--portrait-legend-left);
+  padding-right:calc(var(--portrait-led-right) + var(--portrait-led-size) + 7px);
+  font-size:var(--portrait-font-size);
+  font-weight:650;
+  letter-spacing:.055em;
+}
+
+.is-portrait-profile #action-keys .key__legend{
+  font-size:0;
+}
+
+.is-portrait-profile #action-keys .key__legend::after{
+  content:attr(data-landscape-label);
+  font-size:var(--portrait-font-size);
+  font-weight:650;
+  letter-spacing:.055em;
+}
+
+.is-portrait-profile .key__icon{
+  left:var(--portrait-icon-left);
+  width:var(--portrait-icon-size);
+  height:var(--portrait-icon-size);
+}
+
+.is-portrait-profile .key__led{
+  top:var(--portrait-led-top);
+  right:var(--portrait-led-right);
+  width:var(--portrait-led-size);
+  height:var(--portrait-led-size);
+}
+
+.is-portrait-profile .stack,
+.is-portrait-profile .rule{
+  display:block;
+}
+
+.machine.is-compact.is-portrait-profile .panel--right .rule{
+  position:absolute;
+  left:var(--portrait-rail-left);
+  top:calc(var(--portrait-controls-top) - (var(--portrait-controls-top) - var(--portrait-action-top) - var(--portrait-key-height)) * .45);
+  width:var(--portrait-rail-width);
+  height:var(--portrait-separator-thickness);
+  margin:0;
+  transform:none;
+  background:rgba(84,74,61,.35);
+  box-shadow:0 1px rgba(255,255,255,.52);
+}
+
+.machine.is-compact.is-portrait-profile .panel--right .controls-row{
+  position:absolute;
+  left:var(--portrait-rail-left);
+  top:var(--portrait-controls-top);
+  width:var(--portrait-rail-width);
+  height:var(--portrait-controls-height);
+  margin:0;
+  transform:none;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  column-gap:0;
+  align-items:start;
+}
+
+.is-portrait-profile .control{
+  position:relative;
+  width:auto;
+  min-width:0;
+}
+
+.is-portrait-profile .control + .control{
+  margin-top:0;
+}
+
+.is-portrait-profile .control + .control::before{
+  content:"";
+  position:absolute;
+  left:0;
+  top:calc(var(--portrait-caption-size) + 7px);
+  width:var(--portrait-separator-thickness);
+  height:calc(var(--portrait-controls-height) - var(--portrait-caption-size) - 4px);
+  background:rgba(84,74,61,.38);
+  box-shadow:1px 0 rgba(255,255,255,.5);
+}
+
+.is-portrait-profile .caption{
+  justify-content:center;
+  font-size:var(--portrait-caption-size);
+  line-height:1;
+  letter-spacing:.045em;
+  text-indent:0;
+  color:var(--ink-hard);
+}
+
+.is-portrait-profile .caption::after{
+  display:none;
+}
+
+.is-portrait-profile .control:first-child .caption{
+  font-size:0;
+}
+
+.is-portrait-profile .control:first-child .caption::before{
+  content:"CRT";
+  font-size:var(--portrait-caption-size);
+}
+
+.is-portrait-profile .control__row,
+.is-portrait-profile .slider-row{
+  justify-content:center;
+  margin-top:8px;
+  gap:0;
+}
+
+.is-portrait-profile .control__row .tiny,
+.is-portrait-profile .slider-row .tiny{
+  display:none;
+}
+
+.is-portrait-profile .switch{
+  width:var(--portrait-switch-width);
+}
+
+.is-portrait-profile .slider{
+  width:var(--portrait-slider-width);
+  margin:0;
+}
+
+.machine.is-compact.is-portrait-profile .panel--right .bottom-row{
+  position:absolute;
+  left:var(--portrait-rail-left);
+  top:var(--portrait-power-top);
+  width:var(--portrait-rail-width);
+  height:var(--portrait-power-height);
+  margin:0;
+  transform:none;
+  display:block;
+}
+
+.is-portrait-profile .bottom-row::before{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  top:var(--portrait-power-separator-offset);
+  height:var(--portrait-separator-thickness);
+  background:
+    linear-gradient(90deg,
+      rgba(84,74,61,.35) 0 34%,
+      transparent 34% 66%,
+      rgba(84,74,61,.35) 66% 100%);
+  box-shadow:0 1px rgba(255,255,255,.5);
+}
+
+.is-portrait-profile .grille{
+  display:none;
+}
+
+.is-portrait-profile .panel--right .bottom-row .power{
+  width:max-content;
+  margin:0 auto;
+  transform:none;
+}
+
+.is-portrait-profile .power::before{
+  content:"POWER";
+  left:50%;
+  top:calc(var(--portrait-caption-size) * -1.7);
+  translate:-50% 0;
+  font-size:var(--portrait-caption-size);
+  letter-spacing:.045em;
+}
+
+.is-portrait-profile .rocker{
+  width:var(--portrait-rocker-width);
+}
+
+@media (prefers-reduced-motion:reduce){
+  .is-portrait-profile .panel--left,
+  .is-portrait-profile .panel--right{
+    transition:none;
+  }
+}

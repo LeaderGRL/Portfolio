@@ -14,10 +14,11 @@ green phosphor. It is restrained, tactile, technical, and never card-based.
   `assets/src/chassis-moulding-desktop.png` at 1672 × 941. It is cropped
   symmetrically by less than one source pixel vertically, never stretched, and
   exported at 1920 × 1080 and 3840 × 2160.
-- Portable/mobile: user-supplied `assets/src/chassis-moulding-mobile.png` and
-  artist-cut `assets/src/chassis-frame-mobile.png`, both at 941 × 1672.
-  They are used full bleed without stretching; the supplied frame alpha is the
-  exact aperture for the live CRT and must not be replaced by a CSS radius.
+- Portable/mobile fallback: user-supplied `assets/src/chassis-moulding-mobile.png`
+  and artist-cut `assets/src/chassis-frame-mobile.png`, both at 941 × 1672.
+  Authored portrait phones instead use the resolution profiles described below.
+  In every case the supplied frame alpha owns the live CRT silhouette and must
+  not be replaced by a CSS radius.
 
 ## Palette and material
 
@@ -60,21 +61,40 @@ physical proportion at a restrained 154px width; moulding, cavity, and face
 scale as one physical object. Responsive fitting scales the complete plate
 uniformly with a cover fit. The 4K source is selected from 2560px upward, while
 Full HD uses the 1920px derivative.
-The portable variant
-keeps its separate, reference-specific wide key mould. The model footer is
-omitted from the reference state.
+The portable variant keeps the same tactile key language as desktop and
+landscape. The model footer is omitted from the reference state.
 
-Portable uses the portrait plate's native 941 × 1672 surface with a cover fit.
-Its order is nameplate, large CRT, six full-width navigation keys, paired
-CRT/volume controls, then power. Navigation never becomes a two-column grid
-and stays directly accessible; there is no hamburger/menu control. The live
-glass follows the measured alpha of `chassis-frame-mobile.png` (roughly
-26.1–73.8% horizontally and 18.1–46.5% vertically).
-The photographic frame ends before the navigation begins, leaving a deliberate
-gap and preventing the keys from touching the moulding. The mobile navigation
-rail is a centred 430px-wide column with a 10px rhythm between the six keys;
-it begins noticeably below the CRT instead of visually attaching to its frame.
-CRT/Volume form a second lower tier, while Power sits on a distinct final tier.
+## Portrait mobile reference (September 11, 2026)
+
+Portrait phones use 19 user-supplied chassis references in
+`assets/src/portrait-chassis/`, covering 320 × 568 through 440 × 956. Exact
+viewport matches select their exact profile; intermediate portrait sizes select
+the closest profile by aspect ratio and physical size. This is one responsive
+model, not a stack of per-device media queries.
+
+`tools/build_chassis.py` normalizes only the cream material toward the desktop
+reference while preserving texture, shadows and moulding. It then measures the
+source aperture and maps it onto the aperture measured from the corresponding
+goal reference in `assets/src/portrait-reference-geometry.json`. The resulting
+`reference_aperture` and `frame_transform` values are published through
+`assets/build/meta.json`. The frame can therefore be translated/scaled to match
+the authored composition while the live CRT remains registered to the correct
+opening.
+
+Portrait runtime geometry is owned by `src/portrait-mobile.js` and
+`src/portrait-mobile.css`. The chassis fills the viewport with no bars. The CRT
+occupies the measured reference aperture. Below it, HOME / ABOUT, RESUME /
+PROJECTS and ARTICLES / CONTACT form a two-column grid, followed by ENTER /
+BACK, a separated CRT / FULL SCREEN / VOLUME tier, and centered POWER. The
+layout scales continuously from the viewport dimensions; only the photographic
+profile selection is discrete.
+
+Portrait does **not** invent a new button design. The cavity, cream gradients,
+LED treatment, text, iconography and press travel reuse the shared desktop key
+rules. As on landscape mobile, the visible cap is inset inside the touch row so
+small portrait rows do not squash the 62px desktop cavity into a dark pill.
+Only size and placement change. This keeps portrait, landscape and desktop
+visually part of the same manufactured object.
 
 ## Landscape mobile reference (September 9, 2026)
 
