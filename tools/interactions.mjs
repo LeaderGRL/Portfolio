@@ -105,8 +105,29 @@ setTimeout(async()=>{
   step('enter then escape', ()=>{key('Enter');key('Escape')})
   step('scroll keys on detail', ()=>{key('Enter');key('PageDown');key('End');key('Home');key('Escape')})
   step('wheel on tube', ()=>{key('Enter');d.getElementById('tube').dispatchEvent(new w.WheelEvent('wheel',{deltaY:120,bubbles:true,cancelable:true}))})
-  step('phone compact contain fit', ()=>{Object.defineProperty(w,'innerWidth',{value:420,configurable:true});Object.defineProperty(w,'innerHeight',{value:900,configurable:true});w.dispatchEvent(new w.Event('resize'));if(!near(fit(),Math.min(420/941,900/1672))) throw new Error('phone compact fit is not contain: '+fit())})
-  step('tablet compact contain fit', ()=>{Object.defineProperty(w,'innerWidth',{value:768,configurable:true});Object.defineProperty(w,'innerHeight',{value:1024,configurable:true});w.dispatchEvent(new w.Event('resize'));if(!near(fit(),Math.min(768/941,1024/1672))) throw new Error('tablet compact fit crops the chassis: '+fit())})
+  step('portrait exact profiles', ()=>{
+    const targets=['320x568','360x640','360x720','360x740','360x780','360x800','375x667','375x812','390x844','393x852','393x873','412x869','412x884','412x915','414x736','414x896','428x926','430x932','440x956']
+    for(const id of targets){
+      const [width,height]=id.split('x').map(Number)
+      Object.defineProperty(w,'innerWidth',{value:width,configurable:true})
+      Object.defineProperty(w,'innerHeight',{value:height,configurable:true})
+      w.dispatchEvent(new w.Event('resize'))
+      const machine=d.getElementById('machine')
+      if(machine.dataset.portraitProfile!==id) throw new Error(`${id} selected ${machine.dataset.portraitProfile||'no portrait profile'}`)
+      if(!near(fit(),1)) throw new Error(`${id} portrait surface is not viewport-native: ${fit()}`)
+      if(!machine.classList.contains('is-portrait-profile')) throw new Error(`${id} portrait profile class missing`)
+    }
+  })
+  step('portrait nearest fallback', ()=>{
+    Object.defineProperty(w,'innerWidth',{value:420,configurable:true});Object.defineProperty(w,'innerHeight',{value:900,configurable:true});w.dispatchEvent(new w.Event('resize'))
+    if(!d.getElementById('machine').dataset.portraitProfile) throw new Error('intermediate phone did not select a portrait profile')
+    if(!near(fit(),1)) throw new Error('intermediate portrait surface is not viewport-native: '+fit())
+  })
+  step('tablet portrait fallback', ()=>{
+    Object.defineProperty(w,'innerWidth',{value:768,configurable:true});Object.defineProperty(w,'innerHeight',{value:1024,configurable:true});w.dispatchEvent(new w.Event('resize'))
+    if(!d.getElementById('machine').dataset.portraitProfile) throw new Error('tablet did not select a portrait profile')
+    if(!near(fit(),1)) throw new Error('tablet portrait surface is not viewport-native: '+fit())
+  })
   step('resize back', ()=>{Object.defineProperty(w,'innerWidth',{value:1440,configurable:true});Object.defineProperty(w,'innerHeight',{value:900,configurable:true});w.dispatchEvent(new w.Event('resize'))})
   step('desktop cover fit', ()=>{Object.defineProperty(w,'innerWidth',{value:1848,configurable:true});Object.defineProperty(w,'innerHeight',{value:928,configurable:true});w.dispatchEvent(new w.Event('resize'));if(!near(fit(),0.9625,0.0001)) throw new Error('desktop fit is not full-bleed cover: '+fit())})
   step('P toggles power', ()=>{key('p');key('p')})

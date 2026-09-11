@@ -55,7 +55,17 @@ jobs:
           path: tmp/asset-audit.json
           retention-days: 14
 
+      - name: Restore generated asset cache
+        id: generated-assets-cache
+        uses: actions/cache@v6
+        with:
+          path: assets/build
+          key: >-
+            generated-assets-${{ runner.os }}-
+            ${{ hashFiles('assets/src/**', 'tools/assets.mjs', 'tools/build_chassis.py') }}
+
       - name: Generate assets
+        if: steps.generated-assets-cache.outputs.cache-hit != 'true'
         run: npm run assets
 
       - name: Build production bundle

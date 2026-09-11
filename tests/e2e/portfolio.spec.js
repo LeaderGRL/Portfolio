@@ -18,54 +18,39 @@ async function compactGeometry(page) {
   return page.evaluate(() => {
     const machine = document.getElementById('machine').getBoundingClientRect()
     const rootStyle = getComputedStyle(document.documentElement)
-    const bodyBefore = getComputedStyle(document.body, '::before')
-    const bodyAfter = getComputedStyle(document.body, '::after')
-    const stage = document.getElementById('stage')
-    const stageBefore = getComputedStyle(stage, '::before')
-    const stageAfter = getComputedStyle(stage, '::after')
+    const chassis = document.querySelector('.machine__background--mobile img')
     return {
       scrollWidth: document.documentElement.scrollWidth,
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
       machine,
-      gapX: Number.parseFloat(rootStyle.getPropertyValue('--compact-gap-x')) || 0,
-      gapY: Number.parseFloat(rootStyle.getPropertyValue('--compact-gap-y')) || 0,
-      fillTop: rootStyle.getPropertyValue('--compact-fill-top'),
-      fillBottom: rootStyle.getPropertyValue('--compact-fill-bottom'),
-      fillLeft: rootStyle.getPropertyValue('--compact-fill-left'),
-      fillRight: rootStyle.getPropertyValue('--compact-fill-right'),
-      topApplied: bodyBefore.backgroundImage,
-      bottomApplied: bodyAfter.backgroundImage,
-      leftApplied: stageBefore.backgroundImage,
-      rightApplied: stageAfter.backgroundImage,
+      fit: Number.parseFloat(rootStyle.getPropertyValue('--fit')) || 0,
+      profile: document.getElementById('machine').dataset.portraitProfile || '',
+      portraitStage: document.body.classList.contains('is-portrait-profile-stage'),
+      chassisSource: chassis?.currentSrc || chassis?.src || '',
+      aperture: ['--portrait-ap-l','--portrait-ap-t','--portrait-ap-r','--portrait-ap-b']
+        .map(name => Number.parseFloat(rootStyle.getPropertyValue(name))),
     }
   })
 }
 
-function isEmbeddedWebp(value) {
-  return /url\(["']?data:image\/webp/i.test(String(value || ''))
-}
-
-function expectContainedCompactGeometry(dimensions) {
+function expectFullBleedPortraitGeometry(dimensions) {
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth + 1)
-  expect(dimensions.machine.left).toBeGreaterThanOrEqual(-1)
-  expect(dimensions.machine.right).toBeLessThanOrEqual(dimensions.innerWidth + 1)
-  expect(dimensions.machine.top).toBeGreaterThanOrEqual(-1)
-  expect(dimensions.machine.bottom).toBeLessThanOrEqual(dimensions.innerHeight + 1)
-
-  expect(isEmbeddedWebp(dimensions.fillTop)).toBe(true)
-  expect(isEmbeddedWebp(dimensions.fillBottom)).toBe(true)
-  expect(isEmbeddedWebp(dimensions.fillLeft)).toBe(true)
-  expect(isEmbeddedWebp(dimensions.fillRight)).toBe(true)
-
-  if (dimensions.gapY > 1) {
-    expect(isEmbeddedWebp(dimensions.topApplied)).toBe(true)
-    expect(isEmbeddedWebp(dimensions.bottomApplied)).toBe(true)
-  }
-  if (dimensions.gapX > 1) {
-    expect(isEmbeddedWebp(dimensions.leftApplied)).toBe(true)
-    expect(isEmbeddedWebp(dimensions.rightApplied)).toBe(true)
-  }
+  expect(Math.abs(dimensions.machine.left)).toBeLessThanOrEqual(1)
+  expect(Math.abs(dimensions.machine.top)).toBeLessThanOrEqual(1)
+  expect(Math.abs(dimensions.machine.width - dimensions.innerWidth)).toBeLessThanOrEqual(1)
+  expect(Math.abs(dimensions.machine.height - dimensions.innerHeight)).toBeLessThanOrEqual(1)
+  expect(dimensions.fit).toBeCloseTo(1, 4)
+  expect(dimensions.profile).not.toBe('')
+  expect(dimensions.portraitStage).toBe(true)
+  expect(dimensions.chassisSource).toMatch(/^data:image\/webp/i)
+  const [left, top, right, bottom] = dimensions.aperture
+  expect(left).toBeGreaterThan(0)
+  expect(top).toBeGreaterThan(0)
+  expect(right).toBeGreaterThan(left)
+  expect(bottom).toBeGreaterThan(top)
+  expect(right).toBeLessThan(1)
+  expect(bottom).toBeLessThan(.65)
 }
 
 test('panel navigation keeps terminal arrows active after clicking PROJECTS', async ({ page }, testInfo) => {
@@ -144,19 +129,59 @@ test('deep project links render without uncaught page errors', async ({ page }) 
   expect(errors).toEqual([])
 })
 
-test('mobile compact geometry is contained over photographed chassis material', async ({ page }, testInfo) => {
+test('mobile portrait geometry is profile-driven and full bleed', async ({ page }, testInfo) => {
   test.skip(!isMobileProject(testInfo), 'Mobile-only layout assertion')
   await boot(page)
-  await expect(page.locator('#machine')).toHaveClass(/is-compact/)
-  expectContainedCompactGeometry(await compactGeometry(page))
+  await expect(page.locator('#machine')).toHaveClass(/is-portrait-profile/)
+  expectFullBleedPortraitGeometry(await compactGeometry(page))
 })
 
-test('tablet compact geometry is contained over photographed chassis material', async ({ page }, testInfo) => {
+test('tablet portrait geometry uses the nearest full-bleed profile', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Tablet geometry only needs one browser engine')
   await page.setViewportSize({ width: 768, height: 1024 })
   await boot(page)
-  await expect(page.locator('#machine')).toHaveClass(/is-compact/)
-  expectContainedCompactGeometry(await compactGeometry(page))
+  await expect(page.locator('#machine')).toHaveClass(/is-portrait-profile/)
+  expectFullBleedPortraitGeometry(await compactGeometry(page))
+})
+
+test('all authored portrait resolutions select their exact profile', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Profile selection is engine-independent')
+  const targets = ['320x568','360x640','360x720','360x740','360x780','360x800','375x667','375x812','390x844','393x852','393x873','412x869','412x884','412x915','414x736','414x896','428x926','430x932','440x956']
+  await page.goto('/')
+  for (const id of targets) {
+    const [width, height] = id.split('x').map(Number)
+    await page.setViewportSize({ width, height })
+    await expect(page.locator('#machine')).toHaveAttribute('data-portrait-profile', id)
+    await expect(page.locator('body')).toHaveClass(/is-portrait-profile-stage/)
+  }
+})
+
+test('portrait keeps the shared tactile key hardware', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Computed hardware styling only needs one engine')
+  await page.setViewportSize({ width: 412, height: 915 })
+  await boot(page)
+
+  const hardware = await page.getByRole('button', { name: 'HOME' }).evaluate(key => {
+    const button = key.querySelector('.key__button')
+    const face = key.querySelector('.key__face')
+    const led = key.querySelector('.key__led')
+    const root = getComputedStyle(document.documentElement)
+    const keyStyle = getComputedStyle(key)
+    return {
+      keySurface: keyStyle.getPropertyValue('--key-surface').trim(),
+      sharedCream: root.getPropertyValue('--cream-2').trim(),
+      cavity: getComputedStyle(key, '::before').backgroundImage,
+      cap: button ? getComputedStyle(button).backgroundImage : 'none',
+      face: face ? getComputedStyle(face).backgroundImage : 'none',
+      ledShadow: led ? getComputedStyle(led).boxShadow : 'none',
+    }
+  })
+
+  expect(hardware.keySurface).toBe(hardware.sharedCream)
+  expect(hardware.cavity).toContain('linear-gradient')
+  expect(hardware.cap).toContain('linear-gradient')
+  expect(hardware.face).toContain('radial-gradient')
+  expect(hardware.ledShadow).not.toBe('none')
 })
 
 test('semantic article focus has a visible CRT proxy', async ({ page }, testInfo) => {
