@@ -1,0 +1,45 @@
+/* Visible keyboard-focus projection for the transparent semantic article
+   mirror. The semantic DOM remains accessible while its visible pixels are
+   rasterised through the physical CRT pipeline. */
+.semantic-focus-proxy{
+  position:absolute;
+  z-index:3;
+  pointer-events:none;
+  border:2px solid rgba(184,255,206,.95);
+  border-radius:3px;
+  background:rgba(32,255,111,.045);
+  box-shadow:
+    0 0 4px rgba(107,243,154,.85),
+    0 0 12px rgba(47,208,109,.34),
+    inset 0 0 8px rgba(47,208,109,.10);
+  transition:left 80ms linear, top 80ms linear, width 80ms linear, height 80ms linear;
+}
+.semantic-focus-proxy[hidden],
+.tube.is-powered-off .semantic-focus-proxy{
+  display:none !important;
+}
+.semantic-focus-proxy::after{
+  content:attr(data-label);
+  position:absolute;
+  left:0;
+  top:0;
+  max-width:min(360px, 90vw);
+  padding:3px 6px;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  color:#d5ffe1;
+  background:rgba(1,17,8,.92);
+  font:700 10px/1.2 ui-monospace,"SFMono-Regular",Consolas,monospace;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  text-shadow:0 0 4px rgba(67,255,132,.55);
+  transform:translateY(-100%);
+}
+.semantic-focus-proxy.is-label-inside::after{
+  transform:none;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .semantic-focus-proxy{ transition:none; }
+}
