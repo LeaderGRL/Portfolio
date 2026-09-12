@@ -114,7 +114,7 @@ class Local3DScene {
 
   _loadModel(src) {
     const value = String(src || '')
-    const isManifest = value.startsWith('data:application/json') || /\.model\.json(?:$|[?#])/i.test(value)
+    const isManifest = value.startsWith('data:application/json') || /\.model(?:-[a-z0-9_-]+)?\.json(?:$|[?#])/i.test(value)
 
     if (isManifest) {
       fetch(src)

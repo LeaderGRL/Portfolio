@@ -51,7 +51,17 @@ w.HTMLCanvasElement.prototype.getContext=function(t){
 w.AudioContext=w.webkitAudioContext=undefined
 const errors=[]
 w.addEventListener('error',e=>errors.push(e.message)); w.onerror=m=>{errors.push(String(m));return true}
-try{ w.eval(html.match(/<script type="module">([\s\S]*?)<\/script>/)[1]) }catch(e){ errors.push(e.message) }
+const inlineModule = html.match(/<script type="module">([\s\S]*?)<\/script>/)
+const externalModule = html.match(/<script type="module"[^>]*src="([^"]+)"[^>]*><\/script>/)
+let code = inlineModule?.[1] || ''
+if (!code && externalModule?.[1]) {
+  const scriptPath = externalModule[1].replace(/^\//, '')
+  code = fs.readFileSync(`dist/${scriptPath}`, 'utf8')
+}
+if (!code) errors.push('dist/index.html does not contain a runnable module script')
+else {
+  try { w.eval(code) } catch (e) { errors.push(e.message) }
+}
 
 setTimeout(async()=>{
   const d=w.document
