@@ -148,9 +148,10 @@ function installBackground(machine) {
 function loadBackground(image, layout) {
   image.dataset.decodeState = 'loading'
   image.src = layout.src
+  const requestedSrc = image.src
 
   const mark = state => {
-    if (image.src === layout.src || image.currentSrc === layout.src) image.dataset.decodeState = state
+    if (image.src === requestedSrc) image.dataset.decodeState = state
   }
 
   if (typeof image.decode === 'function') {
