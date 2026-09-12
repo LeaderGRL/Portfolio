@@ -1,5 +1,6 @@
 import { ASSETS, ASSET_META } from './assets.js'
 import { clamp } from './core.js'
+import { aspectDistance, aspectRatio } from './layout-engine.js'
 
 const PORTRAIT_MAX_ASPECT = 1.05
 
@@ -14,11 +15,11 @@ export function resolvePortraitProfile(width, height, profiles = PORTRAIT_PROFIL
   const exact = profiles.find(profile => profile.id === exactId)
   if (exact) return exact
 
-  const viewportAspect = width / Math.max(1, height)
+  const viewportAspect = aspectRatio(width, height)
   return profiles.reduce((best, candidate) => {
     const [candidateWidth, candidateHeight] = candidate.viewport
-    const candidateAspect = candidateWidth / candidateHeight
-    const aspectError = Math.abs(Math.log(viewportAspect / candidateAspect))
+    const candidateAspect = aspectRatio(candidateWidth, candidateHeight)
+    const aspectError = aspectDistance(viewportAspect, candidateAspect)
     const widthError = Math.abs(Math.log(width / candidateWidth))
     const heightError = Math.abs(Math.log(height / candidateHeight))
     const score = aspectError * 5 + widthError * .35 + heightError * .35
@@ -27,7 +28,7 @@ export function resolvePortraitProfile(width, height, profiles = PORTRAIT_PROFIL
 }
 
 export function portraitDeckGeometry(width, height) {
-  const aspect = width / Math.max(1, height)
+  const aspect = aspectRatio(width, height)
   const tallness = clamp((height / Math.max(1, width) - 1.78) / .42, 0, 1)
   const deckTop = height * (.532 + tallness * .012)
   const deckBottom = height - clamp(height * .032, 14, 32)

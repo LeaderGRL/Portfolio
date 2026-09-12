@@ -8,6 +8,7 @@ import frame21x9 from '../assets/src/chassis-frame-landscape-21x9.webp?url'
 import frame3x1 from '../assets/src/chassis-frame-landscape-3x1.webp?url'
 import { ASSET_META } from './assets.js'
 import { SRC_H, SRC_W, clamp } from './core.js'
+import { aspectDistance, aspectRatio, displayLayout, fitScale } from './layout-engine.js'
 
 // The build measures each supplied frame, including its alpha and edge colours.
 // A new chassis can never keep the previous artwork's screen coordinates.
@@ -53,9 +54,9 @@ function closestLayout(viewportAspect) {
   // rather than forcing the 16:9 goal plate onto panoramic phones: doing so
   // discarded the wider assets and could crop all the way to the CRT moulding.
   return LANDSCAPE_LAYOUTS.reduce((best, candidate) => {
-    const candidateAspect = candidate.width / candidate.height
-    const bestAspect = best.width / best.height
-    return Math.abs(Math.log(viewportAspect / candidateAspect)) < Math.abs(Math.log(viewportAspect / bestAspect))
+    const candidateAspect = aspectRatio(candidate.width, candidate.height)
+    const bestAspect = aspectRatio(best.width, best.height)
+    return aspectDistance(viewportAspect, candidateAspect) < aspectDistance(viewportAspect, bestAspect)
       ? candidate
       : best
   })
@@ -77,7 +78,7 @@ function hasTouchInput() {
 
 function isMobileLandscape(width, height) {
   if (!hasTouchInput() || !(width > 0) || !(height > 0)) return false
-  const aspect = width / height
+  const aspect = aspectRatio(width, height)
   return aspect >= LANDSCAPE_MIN_ASPECT && height <= MOBILE_MAX_HEIGHT && width <= MOBILE_MAX_WIDTH
 }
 
@@ -100,8 +101,8 @@ function mix(a, b, t) {
 }
 
 function mouldingSafeFit(viewportWidth, viewportHeight, layout) {
-  const contain = Math.min(viewportWidth / layout.width, viewportHeight / layout.height)
-  const cover = Math.max(viewportWidth / layout.width, viewportHeight / layout.height)
+  const contain = fitScale(viewportWidth, viewportHeight, layout.width, layout.height, 'contain')
+  const cover = fitScale(viewportWidth, viewportHeight, layout.width, layout.height, 'cover')
   const [left, top, right, bottom] = layout.moulding || layout.aperture
   const surroundRight = Math.max(layout.screen_surround_right || right, right)
   const surroundPadPixels = Math.max(0, (surroundRight - right) * layout.width)
@@ -182,21 +183,6 @@ export function landscapeDisplayLayout(width, height, fit = 1, dpr = 1, maxDimen
 
   const physicalWidth = width * fit
   const physicalHeight = height * fit
-  const limit = Math.max(1, Math.min(4096, maxDimension || 4096))
-  const density = Math.min(
-    Math.max(1, dpr || 1),
-    2,
-    limit / Math.max(physicalWidth, physicalHeight),
-    Math.sqrt(8388608 / Math.max(1, physicalWidth * physicalHeight)),
-  )
-
-  const terminalScale = Math.min(width / SRC_W, height / SRC_H)
-  const terminal = {
-    x: (width - SRC_W * terminalScale) * 0.5,
-    y: (height - SRC_H * terminalScale) * 0.5,
-    width: SRC_W * terminalScale,
-    height: SRC_H * terminalScale,
-  }
 
   const physicalDocumentScale = clamp(
     Math.min(physicalWidth / 260, physicalHeight / 150),
@@ -206,17 +192,17 @@ export function landscapeDisplayLayout(width, height, fit = 1, dpr = 1, maxDimen
   const textScale = physicalDocumentScale / fit
 
   return {
-    width,
-    height,
-    textScale,
+    ...displayLayout({
+      width,
+      height,
+      sourceWidth: SRC_W,
+      sourceHeight: SRC_H,
+      textScale,
+      physicalScale: fit,
+      dpr,
+      maxDimension: maxDimension || 4096,
+    }),
     physicalDocumentScale,
-    bottom: 0,
-    terminal,
-    pixelWidth: Math.max(1, Math.floor(physicalWidth * density)),
-    pixelHeight: Math.max(1, Math.floor(physicalHeight * density)),
-    documentWidth: width / textScale,
-    documentHeight: height / textScale,
-    documentBottom: 0,
   }
 }
 
@@ -541,7 +527,7 @@ export function installLandscapeMobileLayout(app) {
   }
 
   const applyLandscape = (viewportWidth, viewportHeight, safe) => {
-    const layout = closestLayout(viewportWidth / viewportHeight)
+    const layout = closestLayout(aspectRatio(viewportWidth, viewportHeight))
     // Fill as much of the viewport as the artwork safely allows. The fitted
     // plate may lose only its exterior cream perimeter; the measured black CRT
     // moulding is never allowed to cross a viewport edge. Any remaining strip

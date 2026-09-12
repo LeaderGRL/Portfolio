@@ -2,6 +2,7 @@ import { foley } from './audio.js'
 import { articleReaderScroll } from './article-reader.js'
 import { CONTENT } from './content.js'
 import { fullscreenLayout } from './fullscreen-layout.js'
+import { aspectRatio, fittedRect } from './layout-engine.js'
 import { COLS, REDUCED, ROWS, SRC_H, SRC_W, clamp, lerp, now } from './core.js'
 import { CRT } from './crt.js'
 import { syncNavigationHistory, syncNavigationMetadata, resolveNavigation } from './navigation.js'
@@ -331,27 +332,28 @@ export class App {
 
   _fit({ forceCompact = false } = {}) {
     const machine = document.getElementById("machine");
+    const viewportWidth = innerWidth || 1;
+    const viewportHeight = innerHeight || 1;
 
     // The 941x1672 chassis is an authored portrait composition. Selecting it
     // merely because a phone is narrow collapses it to unreadable scale in
     // landscape; landscape viewports use the horizontal desktop composition.
-    const compact = forceCompact || innerWidth / innerHeight < 1.05;
+    const compact = forceCompact || aspectRatio(viewportWidth, viewportHeight) < 1.05;
     machine.classList.toggle("is-compact", compact);
     document.body.classList.toggle("is-compact-stage", compact);
 
     const dw = compact ? 941 : 1920;
     const dh = compact ? 1672 : 1080;
-    const fit = compact
-      ? Math.min(innerWidth / dw, innerHeight / dh)
-      : Math.max(innerWidth / dw, innerHeight / dh);
+    const composition = fittedRect(viewportWidth, viewportHeight, dw, dh, compact ? 'contain' : 'cover');
+    const fit = composition.scale;
     const root = document.documentElement.style;
     root.setProperty("--fit", fit.toFixed(4));
 
     if (compact) {
-      const renderedWidth = dw * fit;
-      const renderedHeight = dh * fit;
-      const gapX = Math.max(0, (innerWidth - renderedWidth) * 0.5);
-      const gapY = Math.max(0, (innerHeight - renderedHeight) * 0.5);
+      const renderedWidth = composition.width;
+      const renderedHeight = composition.height;
+      const gapX = composition.gapX;
+      const gapY = composition.gapY;
       root.setProperty("--compact-render-w", `${renderedWidth}px`);
       root.setProperty("--compact-render-h", `${renderedHeight}px`);
       root.setProperty("--compact-gap-x", `${gapX}px`);
