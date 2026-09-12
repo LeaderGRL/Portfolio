@@ -16,6 +16,9 @@ export const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 export const lerp  = (a, b, t) => a + (b - a) * t;
 export const now   = () => performance.now() / 1000;
 export const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Playwright sets this before application modules are evaluated. Production
+// never defines the flag, so visual-test stabilisation cannot affect users.
+export const VISUAL_TEST = globalThis.__JG1500_VISUAL_TEST__ === true;
 
 /** Word-wrap a string into lines of at most `w` characters. */
 export function wrap(text, w) {

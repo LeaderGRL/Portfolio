@@ -1,5 +1,5 @@
 import { foley } from '../audio.js'
-import { REDUCED, lerp } from '../core.js'
+import { REDUCED, VISUAL_TEST, lerp } from '../core.js'
 import { PAGES } from '../pages.js'
 
 export class RenderController {
@@ -81,12 +81,12 @@ export class RenderController {
     app.booting = true
     app.dirty = true
     foley.humOn(true)
-    foley.degauss()
-    app.state.degauss = 1
+    if (!VISUAL_TEST) foley.degauss()
+    app.state.degauss = VISUAL_TEST ? 0 : 1
     setTimeout(() => {
       app.booting = false
       app._restoreNavigation()
-    }, REDUCED ? 80 : 1200)
+    }, VISUAL_TEST ? 0 : REDUCED ? 80 : 1200)
   }
 
   frame(ms) {
@@ -95,18 +95,28 @@ export class RenderController {
     const time = ms / 1000
     const dt = Math.min(0.05, time - (app._last || time))
     app._last = time
-    state.time = time
+    state.time = VISUAL_TEST ? 42 : time
 
-    state.power = lerp(state.power, state.powerTarget, 1 - Math.pow(0.001, dt * 1.6))
-    state.crt = lerp(state.crt, state.crtTarget, 1 - Math.pow(0.001, dt * 3))
-    state.degauss = Math.max(0, state.degauss - dt * 0.9)
-    state.static = Math.max(0, state.static - dt * 4.5)
-    state.warm = Math.min(1, state.warm + dt * 0.55)
+    if (VISUAL_TEST) {
+      state.power = state.powerTarget
+      state.crt = state.crtTarget
+      state.degauss = 0
+      state.static = 0
+      state.warm = 1
+    } else {
+      state.power = lerp(state.power, state.powerTarget, 1 - Math.pow(0.001, dt * 1.6))
+      state.crt = lerp(state.crt, state.crtTarget, 1 - Math.pow(0.001, dt * 3))
+      state.degauss = Math.max(0, state.degauss - dt * 0.9)
+      state.static = Math.max(0, state.static - dt * 4.5)
+      state.warm = Math.min(1, state.warm + dt * 0.55)
+    }
 
-    const date = new Date()
     const pad = value => String(value).padStart(2, '0')
-    const clock = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-    const elapsed = Math.max(0, Math.floor(time - app.bootAt))
+    const date = VISUAL_TEST ? null : new Date()
+    const clock = VISUAL_TEST
+      ? '12:34:56'
+      : `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+    const elapsed = VISUAL_TEST ? 42 : Math.max(0, Math.floor(time - app.bootAt))
     const uptime = `${pad(Math.floor(elapsed / 3600))}:${pad(Math.floor(elapsed / 60) % 60)}:${pad(elapsed % 60)}`
     if (clock !== state.clock) {
       state.clock = clock
@@ -127,7 +137,7 @@ export class RenderController {
       }
     }
 
-    const blink = Math.floor(time * 2) % 2 === 0
+    const blink = VISUAL_TEST ? true : Math.floor(time * 2) % 2 === 0
     if (blink !== app._blink) {
       app._blink = blink
       if (!app.documentRuntime?.isDocument?.()) app.dirty = true
