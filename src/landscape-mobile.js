@@ -1,11 +1,11 @@
-import frame5x4 from '../assets/src/chassis-frame-landscape-5x4.webp?inline'
-import frame4x3 from '../assets/src/chassis-frame-landscape-4x3.webp?inline'
-import frame3x2 from '../assets/src/chassis-frame-landscape-3x2.webp?inline'
-import frame16x10 from '../assets/src/chassis-frame-landscape-16x10.webp?inline'
-import frame16x9 from '../assets/src/chassis-frame-landscape-16x9.webp?inline'
-import frame20x9 from '../assets/src/chassis-frame-landscape-20x9.webp?inline'
-import frame21x9 from '../assets/src/chassis-frame-landscape-21x9.webp?inline'
-import frame3x1 from '../assets/src/chassis-frame-landscape-3x1.webp?inline'
+import frame5x4 from '../assets/src/chassis-frame-landscape-5x4.webp?url'
+import frame4x3 from '../assets/src/chassis-frame-landscape-4x3.webp?url'
+import frame3x2 from '../assets/src/chassis-frame-landscape-3x2.webp?url'
+import frame16x10 from '../assets/src/chassis-frame-landscape-16x10.webp?url'
+import frame16x9 from '../assets/src/chassis-frame-landscape-16x9.webp?url'
+import frame20x9 from '../assets/src/chassis-frame-landscape-20x9.webp?url'
+import frame21x9 from '../assets/src/chassis-frame-landscape-21x9.webp?url'
+import frame3x1 from '../assets/src/chassis-frame-landscape-3x1.webp?url'
 import { ASSET_META } from './assets.js'
 import { SRC_H, SRC_W, clamp } from './core.js'
 
@@ -148,9 +148,10 @@ function installBackground(machine) {
 function loadBackground(image, layout) {
   image.dataset.decodeState = 'loading'
   image.src = layout.src
+  const requestedSrc = image.src
 
   const mark = state => {
-    if (image.src === layout.src || image.currentSrc === layout.src) image.dataset.decodeState = state
+    if (image.src === requestedSrc) image.dataset.decodeState = state
   }
 
   if (typeof image.decode === 'function') {

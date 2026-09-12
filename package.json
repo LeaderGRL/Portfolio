@@ -6,7 +6,7 @@
   "description": "Skeuomorphic CRT terminal portfolio",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node tools/generate-seo-nginx.mjs",
+    "build": "vite build && node tools/generate-seo-nginx.mjs && node tools/bundle-budget.mjs",
     "preview": "vite preview",
     "assets": "node tools/assets.mjs",
     "audit:assets": "node tools/asset-audit.mjs",
@@ -18,8 +18,7 @@
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.62.1",
     "jsdom": "^25.0.0",
-    "vite": "^6.4.3",
-    "vite-plugin-singlefile": "^2.3.3"
+    "vite": "^6.4.3"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.1",

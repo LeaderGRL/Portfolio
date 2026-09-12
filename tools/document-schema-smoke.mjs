@@ -41,7 +41,7 @@ for (const type of ['media', 'model3d', 'gallery', 'facts', 'system', 'pipeline'
 check(plugin.includes('DIRECTIVE_TYPES'), 'parser consumes shared schema')
 check(plugin.includes('normalizeBlocks'), 'parser normalizes imported markdown')
 check(plugin.includes("join(path, 'index.md')"), 'project folder index.md supported')
-check(plugin.includes("'.glb': 'model/gltf-binary'"), 'local GLB asset handling supported')
+check(plugin.includes("'.glb'"), 'local GLB asset handling supported')
 check(plugin.includes('resolveGalleryBody'), 'gallery body assets are resolved')
 check(plugin.includes('findLocalAsset'), 'relative project assets supported')
 

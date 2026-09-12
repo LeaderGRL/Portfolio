@@ -44,7 +44,7 @@ function expectFullBleedPortraitGeometry(dimensions) {
   expect(dimensions.fit).toBeCloseTo(1, 4)
   expect(dimensions.profile).not.toBe('')
   expect(dimensions.portraitStage).toBe(true)
-  expect(dimensions.chassisSource).toMatch(/^data:image\/webp/i)
+  expect(dimensions.chassisSource).toMatch(/(?:^data:image\/webp|\/assets\/[^?#]+\.webp)/i)
   const [left, top, right, bottom] = dimensions.aperture
   expect(left).toBeGreaterThan(0)
   expect(top).toBeGreaterThan(0)
@@ -177,7 +177,7 @@ test('portrait frame gaps are continued with photographed chassis material', asy
   })
 
   expect(continuation.bottomGap).toBeGreaterThan(80)
-  expect(continuation.images).toContain('data:image/webp')
+  expect(continuation.images).toMatch(/(?:data:image\/webp|\/assets\/[^)"']+\.webp)/i)
   expect(continuation.sizes).toContain(`${continuation.bottomGap}px`)
 })
 
