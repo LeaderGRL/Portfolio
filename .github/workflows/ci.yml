@@ -105,6 +105,8 @@ jobs:
             browser: webkit
           - project: mobile-chromium
             browser: chromium
+          - project: visual-regression
+            browser: chromium
 
     steps:
       - name: Checkout repository

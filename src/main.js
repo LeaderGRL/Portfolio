@@ -35,5 +35,8 @@ const install = app => {
 }
 
 const boot = createBootCoordinator({ start, install })
-boot.boot()
+const app = boot.boot()
+// Keep the runtime observable only for deterministic Playwright snapshots.
+// The flag is injected before module evaluation and is never set in production.
+if (globalThis.__JG1500_VISUAL_TEST__ === true) globalThis.__JG1500_APP__ = app
 boot.observeFonts(document.fonts)

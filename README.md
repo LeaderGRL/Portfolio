@@ -33,6 +33,7 @@ npm run build          # dist/index.html + fingerprinted assets + dist/nginx.con
 npm run preview        # preview the production Vite output
 npm run test:runtime   # jsdom/runtime/schema/navigation/SEO regression suite
 npm run test:e2e       # Playwright: Chromium, Firefox, WebKit and mobile
+npm run test:visual    # deterministic Chromium snapshots for critical viewports
 npm run audit:assets   # writes tmp/asset-audit.json
 npm test               # production build + runtime suite
 ```
@@ -42,6 +43,29 @@ Axe accessibility checks, validates the generated Nginx configuration with
 `nginx -t`, and retains Playwright traces/screenshots/video when a browser test
 fails. Feature branches are tested through `pull_request`; production image
 publishing happens only after a successful push to `master`.
+
+### Visual regression baselines
+
+`tests/e2e/visual-regression.spec.js` protects the authored physical composition
+at desktop, Pixel 7-class portrait, iPhone-class portrait, tablet portrait and
+mobile landscape sizes. The dedicated `visual-regression` Playwright project
+uses Chromium at 1x device scale and enables a test-only runtime flag before the
+application loads. That flag fixes the CRT shader clock, terminal clock,
+degauss/static state and cursor blink; it is absent from production rendering.
+
+When an intentional visual change is approved, rebuild the production bundle
+and update the references locally:
+
+```bash
+npm run build
+npm run test:visual:update
+npm run test:visual
+```
+
+Review every changed PNG under `tests/e2e/visual-regression.spec.js-snapshots/`
+before committing it. Do not update snapshots to make an unexplained CI diff
+green; Playwright stores the actual, expected and diff images in `test-results/`
+when a comparison fails.
 
 ## Repository layout
 
