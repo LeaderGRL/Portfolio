@@ -6,7 +6,7 @@
  * so authoring validation and rendering cannot silently drift apart.
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
-import { join, extname, basename, resolve, dirname } from 'node:path'
+import { join, extname, basename, resolve, dirname, relative } from 'node:path'
 import { DIRECTIVE_TYPES, getBlockDefinition } from '../src/document/schema.js'
 
 const VIRTUAL = 'virtual:content'
@@ -194,15 +194,9 @@ function normalizeBlocks(blocks) {
 }
 
 const MEDIA_DIR = 'content/media'
-const INLINE_MIME = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp',
-  '.gif': 'image/gif',
-  '.glb': 'model/gltf-binary',
-  '.json': 'application/json',
-}
+const BUNDLED_ASSET_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.webp', '.gif', '.glb', '.json',
+])
 const isExternal = value => /^(?:data:|blob:|https?:|\/)/i.test(String(value || ''))
 
 function findLocalAsset(value, file) {
@@ -214,29 +208,30 @@ function findLocalAsset(value, file) {
   return candidates.find(existsSync) || null
 }
 
-function inlineLocalAsset(value, file) {
+function resolveLocalAsset(value, file, registerAsset) {
   if (!value || isExternal(value)) return value
   const path = findLocalAsset(value, file)
   if (!path) throw new Error(`${file}: media not found: ${value}`)
-  const mime = INLINE_MIME[extname(path).toLowerCase()]
-  if (!mime) return value
-  return `data:${mime};base64,${readFileSync(path).toString('base64')}`
+  if (!BUNDLED_ASSET_EXTENSIONS.has(extname(path).toLowerCase())) return value
+  return registerAsset(path)
 }
 
-function resolveGalleryBody(body, file) {
+function resolveGalleryBody(body, file, registerAsset) {
   return String(body || '')
     .split('\n')
     .map(line => {
       if (!line.trim()) return line
       const [rawSrc, ...rest] = line.split('|')
       const src = rawSrc.trim()
-      const resolved = src && !isExternal(src) ? inlineLocalAsset(src, file) : src
+      const resolved = src && !isExternal(src)
+        ? resolveLocalAsset(src, file, registerAsset)
+        : src
       return [resolved, ...rest].join(' | ')
     })
     .join('\n')
 }
 
-function resolveMedia(blocks, file) {
+function resolveMedia(blocks, file, registerAsset) {
   for (const block of blocks) {
     const definition = getBlockDefinition(block.type)
     for (const field of definition?.assetFields || []) {
@@ -245,8 +240,8 @@ function resolveMedia(blocks, file) {
 
       const path = findLocalAsset(value, file)
       const ext = extname(path || value).toLowerCase()
-      if (INLINE_MIME[ext]) {
-        block[field] = inlineLocalAsset(value, file)
+      if (BUNDLED_ASSET_EXTENSIONS.has(ext)) {
+        block[field] = resolveLocalAsset(value, file, registerAsset)
         continue
       }
 
@@ -255,33 +250,35 @@ function resolveMedia(blocks, file) {
       }
     }
 
-    if (block.type === 'gallery') block.body = resolveGalleryBody(block.body, file)
+    if (block.type === 'gallery') {
+      block.body = resolveGalleryBody(block.body, file, registerAsset)
+    }
   }
   return blocks
 }
 
-function readDocument(path, id) {
+function readDocument(path, id, registerAsset) {
   const [meta, body] = parseFrontMatter(readFileSync(path, 'utf8'))
   return {
     id,
     ...meta,
-    blocks: resolveMedia(normalizeBlocks(parseBody(body, path)), path),
+    blocks: resolveMedia(normalizeBlocks(parseBody(body, path)), path, registerAsset),
   }
 }
 
-function readCollection(dir) {
+function readCollection(dir, registerAsset) {
   if (!existsSync(dir)) return []
   const documents = []
   for (const entry of readdirSync(dir).sort()) {
     const path = join(dir, entry)
     const stat = statSync(path)
     if (stat.isFile() && extname(entry) === '.md') {
-      documents.push(readDocument(path, basename(entry, '.md')))
+      documents.push(readDocument(path, basename(entry, '.md'), registerAsset))
       continue
     }
     if (stat.isDirectory()) {
       const index = join(path, 'index.md')
-      if (existsSync(index)) documents.push(readDocument(index, entry))
+      if (existsSync(index)) documents.push(readDocument(index, entry, registerAsset))
     }
   }
   return documents
@@ -305,15 +302,51 @@ export default function contentPlugin(root = 'content') {
     resolveId(id) { return id === VIRTUAL ? RESOLVED : null },
     load(id) {
       if (id !== RESOLVED) return null
+      const assets = new Map()
+      const registerAsset = path => {
+        const absolute = resolve(path)
+        const existing = assets.get(absolute)
+        if (existing) return existing.token
+        const token = `__JG_CONTENT_ASSET_${assets.size}__`
+        assets.set(absolute, { token, variable: `contentAsset${assets.size}` })
+        return token
+      }
       const site = JSON.parse(readFileSync(join(root, 'site.json'), 'utf8'))
       const bundle = {
         ...site,
-        pages: Object.fromEntries(readCollection(join(root, 'pages')).map(p => [p.id, p])),
-        projects: readCollection(join(root, 'projects')),
-        articles: readCollection(join(root, 'articles')),
+        pages: Object.fromEntries(readCollection(join(root, 'pages'), registerAsset).map(p => [p.id, p])),
+        projects: readCollection(join(root, 'projects'), registerAsset),
+        articles: readCollection(join(root, 'articles'), registerAsset),
       }
       collectWatchFiles(root).forEach(f => this.addWatchFile(f))
-      return `export default ${JSON.stringify(bundle)}`
+
+      const imports = [...assets.entries()].map(([path, asset]) => {
+        const rootPath = relative(process.cwd(), path).replaceAll('\\', '/')
+        return `import ${asset.variable} from ${JSON.stringify(`/${rootPath}?url`)}`
+      }).join('\n')
+      const assetMap = [...assets.values()].map(asset =>
+        `${JSON.stringify(asset.token)}: ${asset.variable}`
+      ).join(',\n')
+
+      return `${imports}
+const contentBundle = ${JSON.stringify(bundle)}
+const contentAssets = {${assetMap}}
+const contentAssetPattern = /__JG_CONTENT_ASSET_\\d+__/g
+
+function hydrateContentAssets(value) {
+  if (typeof value === 'string') {
+    return value.replace(contentAssetPattern, token => contentAssets[token] || token)
+  }
+  if (Array.isArray(value)) return value.map(hydrateContentAssets)
+  if (value && typeof value === 'object') {
+    for (const [key, entry] of Object.entries(value)) {
+      value[key] = hydrateContentAssets(entry)
+    }
+  }
+  return value
+}
+
+export default hydrateContentAssets(contentBundle)`
     },
     handleHotUpdate({ file, server }) {
       if (!resolve(file).startsWith(resolve(root))) return

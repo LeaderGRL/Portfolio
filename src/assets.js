@@ -1,11 +1,8 @@
 /* ==========================================================================
  * ASSETS
  *
- * Generated sprites, pulled in as real files rather than a pasted base64
- * blob. In dev Vite serves them individually, so a change to a component
- * render shows up on reload; in the production build the singlefile plugin
- * inlines them. `?inline` forces data URIs either way, which keeps the
- * runtime lookup identical in both modes.
+ * Generated sprites are imported as URLs. Vite serves them individually in
+ * development and emits fingerprinted cacheable files in production.
  *
  * Regenerate with:  npm run assets
  * ======================================================================== */
@@ -13,7 +10,7 @@ const metaGlob = import.meta.glob('../assets/build/meta.json',
   { eager: true, import: 'default' })
 
 const files = import.meta.glob('../assets/build/*.webp',
-  { eager: true, query: '?inline', import: 'default' })
+  { eager: true, query: '?url', import: 'default' })
 
 // A glob rather than a static import on purpose. assets/build/ is generated
 // and gitignored, so a fresh clone has nothing there — and a static import of

@@ -84,7 +84,14 @@ const errors = []
 w.addEventListener('error', e => errors.push(e.message))
 w.onerror = (m) => { errors.push(String(m)); return true }
 
-const code = html.match(/<script type="module">([\s\S]*?)<\/script>/)[1]
+const inlineModule = html.match(/<script type="module">([\s\S]*?)<\/script>/)
+const externalModule = html.match(/<script type="module"[^>]*src="([^"]+)"[^>]*><\/script>/)
+let code = inlineModule?.[1]
+if (!code && externalModule) {
+  const scriptPath = new URL(externalModule[1], 'http://localhost/').pathname.replace(/^\//, '')
+  code = fs.readFileSync(`dist/${scriptPath}`, 'utf8')
+}
+if (!code) throw new Error('dist/index.html does not contain a runnable module script')
 try { w.eval(code) } catch (e) { errors.push(e.message) }
 
 setTimeout(() => {
@@ -100,7 +107,8 @@ setTimeout(() => {
   console.log('  --ap-l / --cap-w:', d.documentElement.style.getPropertyValue('--ap-l') || '-',
               '/', d.documentElement.style.getPropertyValue('--cap-w') || '-')
   console.log('  --pad-h         :', d.documentElement.style.getPropertyValue('--pad-h') || 'NOT SET')
-  console.log('  sprites resolved:', imgs.filter(i => i.src.startsWith('data:')).length, '/', imgs.length)
+  const resolvedSprites = imgs.filter(i => i.src.startsWith('data:') || i.src.includes('/assets/'))
+  console.log('  sprites resolved:', resolvedSprites.length, '/', imgs.length)
   const keyFaces = d.querySelectorAll('#nav-keys .key:first-child > .key__button > .key__face').length
   console.log('  cavity/edge/face:', keyFaces, ok(keyFaces === 1))
   const keyLeds = d.querySelectorAll('#nav-keys .key > .key__button > .key__led').length
@@ -140,7 +148,7 @@ setTimeout(() => {
 
   ok(errors.length === 0)
   if (errors.length) console.log('\n  uncaught errors:\n   ' + [...new Set(errors)].join('\n   '))
-  ok(imgs.length > 0 && imgs.every(i => i.src.startsWith('data:')))
+  ok(imgs.length > 0 && imgs.every(i => i.src.startsWith('data:') || i.src.includes('/assets/')))
   ok(d.documentElement.style.getPropertyValue('--fit') !== '')
   ok(d.documentElement.style.getPropertyValue('--ap-l') !== '')
   ok(d.documentElement.style.getPropertyValue('--pad-h') !== '')

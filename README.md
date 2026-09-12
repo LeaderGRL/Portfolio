@@ -29,7 +29,7 @@ Avoid appending shell-style `# comments` to npm commands in `cmd.exe`.
 ## Production and tests
 
 ```bash
-npm run build          # dist/index.html + dist/nginx.conf
+npm run build          # dist/index.html + fingerprinted assets + dist/nginx.conf
 npm run preview        # preview the production Vite output
 npm run test:runtime   # jsdom/runtime/schema/navigation/SEO regression suite
 npm run test:e2e       # Playwright: Chromium, Firefox, WebKit and mobile
@@ -213,10 +213,12 @@ renderer rather than adding a legacy `PAGES.detail` case.
 
 ## Media
 
-Local images that participate in authored documents may be inlined by the
-content plugin. Large videos live in `public/media/` and are loaded as runtime
-files rather than being converted to base64. Media that is painted into the CRT
-uses the same phosphor-oriented rendering rules as the rest of the document.
+Local images that participate in authored documents, runtime chassis sprites,
+fonts and other imported assets are emitted as fingerprinted files so browsers
+can cache them independently. Large videos live in `public/media/` and remain
+runtime files rather than being converted to base64. Media that is painted into
+the CRT uses the same phosphor-oriented rendering rules as the rest of the
+document.
 
 `npm run audit:assets` is non-destructive. It reports media/source totals,
 unreferenced candidates, exact duplicates and the largest files to
