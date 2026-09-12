@@ -19,6 +19,7 @@ import fs from 'node:fs'
 const html = fs.readFileSync('dist/index.html', 'utf8')
 const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' })
 const w = dom.window
+w.document.fonts = { ready: new Promise(() => {}) }
 w.matchMedia = () => ({ matches: false, addEventListener(){}, removeEventListener(){}, addListener(){}, removeListener(){} })
 w.devicePixelRatio = 1
 Object.defineProperty(w, 'innerWidth',  { value: 1440, configurable: true })

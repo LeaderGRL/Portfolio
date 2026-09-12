@@ -1,8 +1,8 @@
 /* Entry point.
  *
- * Boot once the fonts have settled: both the terminal glyph atlas and the
- * article raster source depend on the final font metrics. App owns the single
- * physical CRT pipeline; content providers only supply pixels to it.
+ * Boot does not depend on webfont availability. The chassis can render with
+ * fallback metrics immediately, then refresh its fitted geometry once the
+ * initial FontFaceSet settles. App still owns the single physical CRT pipeline.
  */
 import './style.css'
 import './display.css'
@@ -22,9 +22,9 @@ import { installSemanticFocusProxy } from './semantic-focus.js'
 import { installLandscapeMobileLayout } from './landscape-mobile.js'
 import { installLandscapeActionKeys } from './landscape-action-keys.js'
 import { installPortraitMobileLayout } from './portrait-mobile.js'
+import { createBootCoordinator } from './boot-coordinator.js'
 
-const boot = () => {
-  const app = start()
+const install = app => {
   installLandscapeActionKeys()
   installLandscapeMobileLayout(app)
   installPortraitMobileLayout(app)
@@ -34,5 +34,6 @@ const boot = () => {
   installFullscreenSoftkeys(app)
 }
 
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(boot)
-else addEventListener('load', boot)
+const boot = createBootCoordinator({ start, install })
+boot.boot()
+boot.observeFonts(document.fonts)
