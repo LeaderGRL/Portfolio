@@ -3,6 +3,7 @@ title: ASTRO
 sub: A competitive local party game that started with eggs, a chest and permission to throw your friends into space
 status: PAUSED · GAME JAM → GAME CRÉALAB 2024
 year: 2024
+order: 3
 stack: [Unreal Engine, C++, Blueprints, Game Design, Programming, Local Multiplayer]
 theme: synthwave
 link: https://awelyaa.itch.io/astro

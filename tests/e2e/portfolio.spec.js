@@ -64,6 +64,18 @@ test('panel navigation keeps terminal arrows active after clicking PROJECTS', as
   await expect(page).toHaveURL(/\/projects\/.+/)
 })
 
+test('PROJECTS follows the authored portfolio priority order', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Project ordering is content-driven and only needs one browser engine')
+
+  const expected = ['frogbyte', 'crossatro', 'astro', 'jg1500', 'leak', 'penw']
+  for (let index = 0; index < expected.length; index++) {
+    await boot(page, '/projects')
+    for (let step = 0; step < index; step++) await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(new RegExp(`/projects/${expected[index]}$`))
+  }
+})
+
 test('ARTICLES supports keyboard selection and browser history', async ({ page }, testInfo) => {
   test.skip(isMobileProject(testInfo), 'Hardware-keyboard scenario is covered by desktop browser engines')
   test.setTimeout(60_000)
