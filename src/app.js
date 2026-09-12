@@ -432,6 +432,13 @@ export class App {
     return runtime;
   }
 
+  refreshTypography() {
+    // Layout installers wrap _fit(), so this single call refreshes desktop,
+    // portrait and landscape geometry without reinstalling any runtime.
+    this._fit();
+    this.dirty = true;
+  }
+
   detachDocumentRuntime(runtime) {
     if (runtime && this.documentRuntime !== runtime) return;
     this.documentRuntime = null;
