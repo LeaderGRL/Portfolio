@@ -3,6 +3,7 @@ title: CROSSATRO
 sub: A crossword roguelite built around procedural grids, scoring builds and collectible floppies
 status: PROTOTYPE / DEVELOPMENT ENDED
 year: 2025–2026
+order: 2
 stack: [Unity, C#, Procedural Generation, Event-Driven Systems, Game Design]
 link: https://github.com/LeaderGRL/Crossatro
 ---
