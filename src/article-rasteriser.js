@@ -39,6 +39,7 @@ export class ArticleRasteriser {
     this.height = SRC_H
     this.readingHeight = SRC_H
     this.fullscreen = false
+    this.responsiveViewport = false
     this.reader = reader
     this.onDirty = onDirty
     this.blockRegistry = options.blockRegistry || null
@@ -69,15 +70,26 @@ export class ArticleRasteriser {
     return Math.max(20, this.readingHeight - this.getDocumentFooterReserve())
   }
 
-  setViewport(layout) {
-    this.fullscreen = Boolean(layout)
+  setViewport(layout, { fullscreen = false } = {}) {
+    const nextResponsiveViewport = Boolean(layout)
+    const nextFullscreen = Boolean(fullscreen)
     const width = layout?.documentWidth || SRC_W
     const height = layout?.documentHeight || SRC_H
     const readingHeight = height - (layout?.documentBottom || 0)
     const pixelsW = layout?.pixelWidth || SRC_W
     const pixelsH = layout?.pixelHeight || SRC_H
-    if (this.width === width && this.height === height && this.readingHeight === readingHeight && this.canvas.width === pixelsW && this.canvas.height === pixelsH) return false
+    if (
+      this.responsiveViewport === nextResponsiveViewport &&
+      this.fullscreen === nextFullscreen &&
+      this.width === width &&
+      this.height === height &&
+      this.readingHeight === readingHeight &&
+      this.canvas.width === pixelsW &&
+      this.canvas.height === pixelsH
+    ) return false
     const progress = this.maxScroll ? this.scroll / this.maxScroll : 0
+    this.responsiveViewport = nextResponsiveViewport
+    this.fullscreen = nextFullscreen
     this.width = width
     this.height = height
     this.readingHeight = readingHeight
@@ -205,7 +217,7 @@ export class ArticleRasteriser {
         case 'code': {
           const raw = String(block.body || '').replace(/\r\n?/g, '\n').split('\n')
           this._font(8)
-          const max = this.fullscreen ? Math.max(12, Math.floor((width - 18) / this.ctx.measureText('M').width)) : 47
+          const max = this.responsiveViewport ? Math.max(12, Math.floor((width - 18) / this.ctx.measureText('M').width)) : 47
           const lines = raw.flatMap(line => line.length ? line.match(new RegExp(`.{1,${max}}`, 'g')) : [''])
           push({ type: 'code', language: block.language || '', lines, height: 47 + lines.length * 13 })
           break
@@ -403,7 +415,7 @@ export class ArticleRasteriser {
     g.imageSmoothingQuality = 'high'
     g.fillStyle = COLORS.bg
     g.fillRect(0, 0, this.width, this.height)
-    const glow = g.createRadialGradient(this.width * .43, this.height * .35, 8, this.width * .5, this.height * .5, this.fullscreen ? Math.max(this.width, this.height) * .7 : SRC_W * .62)
+    const glow = g.createRadialGradient(this.width * .43, this.height * .35, 8, this.width * .5, this.height * .5, this.responsiveViewport ? Math.max(this.width, this.height) * .7 : SRC_W * .62)
     glow.addColorStop(0, COLORS.glowInner)
     glow.addColorStop(1, COLORS.glowOuter)
     g.fillStyle = glow

@@ -105,6 +105,21 @@ test('PROJECTS keeps list metadata concise', async ({ page }, testInfo) => {
   await expect(live).not.toContainText('UNITY · ARCADE · IOT')
 })
 
+test('project detail state preserves the full status behind concise list metadata', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Project metadata is content-driven and only needs one browser engine')
+  await page.addInitScript(() => { globalThis.__JG1500_VISUAL_TEST__ = true })
+  await boot(page, '/projects/jg1500')
+
+  const item = await page.evaluate(() => {
+    const current = globalThis.__JG1500_APP__?.state?.item
+    return current ? { status: current.status, listMeta: current.listMeta } : null
+  })
+  expect(item).toEqual({
+    status: 'WEBGL · JAVASCRIPT · SYSTEMS',
+    listMeta: 'WEBGL · SYSTEMS',
+  })
+})
+
 test('ARTICLES supports keyboard selection and browser history', async ({ page }, testInfo) => {
   test.skip(isMobileProject(testInfo), 'Hardware-keyboard scenario is covered by desktop browser engines')
   test.setTimeout(60_000)

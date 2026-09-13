@@ -143,7 +143,16 @@ export class InlineIntegrationController {
   _visibleAmount(entry) {
     const top = entry.y - this.rasteriser.scroll
     const bottom = top + entry.height
-    return Math.max(0, Math.min(bottom, this.rasteriser.readingHeight || SRC_H) - Math.max(top, 0))
+    const contentBottom = this.rasteriser.getDocumentContentBottom?.() ?? (this.rasteriser.readingHeight || SRC_H)
+    return Math.max(0, Math.min(bottom, contentBottom) - Math.max(top, 0))
+  }
+
+  _syncClipBoundary() {
+    const height = this.rasteriser?.height || SRC_H
+    const contentBottom = this.rasteriser?.getDocumentContentBottom?.() ?? (this.rasteriser?.readingHeight || SRC_H)
+    const clippedBottom = Math.max(0, Math.min(height, contentBottom))
+    const inset = Math.max(0, height - clippedBottom)
+    this.layer.style.clipPath = `inset(0 0 ${((inset / height) * 100).toFixed(6)}% 0)`
   }
 
   _position(host, entry) {
@@ -324,6 +333,7 @@ export class InlineIntegrationController {
       }
 
       this.layer.hidden = false
+      this._syncClipBoundary()
       const wanted = new Set()
 
       for (const entry of this.rasteriser?.layout || []) {

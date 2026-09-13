@@ -88,6 +88,45 @@ test('scrollable full screen documents keep the footer clear and show a one-time
   await attachScreenshot(page, testInfo, 'fullscreen-document-end')
 })
 
+test('inline integrations stop at the same footer-safe boundary as raster content', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Integration boundary geometry only needs one browser engine')
+  await page.setViewportSize(DESKTOP)
+  await page.addInitScript(() => {
+    globalThis.__JG1500_VISUAL_TEST__ = true
+    Element.prototype.requestFullscreen = () => Promise.reject(new Error('Test: CSS fullscreen'))
+  })
+  await boot(page, '/articles/01-ecs-entity-management')
+  await expect(page.locator('#tube')).toHaveAttribute('data-display-mode', 'article')
+
+  await page.locator('#fullscreen-switch').click()
+  await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
+
+  const boundary = await page.evaluate(() => {
+    const runtime = globalThis.__JG1500_APP__?.documentRuntime
+    const rasteriser = runtime?.documentRaster
+    const controller = runtime?.inlineIntegrations
+    if (!rasteriser || !controller) return null
+
+    controller.sync()
+    const contentBottom = rasteriser.getDocumentContentBottom()
+    const expectedInset = ((rasteriser.height - contentBottom) / rasteriser.height) * 100
+    return {
+      hiddenAmount: controller._visibleAmount({ y: rasteriser.scroll + contentBottom + 1, height: 20 }),
+      visibleAmount: controller._visibleAmount({ y: rasteriser.scroll + contentBottom - 10, height: 20 }),
+      clipPath: controller.layer.style.clipPath,
+      expectedInset,
+    }
+  })
+
+  expect(boundary).not.toBeNull()
+  expect(boundary.hiddenAmount).toBe(0)
+  expect(boundary.visibleAmount).toBe(10)
+  expect(boundary.clipPath).toMatch(/^inset\(/)
+  const insetMatch = boundary.clipPath.match(/([\d.]+)%/)
+  expect(insetMatch).not.toBeNull()
+  expect(Number(insetMatch[1])).toBeCloseTo(boundary.expectedInset, 3)
+})
+
 test('full screen fills the viewport with a high-resolution continuous glass surface', async ({ page }, testInfo) => {
   test.skip(isMobile(testInfo), 'Portrait geometry is covered by the mobile scenario')
   await page.setViewportSize(DESKTOP)
