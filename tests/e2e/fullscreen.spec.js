@@ -403,7 +403,8 @@ test('fullscreen article and media retain high-resolution CRT without specular g
 
   const progress = await page.locator('#article-reader').evaluate(node => node.scrollTop)
   await page.setViewportSize(isMobile(testInfo) ? { width: 851, height: 393 } : { width: 960, height: 720 })
-  await expect(media).toBeVisible()
+  if (isMobile(testInfo)) await expect(media).toHaveCount(0)
+  else await expect(media).toBeVisible()
   expect(await page.locator('#article-reader').evaluate(node => node.scrollTop)).toBe(progress)
   await page.locator('.softkeys__key--exit').click()
   if (isMobile(testInfo)) {
