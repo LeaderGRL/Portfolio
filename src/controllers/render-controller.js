@@ -1,5 +1,6 @@
 import { foley } from '../audio.js'
-import { REDUCED, VISUAL_TEST, lerp } from '../core.js'
+import { REDUCED, VISUAL_TEST, lerp, now } from '../core.js'
+import { frameDeltas } from '../frame-timing.js'
 import { PAGES } from '../pages.js'
 
 export class RenderController {
@@ -37,6 +38,7 @@ export class RenderController {
     app.total = app.term.countGlyphs()
     if (retype) {
       app.reveal = 0
+      app._revealLast = now()
       this.announce()
     }
     app.revealTarget = app.total
@@ -77,6 +79,7 @@ export class RenderController {
     lines.forEach((line, index) => terminal.put(4, 3 + index, line, index === 0 ? 'bright' : 'mid'))
     app.total = terminal.countGlyphs()
     app.reveal = 0
+    app._revealLast = now()
     app.revealTarget = app.total
     app.booting = true
     app.dirty = true
@@ -93,8 +96,9 @@ export class RenderController {
     const app = this.app
     const state = app.state
     const time = ms / 1000
-    const dt = Math.min(0.05, time - (app._last || time))
+    const { visual: dt, progression: progressionDt } = frameDeltas(time, app._last, app._revealLast)
     app._last = time
+    app._revealLast = time
     state.time = VISUAL_TEST ? 42 : time
 
     if (VISUAL_TEST) {
@@ -127,7 +131,7 @@ export class RenderController {
     if (app.reveal < app.revealTarget) {
       const speed = REDUCED ? 100000 : (app.booting ? 360 : 900)
       const before = Math.floor(app.reveal)
-      app.reveal = Math.min(app.revealTarget, app.reveal + speed * dt)
+      app.reveal = Math.min(app.revealTarget, app.reveal + speed * progressionDt)
       if (Math.floor(app.reveal) !== before) {
         app.dirty = true
         if (!REDUCED && time - app.lastBlip > 0.028) {
