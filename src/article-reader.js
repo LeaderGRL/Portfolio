@@ -1,4 +1,5 @@
 import { renderRichSemanticBlock } from './document/semantic-blocks.js'
+import { parseInlineMarkdown } from './document/inline-markdown.js'
 
 /* Rich semantic document surface inside the physical CRT aperture.
  *
@@ -14,32 +15,27 @@ const make = (tag, className, text) => {
   return node
 }
 
-const INLINE_TOKEN = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_)/g
 const GENERIC_IMAGE_ALT = /^(?:article illustration|project illustration|illustration|image)$/i
 const VISUAL_BLOCK_TYPES = new Set(['image', 'media', 'hero'])
 
 function appendInline(node, value = '') {
-  let cursor = 0
-  for (const match of value.matchAll(INLINE_TOKEN)) {
-    if (match.index > cursor) node.append(document.createTextNode(value.slice(cursor, match.index)))
-    const token = match[0]
-    const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token)
-    if (link) {
-      const anchor = make('a', 'article-reader__link', link[1])
-      anchor.href = link[2]
+  for (const token of parseInlineMarkdown(value).tokens) {
+    if (token.type === 'text') {
+      node.append(document.createTextNode(token.text))
+    } else if (token.type === 'link') {
+      const anchor = make('a', 'article-reader__link', token.text)
+      anchor.href = token.href
       anchor.target = '_blank'
       anchor.rel = 'noreferrer noopener'
       node.append(anchor)
-    } else if (token.startsWith('**') || token.startsWith('__')) {
-      node.append(make('strong', '', token.slice(2, -2)))
-    } else if (token.startsWith('`')) {
-      node.append(make('code', 'article-reader__inline-code', token.slice(1, -1)))
-    } else {
-      node.append(make('em', '', token.slice(1, -1)))
+    } else if (token.type === 'strong') {
+      node.append(make('strong', '', token.text))
+    } else if (token.type === 'code') {
+      node.append(make('code', 'article-reader__inline-code', token.text))
+    } else if (token.type === 'em') {
+      node.append(make('em', '', token.text))
     }
-    cursor = match.index + token.length
   }
-  if (cursor < value.length) node.append(document.createTextNode(value.slice(cursor)))
   return node
 }
 
