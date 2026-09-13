@@ -21,7 +21,8 @@ npm run dev
 
 `npm run assets` generates `assets/build/` from `assets/src/`. The generated
 folder is gitignored, so it must be created once after a fresh clone and again
-whenever the chassis source renders change.
+whenever the chassis source renders change. `npm test` checks this prerequisite
+and generates the missing outputs automatically before it builds the site.
 
 On Windows the asset launcher tries `py -3`, then `python`, then `python3`.
 Avoid appending shell-style `# comments` to npm commands in `cmd.exe`.
