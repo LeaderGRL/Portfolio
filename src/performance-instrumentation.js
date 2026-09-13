@@ -1,11 +1,16 @@
 const FRAME_SAMPLE_LIMIT = 3600
 const TRANSITION_LIMIT = 256
+const RUNTIME_SAMPLE_INTERVAL_MS = 250
 
 const round = value => Number.isFinite(value) ? Math.round(value * 100) / 100 : null
 
 const boundedPush = (items, value, limit) => {
   items.push(value)
-  if (items.length > limit) items.shift()
+  if (items.length > limit) {
+    items.shift()
+    return true
+  }
+  return false
 }
 
 const percentile = (sorted, ratio) => {
@@ -147,7 +152,16 @@ class RuntimePerformanceInstrumentation {
     this.firstFrameAt = null
     this.lastFrameAt = null
     this.lastFrameMode = null
+    this.lastFrameModeKey = null
     this.frameSamples = []
+    this.frameSampleLimit = FRAME_SAMPLE_LIMIT
+    // Keep compact timing values for exact whole-session summaries while the
+    // richer per-frame records remain bounded for report size and memory use.
+    this.frameTimes = []
+    this.visibleFrameTimes = []
+    this.hiddenFrameTimes = []
+    this.frameTimesByMode = new Map()
+    this.droppedFrameSamples = 0
     this.stateTransitions = []
     this.framebufferTransitions = []
     this.visibilityTransitions = []
@@ -162,6 +176,11 @@ class RuntimePerformanceInstrumentation {
     this.lifecycleResumeLatencies = []
     this.lastStateSignature = ''
     this.lastFramebufferSignature = ''
+    this.tube = document.getElementById('tube')
+    this.currentVisibility = document.visibilityState || (document.hidden ? 'hidden' : 'visible')
+    this.currentFrameMode = null
+    this.currentFrameModeKey = null
+    this.runtimeSampleQueued = false
     this.stopped = false
     this.stoppedAt = null
     this.finalReport = null
@@ -172,6 +191,31 @@ class RuntimePerformanceInstrumentation {
     document.addEventListener('visibilitychange', this.onVisibilityChange)
     this.recordVisibility('install')
     this.sampleRuntime('install')
+
+    this.onRuntimeMutation = () => this.scheduleRuntimeSample('mutation')
+    this.runtimeObserver = typeof MutationObserver === 'undefined'
+      ? null
+      : new MutationObserver(this.onRuntimeMutation)
+    if (this.runtimeObserver) {
+      if (document.body) {
+        this.runtimeObserver.observe(document.body, {
+          attributes: true,
+          attributeFilter: ['class'],
+        })
+      }
+      if (this.tube) {
+        this.runtimeObserver.observe(this.tube, {
+          attributes: true,
+          attributeFilter: ['class', 'data-display-mode', 'data-raster-layout'],
+        })
+      }
+    }
+    this.onResize = () => this.scheduleRuntimeSample('resize')
+    globalThis.addEventListener?.('resize', this.onResize, { passive: true })
+    this.runtimeTimer = globalThis.setInterval?.(
+      () => this.sampleRuntime('interval'),
+      RUNTIME_SAMPLE_INTERVAL_MS,
+    ) ?? null
     this.raf = requestAnimationFrame(time => this.frame(time))
   }
 
@@ -179,6 +223,7 @@ class RuntimePerformanceInstrumentation {
     const at = performance.now()
     const state = document.visibilityState || (document.hidden ? 'hidden' : 'visible')
     const previous = this.visibilityTransitions.at(-1)?.state || null
+    this.currentVisibility = state
 
     if (state !== previous || trigger === 'install') {
       boundedPush(this.visibilityTransitions, { atMs: round(at), state, trigger }, TRANSITION_LIMIT)
@@ -194,6 +239,7 @@ class RuntimePerformanceInstrumentation {
     // Do not fold time spent in a background tab into foreground frame time.
     this.lastFrameAt = null
     this.lastFrameMode = null
+    this.lastFrameModeKey = null
   }
 
   markLifecycleState(state, trigger = 'measurement-harness') {
@@ -217,11 +263,31 @@ class RuntimePerformanceInstrumentation {
     // A renderer suspension is an intentional discontinuity in frame timing.
     this.lastFrameAt = null
     this.lastFrameMode = null
+    this.lastFrameModeKey = null
+  }
+
+  scheduleRuntimeSample(trigger) {
+    if (this.stopped || this.runtimeSampleQueued) return
+    this.runtimeSampleQueued = true
+    queueMicrotask(() => {
+      this.runtimeSampleQueued = false
+      if (!this.stopped) this.sampleRuntime(trigger)
+    })
+  }
+
+  updateFrameMode(state) {
+    const mode = frameModeFromState(state)
+    const key = frameModeKey(mode)
+    this.currentFrameMode = mode
+    this.currentFrameModeKey = key
+    if (!this.frameTimesByMode.has(key)) {
+      this.frameTimesByMode.set(key, { mode, values: [] })
+    }
   }
 
   stateSnapshot(trigger) {
     const { state = {} } = this.app
-    const tube = document.getElementById('tube')
+    const tube = this.tube || (this.tube = document.getElementById('tube'))
     return {
       atMs: round(performance.now()),
       trigger,
@@ -266,6 +332,7 @@ class RuntimePerformanceInstrumentation {
 
   sampleRuntime(trigger) {
     const state = this.stateSnapshot(trigger)
+    this.updateFrameMode(state)
     const stateSignature = JSON.stringify({
       route: state.route,
       item: state.item,
@@ -314,18 +381,25 @@ class RuntimePerformanceInstrumentation {
       boundedPush(this.lifecycleResumeLatencies, Math.max(0, time - this.pendingLifecycleResumeAt), TRANSITION_LIMIT)
       this.pendingLifecycleResumeAt = null
     }
-    const state = this.sampleRuntime('frame')
-    if (this.lastFrameAt !== null && this.lastFrameMode) {
+    if (this.lastFrameAt !== null && this.lastFrameMode && this.lastFrameModeKey) {
       const delta = Math.max(0, time - this.lastFrameAt)
-      boundedPush(this.frameSamples, {
+      const roundedDelta = round(delta)
+      const visibility = this.currentVisibility
+      this.frameTimes.push(roundedDelta)
+      if (visibility === 'hidden') this.hiddenFrameTimes.push(roundedDelta)
+      else this.visibleFrameTimes.push(roundedDelta)
+      const modeBucket = this.frameTimesByMode.get(this.lastFrameModeKey)
+      if (modeBucket) modeBucket.values.push(roundedDelta)
+      if (boundedPush(this.frameSamples, {
         atMs: round(time),
-        deltaMs: round(delta),
-        visibility: document.visibilityState || (document.hidden ? 'hidden' : 'visible'),
+        deltaMs: roundedDelta,
+        visibility,
         mode: this.lastFrameMode,
-      }, FRAME_SAMPLE_LIMIT)
+      }, this.frameSampleLimit)) this.droppedFrameSamples++
     }
     this.lastFrameAt = time
-    this.lastFrameMode = frameModeFromState(state)
+    this.lastFrameMode = this.currentFrameMode
+    this.lastFrameModeKey = this.currentFrameModeKey
     this.raf = requestAnimationFrame(next => this.frame(next))
   }
 
@@ -334,9 +408,12 @@ class RuntimePerformanceInstrumentation {
     const hiddenDurationMs = this.hiddenDurationMs + (this.hiddenSince === null ? 0 : Math.max(0, now - this.hiddenSince))
     const suspendedDurationMs = this.suspendedDurationMs + (this.suspendedSince === null ? 0 : Math.max(0, now - this.suspendedSince))
     const frameSamples = this.frameSamples.map(sample => ({ ...sample, mode: { ...sample.mode } }))
-    const visibleFrames = frameSamples.filter(sample => sample.visibility !== 'hidden').map(sample => sample.deltaMs)
-    const hiddenFrames = frameSamples.filter(sample => sample.visibility === 'hidden').map(sample => sample.deltaMs)
-    const allFrames = frameSamples.map(sample => sample.deltaMs)
+    const frameModes = [...this.frameTimesByMode.values()].map(({ mode, values }) => ({
+      mode: { ...mode },
+      timing: summarizeFrameTimes(values),
+    }))
+    const firstRetainedSample = frameSamples[0] || null
+    const lastRetainedSample = frameSamples.at(-1) || null
 
     return {
       version: 1,
@@ -354,11 +431,19 @@ class RuntimePerformanceInstrumentation {
         navigation: navigationMetrics(),
       },
       frames: {
-        all: summarizeFrameTimes(allFrames),
-        visible: summarizeFrameTimes(visibleFrames),
-        hidden: summarizeFrameTimes(hiddenFrames),
-        byMode: summarizeFrameSamplesByMode(frameSamples),
+        all: summarizeFrameTimes(this.frameTimes),
+        visible: summarizeFrameTimes(this.visibleFrameTimes),
+        hidden: summarizeFrameTimes(this.hiddenFrameTimes),
+        byMode: frameModes,
         samples: frameSamples,
+        sampleWindow: {
+          limit: this.frameSampleLimit,
+          retained: frameSamples.length,
+          dropped: this.droppedFrameSamples,
+          truncated: this.droppedFrameSamples > 0,
+          firstRetainedAtMs: firstRetainedSample?.atMs ?? null,
+          lastRetainedAtMs: lastRetainedSample?.atMs ?? null,
+        },
       },
       resources: summarizeResources(resourceEntries),
       framebuffers: [...this.framebufferTransitions],
@@ -386,6 +471,9 @@ class RuntimePerformanceInstrumentation {
     if (this.finalReport) return this.finalReport
     this.stopped = true
     cancelAnimationFrame(this.raf)
+    if (this.runtimeTimer !== null) globalThis.clearInterval?.(this.runtimeTimer)
+    this.runtimeObserver?.disconnect()
+    globalThis.removeEventListener?.('resize', this.onResize)
     document.removeEventListener('visibilitychange', this.onVisibilityChange)
     this.stoppedAt = performance.now()
     this.finalReport = this.createReport(this.stoppedAt)

@@ -25,7 +25,10 @@ import { installPortraitMobileLayout } from './portrait-mobile.js'
 import { createBootCoordinator } from './boot-coordinator.js'
 
 const performanceProbeBoot = globalThis.__JG1500_PERF_TEST__ === true
-  ? { entryAt: performance.now() }
+  // performance.now() is relative to the document time origin, which exists
+  // before the static ESM graph is fetched/evaluated. Zero therefore includes
+  // module loading instead of starting the measurement inside main.js.
+  ? { entryAt: 0 }
   : null
 
 const install = app => {

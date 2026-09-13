@@ -74,6 +74,8 @@ test('performance probe records boot, resources, rendering modes and background 
   if (testInfo.project.name === 'chromium') await page.setViewportSize({ width: 960, height: 540 })
   await bootWithInstrumentation(page, '/articles/02-ecs-rust-data-oriented-design')
   expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(false)
+  // Exercise the bounded detailed-sample window without waiting a full minute.
+  await page.evaluate(() => { globalThis.__JG1500_PERF__.frameSampleLimit = 12 })
 
   const tube = page.locator('#tube')
   const crtSwitch = page.locator('#crt-switch')
@@ -104,13 +106,18 @@ test('performance probe records boot, resources, rendering modes and background 
 
   const report = await page.evaluate(() => globalThis.__JG1500_PERF__.report())
   expect(report.version).toBe(1)
+  expect(report.boot.entryAtMs).toBe(0)
   expect(report.boot.entryToAppReadyMs).toBeGreaterThanOrEqual(0)
   expect(report.boot.entryToProbeReadyMs).toBeGreaterThanOrEqual(report.boot.entryToAppReadyMs)
   expect(report.boot.entryToFirstMeasuredFrameMs).toBeGreaterThanOrEqual(0)
   expect(report.boot.navigation).not.toBeNull()
   expect(report.frames.visible.samples).toBeGreaterThan(5)
   expect(report.frames.visible.p95Ms).toBeGreaterThanOrEqual(report.frames.visible.p50Ms)
-  expect(report.frames.samples.length).toBe(report.frames.all.samples)
+  expect(report.frames.sampleWindow.retained).toBe(report.frames.samples.length)
+  expect(report.frames.sampleWindow.limit).toBe(12)
+  expect(report.frames.sampleWindow.dropped).toBeGreaterThan(0)
+  expect(report.frames.sampleWindow.truncated).toBe(true)
+  expect(report.frames.all.samples).toBeGreaterThan(report.frames.samples.length)
   expect(report.frames.byMode.some(bucket => bucket.mode.crtEnabled === false && bucket.timing.samples > 0)).toBe(true)
   expect(report.frames.byMode.some(bucket => bucket.mode.fullscreen === true && bucket.timing.samples > 0)).toBe(true)
   expect(report.frames.byMode.some(bucket => bucket.mode.displayMode === 'media' && bucket.mode.mediaOpen && bucket.timing.samples > 0)).toBe(true)
