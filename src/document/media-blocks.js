@@ -64,7 +64,7 @@ export function enhanceMediaBlocks(registry) {
       const footer = block.label ? 23 : 0
       // Keep the editorial frame proportional when the reading column narrows,
       // rather than centring a tiny landscape image inside a tall empty box.
-      const scale = env?.rasteriser?.fullscreen ? Math.min(1, env.columnWidth / 396) : 1
+      const scale = env?.rasteriser?.responsiveViewport ? Math.min(1, env.columnWidth / 396) : 1
       const visualHeight = footer + (base - footer) * scale
       const gap = mediaGap(block)
       return { height: visualHeight + gap, meta: { visualHeight, gap } }

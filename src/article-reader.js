@@ -221,6 +221,7 @@ export function syncArticleReader(item) {
   header.append(make('p', 'article-reader__eyebrow', 'DOCUMENT / LOCAL ARCHIVE'))
   header.append(make('h1', 'article-reader__title', item.label))
   if (item.sub) header.append(make('p', 'article-reader__sub', item.sub))
+  if (item.status && item.status !== item.sub) header.append(make('p', 'article-reader__sub', item.status))
   if (item.link) {
     const source = make('a', 'article-reader__link', 'Open project source / primary link')
     source.href = item.link
