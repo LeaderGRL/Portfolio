@@ -39,6 +39,11 @@ npm run audit:assets   # writes tmp/asset-audit.json
 npm test               # production build + runtime suite
 ```
 
+The production build enforces separate raw-size budgets for HTML, initial JavaScript,
+lazy JavaScript chunks, CSS, fonts, and critical image preloads. This keeps a lazy
+chunk from hiding growth in the startup path and makes CI failures identify the resource
+class that regressed.
+
 GitHub Actions additionally installs the real Playwright browser engines, runs
 Axe accessibility checks, validates the generated Nginx configuration with
 `nginx -t`, and retains Playwright traces/screenshots/video when a browser test
