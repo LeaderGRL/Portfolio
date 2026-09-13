@@ -34,6 +34,21 @@ const scriptStyleBytes = (await Promise.all(
 const embeddedHeavyAsset = /data:(?:image|font|video|audio)\/[a-z0-9.+-]+;base64,/i.test(html)
 const failures = []
 
+const preloadTags = [...html.matchAll(/<link\b[^>]*\brel=["']preload["'][^>]*>/gi)]
+const moduleScriptIndex = html.search(/<script\b[^>]*\btype=["']module["']/i)
+const criticalChassisPreloads = [
+  {
+    label: '1920 chassis',
+    asset: /\/assets\/chassis-frame-1920-[^"']+\.webp/i,
+    media: '(min-aspect-ratio: 21/20) and (max-width: 2559px) and (pointer: fine)',
+  },
+  {
+    label: '4K chassis',
+    asset: /\/assets\/chassis-frame-4k-[^"']+\.webp/i,
+    media: '(min-aspect-ratio: 21/20) and (min-width: 2560px) and (pointer: fine)',
+  },
+]
+
 if (htmlBytes > MAX_HTML_BYTES) {
   failures.push(`index.html is ${formatKiB(htmlBytes)} (budget ${formatKiB(MAX_HTML_BYTES)})`)
 }
@@ -44,7 +59,31 @@ if (embeddedHeavyAsset) {
   failures.push('index.html contains an embedded image/font/audio/video data URI')
 }
 
-console.log(`bundle budget: HTML ${formatKiB(htmlBytes)}, JS + CSS ${formatKiB(scriptStyleBytes)}`)
+for (const expected of criticalChassisPreloads) {
+  const match = preloadTags.find(({ 0: tag }) => expected.asset.test(tag))
+  const tag = match?.[0] || ''
+  if (!match) {
+    failures.push(`${expected.label} is not discoverable from an image preload in index.html`)
+    continue
+  }
+  if (!/\bas=["']image["']/i.test(tag) || !/\btype=["']image\/webp["']/i.test(tag)) {
+    failures.push(`${expected.label} preload is missing its image/WebP resource type`)
+  }
+  if (!/\bfetchpriority=["']high["']/i.test(tag)) {
+    failures.push(`${expected.label} preload is not marked high priority`)
+  }
+  if (!tag.includes(`media="${expected.media}"`)) {
+    failures.push(`${expected.label} preload lost its responsive media guard`)
+  }
+  if (moduleScriptIndex >= 0 && (match.index ?? Infinity) > moduleScriptIndex) {
+    failures.push(`${expected.label} preload appears after the JavaScript entry module`)
+  }
+}
+
+console.log(
+  `bundle budget: HTML ${formatKiB(htmlBytes)}, JS + CSS ${formatKiB(scriptStyleBytes)}, ` +
+  `critical chassis preloads ${criticalChassisPreloads.length}`,
+)
 
 if (failures.length) {
   for (const failure of failures) console.error(`bundle budget failed: ${failure}`)
