@@ -2,6 +2,12 @@ import { test, expect } from '@playwright/test'
 
 const supportedProjects = new Set(['chromium', 'mobile-chromium'])
 
+test.use({
+  reducedMotion: 'no-preference',
+  trace: 'off',
+  video: 'off',
+})
+
 async function waitForFrames(page, count = 4) {
   await page.evaluate(frameCount => new Promise(resolve => {
     const step = remaining => {
@@ -27,22 +33,38 @@ async function bootWithInstrumentation(page, path) {
   await waitForFrames(page, 6)
 }
 
-async function setSyntheticVisibility(page, state) {
-  await page.evaluate(nextState => {
-    globalThis.__JG1500_TEST_VISIBILITY__ = nextState
-    if (!globalThis.__JG1500_TEST_VISIBILITY_INSTALLED__) {
-      Object.defineProperty(document, 'visibilityState', {
-        configurable: true,
-        get: () => globalThis.__JG1500_TEST_VISIBILITY__,
-      })
-      Object.defineProperty(document, 'hidden', {
-        configurable: true,
-        get: () => globalThis.__JG1500_TEST_VISIBILITY__ === 'hidden',
-      })
-      globalThis.__JG1500_TEST_VISIBILITY_INSTALLED__ = true
+async function exerciseBrowserSuspension(page) {
+  await page.evaluate(() => {
+    const probe = { frames: 0, lastFrameAt: null, maxGapMs: 0, running: true }
+    globalThis.__JG1500_RAF_SUSPENSION_PROBE__ = probe
+    const sample = time => {
+      if (!probe.running) return
+      if (probe.lastFrameAt !== null) probe.maxGapMs = Math.max(probe.maxGapMs, time - probe.lastFrameAt)
+      probe.lastFrameAt = time
+      probe.frames++
+      requestAnimationFrame(sample)
     }
-    document.dispatchEvent(new Event('visibilitychange'))
-  }, state)
+    requestAnimationFrame(sample)
+  })
+  await waitForFrames(page, 2)
+  const framesBeforeSuspension = await page.evaluate(() => globalThis.__JG1500_RAF_SUSPENSION_PROBE__.frames)
+
+  const cdp = await page.context().newCDPSession(page)
+  await page.evaluate(() => globalThis.__JG1500_PERF__.markLifecycleState('suspended', 'cdp-freeze'))
+  await cdp.send('Page.setWebLifecycleState', { state: 'frozen' })
+  await new Promise(resolve => setTimeout(resolve, 500))
+  await cdp.send('Page.setWebLifecycleState', { state: 'active' })
+  await page.evaluate(() => globalThis.__JG1500_PERF__.markLifecycleState('active', 'cdp-resume'))
+  await waitForFrames(page, 4)
+
+  const probe = await page.evaluate(() => {
+    globalThis.__JG1500_RAF_SUSPENSION_PROBE__.running = false
+    return globalThis.__JG1500_RAF_SUSPENSION_PROBE__
+  })
+  await cdp.detach()
+  expect(probe.frames).toBeGreaterThan(framesBeforeSuspension)
+  expect(probe.frames - framesBeforeSuspension).toBeLessThan(16)
+  expect(probe.maxGapMs).toBeGreaterThan(100)
 }
 
 test('performance probe records boot, resources, rendering modes and background lifecycle', async ({ page }, testInfo) => {
@@ -51,6 +73,7 @@ test('performance probe records boot, resources, rendering modes and background 
 
   if (testInfo.project.name === 'chromium') await page.setViewportSize({ width: 960, height: 540 })
   await bootWithInstrumentation(page, '/articles/02-ecs-rust-data-oriented-design')
+  expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(false)
 
   const tube = page.locator('#tube')
   const crtSwitch = page.locator('#crt-switch')
@@ -70,12 +93,7 @@ test('performance probe records boot, resources, rendering modes and background 
   await expect(tube).toHaveClass(/is-media-inspecting/)
   await waitForFrames(page)
 
-  const foregroundState = await page.evaluate(() => document.visibilityState)
-  expect(foregroundState).toBe('visible')
-  await setSyntheticVisibility(page, 'hidden')
-  await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('hidden')
-  await setSyntheticVisibility(page, 'visible')
-  await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('visible')
+  await exerciseBrowserSuspension(page)
   await waitForFrames(page)
 
   await page.keyboard.press('Escape')
@@ -92,6 +110,10 @@ test('performance probe records boot, resources, rendering modes and background 
   expect(report.boot.navigation).not.toBeNull()
   expect(report.frames.visible.samples).toBeGreaterThan(5)
   expect(report.frames.visible.p95Ms).toBeGreaterThanOrEqual(report.frames.visible.p50Ms)
+  expect(report.frames.samples.length).toBe(report.frames.all.samples)
+  expect(report.frames.byMode.some(bucket => bucket.mode.crtEnabled === false && bucket.timing.samples > 0)).toBe(true)
+  expect(report.frames.byMode.some(bucket => bucket.mode.fullscreen === true && bucket.timing.samples > 0)).toBe(true)
+  expect(report.frames.byMode.some(bucket => bucket.mode.displayMode === 'media' && bucket.mode.mediaOpen && bucket.timing.samples > 0)).toBe(true)
   expect(report.resources.categories.script.count).toBeGreaterThan(0)
   expect(report.resources.categories.style.count).toBeGreaterThan(0)
   expect(report.resources.categories.image.count).toBeGreaterThan(0)
@@ -101,10 +123,12 @@ test('performance probe records boot, resources, rendering modes and background 
   expect(report.states.some(state => state.displayMode === 'media' && state.mediaOpen)).toBe(true)
   expect(report.framebuffers.some(framebuffer => framebuffer.activeSource === 'document')).toBe(true)
   expect(report.framebuffers.some(framebuffer => framebuffer.output?.width > 480)).toBe(true)
-  expect(report.background.transitions.some(event => event.state === 'hidden')).toBe(true)
-  expect(report.background.transitions.at(-1)?.state).toBe('visible')
-  expect(report.background.hiddenDurationMs).toBeGreaterThanOrEqual(0)
-  expect(report.background.resumeLatency.samples).toBeGreaterThan(0)
+  expect(report.background.visibility.transitions.at(-1)?.state).toBe('visible')
+  expect(report.background.visibility.hiddenDurationMs).toBeGreaterThanOrEqual(0)
+  expect(report.background.lifecycle.transitions.some(event => event.state === 'suspended')).toBe(true)
+  expect(report.background.lifecycle.transitions.at(-1)?.state).toBe('active')
+  expect(report.background.lifecycle.suspendedDurationMs).toBeGreaterThan(250)
+  expect(report.background.lifecycle.resumeLatency.samples).toBeGreaterThan(0)
 
   const artifact = {
     project: testInfo.project.name,
@@ -115,5 +139,7 @@ test('performance probe records boot, resources, rendering modes and background 
     body: Buffer.from(JSON.stringify(artifact, null, 2)),
     contentType: 'application/json',
   })
-  await page.evaluate(() => globalThis.__JG1500_PERF__.stop())
+  const stoppedReport = await page.evaluate(() => globalThis.__JG1500_PERF__.stop())
+  await page.waitForTimeout(50)
+  expect(await page.evaluate(() => globalThis.__JG1500_PERF__.report())).toEqual(stoppedReport)
 })

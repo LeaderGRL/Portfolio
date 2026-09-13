@@ -39,12 +39,37 @@ export function resourceCategory(entry) {
   if (name.includes('performance-instrumentation')) return 'instrumentation'
   if (initiator === 'script' || name.endsWith('.js') || name.endsWith('.mjs')) return 'script'
   if (/\.(?:woff2?|ttf|otf)$/.test(name)) return 'font'
-  if (initiator === 'css' || initiator === 'link' && name.endsWith('.css') || name.endsWith('.css')) return 'style'
   if (initiator === 'img' || /\.(?:avif|gif|jpe?g|png|svg|webp)$/.test(name)) return 'image'
   if (initiator === 'video' || initiator === 'audio' || /\.(?:mp3|mp4|ogg|wav|webm)$/.test(name)) return 'media'
   if (/\.(?:glb|gltf|bin)$/.test(name)) return 'model'
+  if (initiator === 'css' || initiator === 'link' && name.endsWith('.css') || name.endsWith('.css')) return 'style'
   if (initiator === 'fetch' || initiator === 'xmlhttprequest' || /\.json$/.test(name)) return 'data'
   return 'other'
+}
+
+const frameModeFromState = state => ({
+  crtEnabled: Boolean(state?.crtEnabled),
+  powerEnabled: Boolean(state?.powerEnabled),
+  fullscreen: Boolean(state?.fullscreen),
+  displayMode: state?.displayMode || 'terminal',
+  mediaOpen: Boolean(state?.mediaOpen),
+})
+
+const frameModeKey = mode => JSON.stringify(mode)
+
+export function summarizeFrameSamplesByMode(samples) {
+  const buckets = new Map()
+  for (const sample of samples || []) {
+    if (!Number.isFinite(sample?.deltaMs) || sample.deltaMs < 0) continue
+    const mode = frameModeFromState(sample.mode)
+    const key = frameModeKey(mode)
+    if (!buckets.has(key)) buckets.set(key, { mode, values: [] })
+    buckets.get(key).values.push(sample.deltaMs)
+  }
+  return [...buckets.values()].map(({ mode, values }) => ({
+    mode,
+    timing: summarizeFrameTimes(values),
+  }))
 }
 
 const blankResourceSummary = () => ({
@@ -121,17 +146,25 @@ class RuntimePerformanceInstrumentation {
     this.appReadyAt = Number(appReadyAt) || this.startedAt
     this.firstFrameAt = null
     this.lastFrameAt = null
-    this.frameTimes = { visible: [], hidden: [] }
+    this.lastFrameMode = null
+    this.frameSamples = []
     this.stateTransitions = []
     this.framebufferTransitions = []
     this.visibilityTransitions = []
     this.hiddenDurationMs = 0
     this.hiddenSince = document.visibilityState === 'hidden' ? this.startedAt : null
-    this.pendingResumeAt = null
-    this.resumeLatencies = []
+    this.pendingVisibilityResumeAt = null
+    this.visibilityResumeLatencies = []
+    this.lifecycleTransitions = []
+    this.suspendedDurationMs = 0
+    this.suspendedSince = null
+    this.pendingLifecycleResumeAt = null
+    this.lifecycleResumeLatencies = []
     this.lastStateSignature = ''
     this.lastFramebufferSignature = ''
     this.stopped = false
+    this.stoppedAt = null
+    this.finalReport = null
 
     performance.setResourceTimingBufferSize?.(1000)
 
@@ -155,11 +188,35 @@ class RuntimePerformanceInstrumentation {
     if (state === 'visible' && this.hiddenSince !== null) {
       this.hiddenDurationMs += Math.max(0, at - this.hiddenSince)
       this.hiddenSince = null
-      this.pendingResumeAt = at
+      this.pendingVisibilityResumeAt = at
     }
 
     // Do not fold time spent in a background tab into foreground frame time.
     this.lastFrameAt = null
+    this.lastFrameMode = null
+  }
+
+  markLifecycleState(state, trigger = 'measurement-harness') {
+    if (state !== 'suspended' && state !== 'active') {
+      throw new TypeError('lifecycle state must be suspended or active')
+    }
+
+    const at = performance.now()
+    const previous = this.lifecycleTransitions.at(-1)?.state || null
+    if (state !== previous) {
+      boundedPush(this.lifecycleTransitions, { atMs: round(at), state, trigger }, TRANSITION_LIMIT)
+    }
+
+    if (state === 'suspended' && this.suspendedSince === null) this.suspendedSince = at
+    if (state === 'active' && this.suspendedSince !== null) {
+      this.suspendedDurationMs += Math.max(0, at - this.suspendedSince)
+      this.suspendedSince = null
+      this.pendingLifecycleResumeAt = at
+    }
+
+    // A renderer suspension is an intentional discontinuity in frame timing.
+    this.lastFrameAt = null
+    this.lastFrameMode = null
   }
 
   stateSnapshot(trigger) {
@@ -242,32 +299,44 @@ class RuntimePerformanceInstrumentation {
       this.lastFramebufferSignature = framebufferSignature
       boundedPush(this.framebufferTransitions, framebuffer, TRANSITION_LIMIT)
     }
+    return state
   }
 
   frame(time) {
     if (this.stopped) return
     if (this.firstFrameAt === null) this.firstFrameAt = time
 
-    if (this.pendingResumeAt !== null && document.visibilityState !== 'hidden') {
-      boundedPush(this.resumeLatencies, Math.max(0, time - this.pendingResumeAt), TRANSITION_LIMIT)
-      this.pendingResumeAt = null
+    if (this.pendingVisibilityResumeAt !== null && document.visibilityState !== 'hidden') {
+      boundedPush(this.visibilityResumeLatencies, Math.max(0, time - this.pendingVisibilityResumeAt), TRANSITION_LIMIT)
+      this.pendingVisibilityResumeAt = null
     }
-
-    if (this.lastFrameAt !== null) {
+    if (this.pendingLifecycleResumeAt !== null) {
+      boundedPush(this.lifecycleResumeLatencies, Math.max(0, time - this.pendingLifecycleResumeAt), TRANSITION_LIMIT)
+      this.pendingLifecycleResumeAt = null
+    }
+    const state = this.sampleRuntime('frame')
+    if (this.lastFrameAt !== null && this.lastFrameMode) {
       const delta = Math.max(0, time - this.lastFrameAt)
-      const bucket = document.visibilityState === 'hidden' ? this.frameTimes.hidden : this.frameTimes.visible
-      boundedPush(bucket, delta, FRAME_SAMPLE_LIMIT)
+      boundedPush(this.frameSamples, {
+        atMs: round(time),
+        deltaMs: round(delta),
+        visibility: document.visibilityState || (document.hidden ? 'hidden' : 'visible'),
+        mode: this.lastFrameMode,
+      }, FRAME_SAMPLE_LIMIT)
     }
     this.lastFrameAt = time
-    this.sampleRuntime('frame')
+    this.lastFrameMode = frameModeFromState(state)
     this.raf = requestAnimationFrame(next => this.frame(next))
   }
 
-  report() {
-    const now = performance.now()
+  createReport(now) {
     const resourceEntries = performance.getEntriesByType?.('resource') || []
     const hiddenDurationMs = this.hiddenDurationMs + (this.hiddenSince === null ? 0 : Math.max(0, now - this.hiddenSince))
-    const frames = [...this.frameTimes.visible, ...this.frameTimes.hidden]
+    const suspendedDurationMs = this.suspendedDurationMs + (this.suspendedSince === null ? 0 : Math.max(0, now - this.suspendedSince))
+    const frameSamples = this.frameSamples.map(sample => ({ ...sample, mode: { ...sample.mode } }))
+    const visibleFrames = frameSamples.filter(sample => sample.visibility !== 'hidden').map(sample => sample.deltaMs)
+    const hiddenFrames = frameSamples.filter(sample => sample.visibility === 'hidden').map(sample => sample.deltaMs)
+    const allFrames = frameSamples.map(sample => sample.deltaMs)
 
     return {
       version: 1,
@@ -285,27 +354,42 @@ class RuntimePerformanceInstrumentation {
         navigation: navigationMetrics(),
       },
       frames: {
-        all: summarizeFrameTimes(frames),
-        visible: summarizeFrameTimes(this.frameTimes.visible),
-        hidden: summarizeFrameTimes(this.frameTimes.hidden),
+        all: summarizeFrameTimes(allFrames),
+        visible: summarizeFrameTimes(visibleFrames),
+        hidden: summarizeFrameTimes(hiddenFrames),
+        byMode: summarizeFrameSamplesByMode(frameSamples),
+        samples: frameSamples,
       },
       resources: summarizeResources(resourceEntries),
       framebuffers: [...this.framebufferTransitions],
       states: [...this.stateTransitions],
       background: {
-        hiddenDurationMs: round(hiddenDurationMs),
-        transitions: [...this.visibilityTransitions],
-        resumeLatency: summarizeFrameTimes(this.resumeLatencies),
+        visibility: {
+          hiddenDurationMs: round(hiddenDurationMs),
+          transitions: [...this.visibilityTransitions],
+          resumeLatency: summarizeFrameTimes(this.visibilityResumeLatencies),
+        },
+        lifecycle: {
+          suspendedDurationMs: round(suspendedDurationMs),
+          transitions: [...this.lifecycleTransitions],
+          resumeLatency: summarizeFrameTimes(this.lifecycleResumeLatencies),
+        },
       },
     }
   }
 
+  report() {
+    return this.finalReport || this.createReport(performance.now())
+  }
+
   stop() {
-    if (this.stopped) return this.report()
+    if (this.finalReport) return this.finalReport
     this.stopped = true
     cancelAnimationFrame(this.raf)
     document.removeEventListener('visibilitychange', this.onVisibilityChange)
-    return this.report()
+    this.stoppedAt = performance.now()
+    this.finalReport = this.createReport(this.stoppedAt)
+    return this.finalReport
   }
 }
 
