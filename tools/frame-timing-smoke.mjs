@@ -18,6 +18,10 @@ const dropped = frameDeltas(10.2, 10)
 check(dropped.visual === MAX_VISUAL_FRAME_DELTA, 'long frames keep visual effects clamped')
 check(Math.abs(dropped.progression - 0.2) < 1e-9, 'long frames preserve wall-clock progression')
 
+const resetDuringDroppedFrame = frameDeltas(10.2, 10, 10.18)
+check(resetDuringDroppedFrame.visual === MAX_VISUAL_FRAME_DELTA, 'reveal resets do not change the visual clamp')
+check(Math.abs(resetDuringDroppedFrame.progression - 0.02) < 1e-9, 'reveal resets discard elapsed time before the reset')
+
 const revealSpeed = 900
 const revealAfterDroppedFrame = revealSpeed * dropped.progression
 check(Math.abs(revealAfterDroppedFrame - 180) < 1e-9, 'reveal speed stays wall-clock stable across a 200ms frame')

@@ -33,6 +33,7 @@ export class App {
 
     this.reveal = 0;
     this.revealTarget = 0;
+    this._revealLast = undefined;
     this.dirty = true;
     this.bootAt = now();
     this.lastBlip = 0;
