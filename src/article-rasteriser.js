@@ -61,6 +61,14 @@ export class ArticleRasteriser {
     this.onDirty()
   }
 
+  getDocumentFooterReserve() {
+    return this.fullscreen ? 52 : 40
+  }
+
+  getDocumentContentBottom() {
+    return Math.max(20, this.readingHeight - this.getDocumentFooterReserve())
+  }
+
   setViewport(layout) {
     this.fullscreen = Boolean(layout)
     const width = layout?.documentWidth || SRC_W
@@ -225,8 +233,9 @@ export class ArticleRasteriser {
       }
     }
 
+    this.contentHeight = y
     this.documentHeight = y + 42
-    this.maxScroll = Math.max(0, this.documentHeight - this.readingHeight)
+    this.maxScroll = Math.max(0, this.contentHeight - this.getDocumentContentBottom())
     this._syncVideos()
   }
 
@@ -269,7 +278,7 @@ export class ArticleRasteriser {
       if (!interactive) continue
       const top = entry.y - this.scroll
       const bottom = top + entry.height
-      const visible = Math.max(0, Math.min(bottom, this.readingHeight - 20) - Math.max(top, 20))
+      const visible = Math.max(0, Math.min(bottom, this.getDocumentContentBottom()) - Math.max(top, 20))
       if (visible > bestVisible) {
         bestVisible = visible
         best = entry
@@ -403,13 +412,14 @@ export class ArticleRasteriser {
     g.save()
     g.beginPath()
     // The chapter footer has its own band; content must stop above its glyphs.
-    g.rect(Math.max(8, this.columnX - 16), 20, this.columnWidth + 32, this.readingHeight - (this.fullscreen ? 52 : 40))
+    const contentBottom = this.getDocumentContentBottom()
+    g.rect(Math.max(8, this.columnX - 16), 20, this.columnWidth + 32, Math.max(0, contentBottom - 20))
     g.clip()
 
     const env = this._blockEnv()
     for (const entry of this.layout) {
       const y = entry.y - this.scroll
-      if (y + entry.height < 14 || y > this.readingHeight - 8) continue
+      if (y + entry.height < 14 || y > contentBottom) continue
       const x = entry.x
 
       const handler = this.blockRegistry?.get(entry.type)

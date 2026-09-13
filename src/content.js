@@ -13,7 +13,7 @@ const listEntry = (d) => ({
   id: d.id,
   label: d.title,
   sub: d.sub || '',
-  meta: d.status || d.year || '',
+  meta: d.listMeta || d.status || d.year || '',
   stack: d.stack || [],
   link: d.link || '',
   theme: d.theme || 'default',

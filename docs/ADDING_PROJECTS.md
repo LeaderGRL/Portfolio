@@ -23,6 +23,7 @@ Use `content/projects/<slug>/assets/` only for small document-local images that 
 title: MY PROJECT
 sub: One sentence explaining why it matters
 status: UNITY · C#
+listMeta: UNITY · C#
 year: 2026
 stack: [Unity, C#]
 ---
@@ -38,6 +39,8 @@ YEAR | 2026
 
 Explain the problem, your contribution and the interesting engineering decisions.
 ```
+
+`listMeta` is optional. Use it when the full `status` is too long for the project list; the document keeps the original `status` unchanged.
 
 If you are about to create `src/my-project.js`, stop and ask whether the missing behavior belongs in a reusable block or provider adapter.
 

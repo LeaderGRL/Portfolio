@@ -2,6 +2,7 @@
 title: LEAK
 sub: Systemic first-person horror built around adaptive pressure, information and escape
 status: UNREAL ENGINE · HORROR · AI
+listMeta: HORROR · AI
 year: 2023
 order: 5
 stack: [Unreal Engine, AI, Game Design, Horror]
