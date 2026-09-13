@@ -1,5 +1,6 @@
 import { foley } from '../audio.js'
 import { REDUCED, VISUAL_TEST, lerp } from '../core.js'
+import { frameDeltas } from '../frame-timing.js'
 import { PAGES } from '../pages.js'
 
 export class RenderController {
@@ -93,7 +94,7 @@ export class RenderController {
     const app = this.app
     const state = app.state
     const time = ms / 1000
-    const dt = Math.min(0.05, time - (app._last || time))
+    const { visual: dt, progression: progressionDt } = frameDeltas(time, app._last)
     app._last = time
     state.time = VISUAL_TEST ? 42 : time
 
@@ -127,7 +128,7 @@ export class RenderController {
     if (app.reveal < app.revealTarget) {
       const speed = REDUCED ? 100000 : (app.booting ? 360 : 900)
       const before = Math.floor(app.reveal)
-      app.reveal = Math.min(app.revealTarget, app.reveal + speed * dt)
+      app.reveal = Math.min(app.revealTarget, app.reveal + speed * progressionDt)
       if (Math.floor(app.reveal) !== before) {
         app.dirty = true
         if (!REDUCED && time - app.lastBlip > 0.028) {
