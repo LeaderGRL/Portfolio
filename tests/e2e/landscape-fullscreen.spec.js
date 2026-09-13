@@ -100,6 +100,28 @@ test('reading hint follows actual fullscreen state when returning to landscape',
   expect(await page.evaluate(() => window.__documentRasterText.some(entry => entry.text === 'SCROLL TO READ'))).toBe(false)
 })
 
+test('normal landscape keeps editorial media proportional without entering fullscreen', async ({ page }) => {
+  await page.addInitScript(() => { globalThis.__JG1500_VISUAL_TEST__ = true })
+  await boot(page, { width: 915, height: 412 }, '/articles/02-ecs-rust-data-oriented-design')
+
+  await expect.poll(() => page.evaluate(() => {
+    const rasteriser = globalThis.__JG1500_APP__?.documentRuntime?.documentRaster
+    const media = rasteriser?.layout?.find(entry => entry.type === 'media')
+    if (!rasteriser || !media) return null
+    return {
+      responsiveViewport: rasteriser.responsiveViewport,
+      fullscreen: rasteriser.fullscreen,
+      narrowColumn: rasteriser.columnWidth < 396,
+      scaledMedia: media.meta?.visualHeight < Number(media.block?.height),
+    }
+  })).toEqual({
+    responsiveViewport: true,
+    fullscreen: false,
+    narrowColumn: true,
+    scaledMedia: true,
+  })
+})
+
 for (const viewport of [
   { width: 915, height: 412 },
   { width: 844, height: 390 },

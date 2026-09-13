@@ -179,6 +179,10 @@ export class ArticleRasteriser {
       const sub = this._measureWrapped(this.item.sub, width, 9, 600)
       push({ type: 'sub', lines: sub, height: sub.length * 13 + 14 })
     }
+    if (this.item.status && this.item.status !== this.item.sub) {
+      const status = this._measureWrapped(this.item.status, width, 9, 600)
+      push({ type: 'sub', lines: status, height: status.length * 13 + 14 })
+    }
     push({ type: 'rule', height: 24 })
 
     let videoIndex = 0
