@@ -45,7 +45,7 @@ const criticalChassisPreloads = [
   {
     label: '4K chassis',
     asset: /\/assets\/chassis-frame-4k-[^"']+\.webp/i,
-    media: '(min-width: 2560px) and (pointer: fine)',
+    media: '(min-aspect-ratio: 21/20) and (min-width: 2560px) and (pointer: fine)',
   },
 ]
 
