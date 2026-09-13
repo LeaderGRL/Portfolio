@@ -2,6 +2,7 @@
 title: PROJECT ECHO : NEON WAVE
 sub: Rhythm game built for a custom physical arcade cabinet
 status: UNITY · ARCADE · IOT
+listMeta: ARCADE · IOT
 year: 2023
 order: 6
 stack: [Unity, C#, Arduino, IoT, Hardware]

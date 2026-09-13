@@ -39,6 +39,7 @@ export class ArticleRasteriser {
     this.height = SRC_H
     this.readingHeight = SRC_H
     this.fullscreen = false
+    this.responsiveViewport = false
     this.reader = reader
     this.onDirty = onDirty
     this.blockRegistry = options.blockRegistry || null
@@ -61,15 +62,34 @@ export class ArticleRasteriser {
     this.onDirty()
   }
 
-  setViewport(layout) {
-    this.fullscreen = Boolean(layout)
+  getDocumentFooterReserve() {
+    return this.fullscreen ? 52 : 40
+  }
+
+  getDocumentContentBottom() {
+    return Math.max(20, this.readingHeight - this.getDocumentFooterReserve())
+  }
+
+  setViewport(layout, { fullscreen = false } = {}) {
+    const nextResponsiveViewport = Boolean(layout)
+    const nextFullscreen = Boolean(fullscreen)
     const width = layout?.documentWidth || SRC_W
     const height = layout?.documentHeight || SRC_H
     const readingHeight = height - (layout?.documentBottom || 0)
     const pixelsW = layout?.pixelWidth || SRC_W
     const pixelsH = layout?.pixelHeight || SRC_H
-    if (this.width === width && this.height === height && this.readingHeight === readingHeight && this.canvas.width === pixelsW && this.canvas.height === pixelsH) return false
+    if (
+      this.responsiveViewport === nextResponsiveViewport &&
+      this.fullscreen === nextFullscreen &&
+      this.width === width &&
+      this.height === height &&
+      this.readingHeight === readingHeight &&
+      this.canvas.width === pixelsW &&
+      this.canvas.height === pixelsH
+    ) return false
     const progress = this.maxScroll ? this.scroll / this.maxScroll : 0
+    this.responsiveViewport = nextResponsiveViewport
+    this.fullscreen = nextFullscreen
     this.width = width
     this.height = height
     this.readingHeight = readingHeight
@@ -197,7 +217,7 @@ export class ArticleRasteriser {
         case 'code': {
           const raw = String(block.body || '').replace(/\r\n?/g, '\n').split('\n')
           this._font(8)
-          const max = this.fullscreen ? Math.max(12, Math.floor((width - 18) / this.ctx.measureText('M').width)) : 47
+          const max = this.responsiveViewport ? Math.max(12, Math.floor((width - 18) / this.ctx.measureText('M').width)) : 47
           const lines = raw.flatMap(line => line.length ? line.match(new RegExp(`.{1,${max}}`, 'g')) : [''])
           push({ type: 'code', language: block.language || '', lines, height: 47 + lines.length * 13 })
           break
@@ -225,8 +245,9 @@ export class ArticleRasteriser {
       }
     }
 
+    this.contentHeight = y
     this.documentHeight = y + 42
-    this.maxScroll = Math.max(0, this.documentHeight - this.readingHeight)
+    this.maxScroll = Math.max(0, this.contentHeight - this.getDocumentContentBottom())
     this._syncVideos()
   }
 
@@ -269,7 +290,7 @@ export class ArticleRasteriser {
       if (!interactive) continue
       const top = entry.y - this.scroll
       const bottom = top + entry.height
-      const visible = Math.max(0, Math.min(bottom, this.readingHeight - 20) - Math.max(top, 20))
+      const visible = Math.max(0, Math.min(bottom, this.getDocumentContentBottom()) - Math.max(top, 20))
       if (visible > bestVisible) {
         bestVisible = visible
         best = entry
@@ -394,7 +415,7 @@ export class ArticleRasteriser {
     g.imageSmoothingQuality = 'high'
     g.fillStyle = COLORS.bg
     g.fillRect(0, 0, this.width, this.height)
-    const glow = g.createRadialGradient(this.width * .43, this.height * .35, 8, this.width * .5, this.height * .5, this.fullscreen ? Math.max(this.width, this.height) * .7 : SRC_W * .62)
+    const glow = g.createRadialGradient(this.width * .43, this.height * .35, 8, this.width * .5, this.height * .5, this.responsiveViewport ? Math.max(this.width, this.height) * .7 : SRC_W * .62)
     glow.addColorStop(0, COLORS.glowInner)
     glow.addColorStop(1, COLORS.glowOuter)
     g.fillStyle = glow
@@ -403,13 +424,14 @@ export class ArticleRasteriser {
     g.save()
     g.beginPath()
     // The chapter footer has its own band; content must stop above its glyphs.
-    g.rect(Math.max(8, this.columnX - 16), 20, this.columnWidth + 32, this.readingHeight - (this.fullscreen ? 52 : 40))
+    const contentBottom = this.getDocumentContentBottom()
+    g.rect(Math.max(8, this.columnX - 16), 20, this.columnWidth + 32, Math.max(0, contentBottom - 20))
     g.clip()
 
     const env = this._blockEnv()
     for (const entry of this.layout) {
       const y = entry.y - this.scroll
-      if (y + entry.height < 14 || y > this.readingHeight - 8) continue
+      if (y + entry.height < 14 || y > contentBottom) continue
       const x = entry.x
 
       const handler = this.blockRegistry?.get(entry.type)

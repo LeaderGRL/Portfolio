@@ -214,7 +214,7 @@ export function list(t, st, label, items) {
   items.forEach((it, i) => {
     const y = 3 + i * 2;
     const sel = i === cursor;
-    const rawTag = it.meta || (it.stack && it.stack[0]) || "";
+    const rawTag = it.listMeta || it.status || it.year || it.meta || (it.stack && it.stack[0]) || "";
     const maxTagWidth = Math.max(10, Math.floor((t.cols - 8) * 0.38));
     const tag = ellipsize(rawTag, maxTagWidth);
     const tagX = tag ? t.cols - tag.length - 2 : t.cols - 2;
@@ -236,7 +236,8 @@ export function list(t, st, label, items) {
   });
 
   const cur = items[cursor];
-  const meta = [cur.meta, (cursor + 1) + "/" + items.length].filter(Boolean).join(" \u00b7 ");
+  const listMeta = cur.listMeta || cur.status || cur.year || cur.meta || (cur.stack && cur.stack[0]) || "";
+  const meta = [listMeta, (cursor + 1) + "/" + items.length].filter(Boolean).join(" \u00b7 ");
   t.center(t.rows - 5, "\u25b8 " + meta, "amber");
   footer(t, "ENTER OPEN \u00b7 \u2191\u2193 SELECT \u00b7 ESC HOME");
 }

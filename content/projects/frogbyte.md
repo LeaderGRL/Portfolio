@@ -2,6 +2,7 @@
 title: FROGBYTE
 sub: Refactoring my ECS experiments into a professionally engineered Rust foundation
 status: FOUNDATION / ACTIVE DEVELOPMENT
+listMeta: ACTIVE
 year: 2026
 order: 1
 stack: [Rust, ECS, Criterion, GitHub Actions]

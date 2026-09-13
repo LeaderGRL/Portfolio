@@ -38,11 +38,94 @@ async function expectViewportSource(page, selector) {
   })).toEqual([0, 0])
 }
 
+async function traceDocumentText(page) {
+  await page.addInitScript(() => {
+    window.__documentRasterText = []
+    const originalFillText = CanvasRenderingContext2D.prototype.fillText
+    CanvasRenderingContext2D.prototype.fillText = function(text, x, y, ...args) {
+      if (this.canvas?.id === 'article-source') {
+        window.__documentRasterText.push({ text: String(text), x, y })
+      }
+      return originalFillText.call(this, text, x, y, ...args)
+    }
+  })
+}
+
 // A 16:9 viewport that stays light for software-GL runners: the full-screen
 // shader covers the whole viewport, so its cost scales with this size. The
 // cross-browser lifecycle scenarios use this size to bound software-GL cost.
 // The mobile device profile also multiplies the canvas by its pixel density.
 const DESKTOP = { width: 960, height: 540 }
+
+test('scrollable full screen documents keep the footer clear and show a one-time reading hint', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Raster text geometry only needs one browser engine')
+  await page.setViewportSize(DESKTOP)
+  await traceDocumentText(page)
+  await page.addInitScript(() => {
+    Element.prototype.requestFullscreen = () => Promise.reject(new Error('Test: CSS fullscreen'))
+  })
+  await boot(page, '/articles/01-ecs-entity-management')
+
+  await page.locator('#fullscreen-switch').click()
+  await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
+  await expect.poll(() => page.evaluate(() => window.__documentRasterText.some(entry => entry.text === 'SCROLL TO READ'))).toBe(true)
+
+  await page.evaluate(() => { window.__documentRasterText = [] })
+  const reader = page.locator('#article-reader')
+  await reader.evaluate(node => { node.scrollTop = node.scrollHeight })
+  await expect.poll(() => reader.evaluate(node => Math.abs((node.scrollHeight - node.clientHeight) - node.scrollTop))).toBeLessThanOrEqual(1)
+  await expect.poll(() => page.evaluate(() => window.__documentRasterText.some(entry => entry.text.includes('Unity DOTS Entity')))).toBe(true)
+  await expect.poll(() => page.evaluate(() => window.__documentRasterText.some(entry => /^\d{2}\/\d{2}$/.test(entry.text)))).toBe(true)
+
+  const rasterText = await page.evaluate(() => window.__documentRasterText)
+  expect(rasterText.some(entry => entry.text === 'SCROLL TO READ')).toBe(false)
+  const finalContent = [...rasterText].reverse().find(entry => entry.text.includes('Unity DOTS Entity'))
+  const footerCounter = [...rasterText].reverse().find(entry => /^\d{2}\/\d{2}$/.test(entry.text))
+  expect(finalContent).toBeTruthy()
+  expect(footerCounter).toBeTruthy()
+  expect(footerCounter.y - finalContent.y).toBeGreaterThan(24)
+
+  await attachScreenshot(page, testInfo, 'fullscreen-document-end')
+})
+
+test('inline integrations stop at the same footer-safe boundary as raster content', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Integration boundary geometry only needs one browser engine')
+  await page.setViewportSize(DESKTOP)
+  await page.addInitScript(() => {
+    globalThis.__JG1500_VISUAL_TEST__ = true
+    Element.prototype.requestFullscreen = () => Promise.reject(new Error('Test: CSS fullscreen'))
+  })
+  await boot(page, '/articles/01-ecs-entity-management')
+  await expect(page.locator('#tube')).toHaveAttribute('data-display-mode', 'article')
+
+  await page.locator('#fullscreen-switch').click()
+  await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
+
+  const boundary = await page.evaluate(() => {
+    const runtime = globalThis.__JG1500_APP__?.documentRuntime
+    const rasteriser = runtime?.documentRaster
+    const controller = runtime?.inlineIntegrations
+    if (!rasteriser || !controller) return null
+
+    controller.sync()
+    const contentBottom = rasteriser.getDocumentContentBottom()
+    const expectedInset = ((rasteriser.height - contentBottom) / rasteriser.height) * 100
+    return {
+      hiddenAmount: controller._visibleAmount({ y: rasteriser.scroll + contentBottom + 1, height: 20 }),
+      visibleAmount: controller._visibleAmount({ y: rasteriser.scroll + contentBottom - 10, height: 20 }),
+      clipPath: controller.layer.style.clipPath,
+      expectedInset,
+    }
+  })
+
+  expect(boundary).not.toBeNull()
+  expect(boundary.hiddenAmount).toBe(0)
+  expect(boundary.visibleAmount).toBe(10)
+  expect(boundary.clipPath).toMatch(/^inset\(/)
+  const insetMatch = boundary.clipPath.match(/([\d.]+)%/)
+  expect(insetMatch).not.toBeNull()
+  expect(Number(insetMatch[1])).toBeCloseTo(boundary.expectedInset, 3)
+})
 
 test('full screen fills the viewport with a high-resolution continuous glass surface', async ({ page }, testInfo) => {
   test.skip(isMobile(testInfo), 'Portrait geometry is covered by the mobile scenario')
@@ -320,7 +403,8 @@ test('fullscreen article and media retain high-resolution CRT without specular g
 
   const progress = await page.locator('#article-reader').evaluate(node => node.scrollTop)
   await page.setViewportSize(isMobile(testInfo) ? { width: 851, height: 393 } : { width: 960, height: 720 })
-  await expect(media).toBeVisible()
+  if (isMobile(testInfo)) await expect(media).toHaveCount(0)
+  else await expect(media).toBeVisible()
   expect(await page.locator('#article-reader').evaluate(node => node.scrollTop)).toBe(progress)
   await page.locator('.softkeys__key--exit').click()
   if (isMobile(testInfo)) {

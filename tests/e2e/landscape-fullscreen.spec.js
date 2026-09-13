@@ -18,6 +18,19 @@ async function boot(page, viewport, route = '/') {
   await expect(page.locator('#machine')).toHaveClass(/is-landscape-mobile/)
 }
 
+async function traceDocumentText(page) {
+  await page.addInitScript(() => {
+    window.__documentRasterText = []
+    const originalFillText = CanvasRenderingContext2D.prototype.fillText
+    CanvasRenderingContext2D.prototype.fillText = function(text, x, y, ...args) {
+      if (this.canvas?.id === 'article-source') {
+        window.__documentRasterText.push({ text: String(text), x, y })
+      }
+      return originalFillText.call(this, text, x, y, ...args)
+    }
+  })
+}
+
 async function expectViewportGlass(page) {
   const geometry = await page.evaluate(() => {
     const tube = document.getElementById('tube')
@@ -67,6 +80,25 @@ async function expectLandscapeTiersSeparated(page, viewport, expectedVariant) {
   expect(geometry.controls.bottom).toBeLessThanOrEqual(geometry.power.top)
   expect(geometry.power.bottom).toBeLessThanOrEqual(viewport.height + 1)
 }
+
+test('reading hint follows actual fullscreen state when returning to landscape', async ({ page }) => {
+  await traceDocumentText(page)
+  await boot(page, { width: 915, height: 412 }, '/articles/01-ecs-entity-management')
+
+  await expect.poll(() => page.evaluate(() => window.__documentRasterText.length)).toBeGreaterThan(0)
+  expect(await page.evaluate(() => window.__documentRasterText.some(entry => entry.text === 'SCROLL TO READ'))).toBe(false)
+
+  await page.evaluate(() => { window.__documentRasterText = [] })
+  await page.locator('#fullscreen-switch').tap()
+  await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
+  await expect.poll(() => page.evaluate(() => window.__documentRasterText.some(entry => entry.text === 'SCROLL TO READ'))).toBe(true)
+
+  await page.evaluate(() => { window.__documentRasterText = [] })
+  await page.getByRole('button', { name: 'Exit full screen', exact: true }).tap()
+  await expect(page.locator('#machine')).toHaveClass(/is-landscape-mobile/)
+  await expect.poll(() => page.evaluate(() => window.__documentRasterText.length)).toBeGreaterThan(0)
+  expect(await page.evaluate(() => window.__documentRasterText.some(entry => entry.text === 'SCROLL TO READ'))).toBe(false)
+})
 
 for (const viewport of [
   { width: 915, height: 412 },

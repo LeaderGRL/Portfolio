@@ -98,11 +98,12 @@ class ArticleCRTRuntime {
   visibleLocal3DBlocks() {
     if (this.mediaViewer.isOpen) return []
     const visible = []
+    const contentBottom = this.documentRaster.getDocumentContentBottom?.() ?? this.documentRaster.readingHeight
     for (const entry of this.documentRaster.layout || []) {
       if (entry.type !== 'model3d') continue
       const top = entry.y - this.documentRaster.scroll
       const bottom = top + entry.height
-      if (bottom > 1 && top < this.documentRaster.readingHeight - 1) visible.push(entry.block)
+      if (bottom > 1 && top < contentBottom - 1) visible.push(entry.block)
     }
     return visible
   }
@@ -155,7 +156,8 @@ class ArticleCRTRuntime {
     const position = this.isDocument()
       ? { item: this.app.state.item, progress: maxScroll ? scroll / maxScroll : 0 }
       : null
-    if (!this.documentRaster.setViewport(layout)) return
+    const fullscreen = Boolean(this.app.state?.fullscreen)
+    if (!this.documentRaster.setViewport(layout, { fullscreen })) return
     this.restoreReadingPosition(position)
     // Only view-bound controls are remounted. Persistent audio state survives.
     this.inlineIntegrations.clear()
