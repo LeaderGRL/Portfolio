@@ -118,6 +118,11 @@ test('project detail state preserves the full status behind concise list metadat
     status: 'WEBGL · JAVASCRIPT · SYSTEMS',
     listMeta: 'WEBGL · SYSTEMS',
   })
+  await expect(page.locator('.article-reader__header .article-reader__sub').filter({ hasText: 'WEBGL · JAVASCRIPT · SYSTEMS' })).toHaveCount(1)
+  expect(await page.evaluate(() => {
+    const layout = globalThis.__JG1500_APP__?.documentRuntime?.documentRaster?.layout || []
+    return layout.flatMap(entry => entry.type === 'sub' ? (entry.lines || []) : [])
+  })).toContain('WEBGL · JAVASCRIPT · SYSTEMS')
 })
 
 test('ARTICLES supports keyboard selection and browser history', async ({ page }, testInfo) => {
