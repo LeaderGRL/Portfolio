@@ -24,6 +24,13 @@ import { installLandscapeActionKeys } from './landscape-action-keys.js'
 import { installPortraitMobileLayout } from './portrait-mobile.js'
 import { createBootCoordinator } from './boot-coordinator.js'
 
+const performanceProbeBoot = globalThis.__JG1500_PERF_TEST__ === true
+  // performance.now() is relative to the document time origin, which exists
+  // before the static ESM graph is fetched/evaluated. Zero therefore includes
+  // module loading instead of starting the measurement inside main.js.
+  ? { entryAt: 0 }
+  : null
+
 const install = app => {
   installLandscapeActionKeys()
   installLandscapeMobileLayout(app)
@@ -39,4 +46,15 @@ const app = boot.boot()
 // Keep the runtime observable only for deterministic Playwright snapshots.
 // The flag is injected before module evaluation and is never set in production.
 if (globalThis.__JG1500_VISUAL_TEST__ === true) globalThis.__JG1500_APP__ = app
+if (performanceProbeBoot) {
+  performanceProbeBoot.appReadyAt = performance.now()
+  void import('./performance-instrumentation.js').then(
+    ({ installPerformanceInstrumentation }) => {
+      globalThis.__JG1500_PERF__ = installPerformanceInstrumentation(app, performanceProbeBoot)
+    },
+    error => {
+      globalThis.__JG1500_PERF_ERROR__ = error instanceof Error ? error.message : String(error)
+    },
+  )
+}
 boot.observeFonts(document.fonts)
