@@ -71,6 +71,7 @@ test('narration supports native keyboard activation, seek and quiet time updates
   await expect(toggle).toHaveAttribute('aria-label', 'Play narration for ASTRO')
   await expect(toggle).toHaveAttribute('aria-pressed', 'false')
   expect(await page.evaluate(() => window.__narrationTestAudio.length)).toBe(0)
+  await page.screenshot({ path: testInfo.outputPath('narration-player-idle.png'), fullPage: true })
 
   await toggle.focus()
   await toggle.press('Enter')
@@ -88,6 +89,7 @@ test('narration supports native keyboard activation, seek and quiet time updates
     node.dispatchEvent(new Event('input', { bubbles: true }))
   })
   await expect.poll(() => page.evaluate(() => Math.round(window.__narrationTestAudio[0]?.currentTime || 0))).toBe(5)
+  await page.screenshot({ path: testInfo.outputPath('narration-player-active.png'), fullPage: true })
 
   const live = page.locator('.document-narration-live')
   await page.evaluate(() => {
