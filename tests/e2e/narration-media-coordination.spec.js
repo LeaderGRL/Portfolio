@@ -5,6 +5,8 @@ const audioControl = (page, src) => page.locator(`.document-audio-hotspot[data-a
 
 async function installAudioHarness(page) {
   await page.addInitScript(() => {
+    window.__JG1500_VISUAL_TEST__ = true
+
     const NativeAudio = window.Audio
     const created = []
     Object.defineProperty(window, '__coordTestAudio', {
