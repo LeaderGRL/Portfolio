@@ -158,7 +158,9 @@ export class InlineIntegrationController {
     const clippedBottom = Math.max(0, Math.min(height, contentBottom))
     const topInset = Math.max(0, Math.min(height, this.topInset))
     const bottomInset = Math.max(0, height - clippedBottom)
-    this.layer.style.clipPath = `inset(${((topInset / height) * 100).toFixed(6)}% 0 ${((bottomInset / height) * 100).toFixed(6)}% 0)`
+    const topValue = topInset > 0 ? `${((topInset / height) * 100).toFixed(6)}%` : '0'
+    const bottomValue = `${((bottomInset / height) * 100).toFixed(6)}%`
+    this.layer.style.clipPath = `inset(${topValue} 0 ${bottomValue} 0)`
   }
 
   _position(host, entry) {
