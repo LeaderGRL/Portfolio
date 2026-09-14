@@ -43,6 +43,9 @@ RUN npm run build
 # Run runtime regressions against the exact production output
 RUN npm run test:runtime
 
+# Validate content and generated SEO contracts against the production output
+RUN npm run test:content
+
 
 # -----------------------------
 # Production stage
