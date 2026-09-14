@@ -1,5 +1,12 @@
+import { NarrationSession, narrationDocumentKey } from './narration-session.js'
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value))
+}
+
+function finiteNonNegative(value) {
+  const number = Number(value)
+  return Number.isFinite(number) && number >= 0 ? number : 0
 }
 
 function formatTime(seconds) {
@@ -14,10 +21,16 @@ function readPanelVolume() {
   return Number.isFinite(value) ? clamp(value / 100, 0, 1) : 0.35
 }
 
+function trackPolicy(block) {
+  return block?.playbackPolicy === 'narration' ? 'narration' : 'document'
+}
+
 export class AudioPlaybackManager {
-  constructor({ onChange = () => {} } = {}) {
+  constructor({ onChange = () => {}, narrationSession = new NarrationSession() } = {}) {
     this.onChange = onChange
+    this.narrationSession = narrationSession
     this.documentKey = null
+    this.narrationBlock = null
     this.tracks = new Map()
     this.powered = true
     this.volume = readPanelVolume()
@@ -36,27 +49,36 @@ export class AudioPlaybackManager {
   }
 
   keyFor(block) {
+    if (trackPolicy(block) === 'narration') return `narration:${String(block?.sessionKey || '')}`
     return String(block?.src || '')
   }
 
   ensureTrack(block) {
     const key = this.keyFor(block)
-    if (!key) return null
+    if (!key || key === 'narration:') return null
 
+    const policy = trackPolicy(block)
     let track = this.tracks.get(key)
     if (!track) {
+      const restored = policy === 'narration'
+        ? this.narrationSession.read(block.sessionKey)
+        : { activated: false, currentTime: 0, duration: 0 }
       track = {
         key,
-        src: key,
+        src: String(block.src || ''),
         label: String(block.label || block.title || 'audio track'),
+        policy,
+        sessionKey: policy === 'narration' ? String(block.sessionKey || '') : '',
+        activated: policy === 'narration' ? restored.activated : false,
         durationHint: Number(block.duration) || 0,
         audio: null,
-        state: 'idle',
-        currentTime: 0,
-        duration: Number(block.duration) || 0,
+        state: policy === 'narration' && restored.activated ? 'paused' : 'idle',
+        currentTime: policy === 'narration' ? restored.currentTime : 0,
+        duration: Math.max(Number(block.duration) || 0, policy === 'narration' ? restored.duration : 0),
         error: null,
         listeners: new Set(),
         cleanupAudio: null,
+        restorePending: policy === 'narration' && restored.currentTime > 0,
       }
       this.tracks.set(key, track)
     } else {
@@ -74,6 +96,7 @@ export class AudioPlaybackManager {
         state: 'idle',
         playing: false,
         failed: false,
+        activated: false,
         currentTime: 0,
         duration: Number(block?.duration) || 0,
       }
@@ -83,12 +106,21 @@ export class AudioPlaybackManager {
 
   snapshotTrack(track) {
     const audio = track.audio
-    const duration = Number(audio?.duration) || track.duration || track.durationHint || 0
-    const currentTime = Number(audio?.currentTime) || track.currentTime || 0
+    const audioDuration = Number(audio?.duration)
+    const duration = Number.isFinite(audioDuration) && audioDuration > 0
+      ? audioDuration
+      : track.duration || track.durationHint || 0
+    const audioTime = Number(audio?.currentTime)
+    const currentTime = track.restorePending
+      ? track.currentTime
+      : Number.isFinite(audioTime) && audioTime >= 0
+        ? audioTime
+        : track.currentTime || 0
     return {
       state: track.state,
       playing: track.state === 'playing',
       failed: track.state === 'error',
+      activated: Boolean(track.activated),
       currentTime,
       duration,
       error: track.error,
@@ -110,25 +142,86 @@ export class AudioPlaybackManager {
     if (track.listeners.size) this.onChange(snapshot, track, reason)
   }
 
-  setDocument(item) {
-    const nextKey = item?.id || item?.slug || item?.label || null
-    if (nextKey === this.documentKey) return
+  persistNarration(track) {
+    if (!track || track.policy !== 'narration' || !track.sessionKey) return
+    const snapshot = this.snapshotTrack(track)
+    this.narrationSession.update(track.sessionKey, {
+      activated: track.activated,
+      currentTime: snapshot.currentTime,
+      duration: snapshot.duration,
+    })
+  }
+
+  setDocument(item, route = '') {
+    const nextKey = narrationDocumentKey(route, item)
+    const nextNarration = item?.narration && nextKey
+      ? {
+          src: String(item.narration),
+          label: String(item.label || item.title || item.id || 'narration'),
+          playbackPolicy: 'narration',
+          sessionKey: nextKey,
+        }
+      : null
+
+    if (nextKey === this.documentKey && nextNarration?.src === this.narrationBlock?.src) return
+
     this.releaseAll('document-change')
     this.tracks.clear()
-    this.documentKey = nextKey
+    this.documentKey = nextKey || null
+    this.narrationBlock = nextNarration
+  }
+
+  hasNarration() {
+    return Boolean(this.narrationBlock)
+  }
+
+  snapshotNarration() {
+    return this.narrationBlock ? this.snapshot(this.narrationBlock) : null
+  }
+
+  subscribeNarration(listener) {
+    return this.narrationBlock ? this.subscribe(this.narrationBlock, listener) : () => {}
+  }
+
+  async toggleNarration() {
+    if (!this.narrationBlock) return
+    await this.toggle(this.narrationBlock)
+  }
+
+  seekNarration(seconds) {
+    if (!this.narrationBlock) return null
+    return this.seek(this.narrationBlock, seconds)
   }
 
   setPowered(powered) {
     const next = Boolean(powered)
     if (next === this.powered) return
     this.powered = next
-    if (!next) this.releaseAll('power-off')
+    if (!next) {
+      for (const track of this.tracks.values()) {
+        if (track.policy === 'narration') this.pauseTrack(track)
+        else this.releaseTrack(track, 'power-off')
+      }
+    }
   }
 
   syncVolume() {
     this.volume = readPanelVolume()
     for (const track of this.tracks.values()) {
       if (track.audio) track.audio.volume = this.volume
+    }
+  }
+
+  applyRestoredPosition(track, audio) {
+    if (!track?.restorePending || track.policy !== 'narration') return
+    const duration = finiteNonNegative(audio.duration) || track.duration || track.durationHint || 0
+    const target = duration > 0 ? clamp(track.currentTime, 0, duration) : track.currentTime
+    try {
+      audio.currentTime = target
+      track.currentTime = target
+      track.restorePending = false
+    } catch {
+      // Metadata may not be available yet. loadedmetadata retries the restore.
     }
   }
 
@@ -141,36 +234,59 @@ export class AudioPlaybackManager {
     track.audio = audio
 
     const onLoadedMetadata = () => {
-      track.duration = Number(audio.duration) || track.durationHint || 0
+      track.duration = Number(audio.duration) || track.durationHint || track.duration || 0
+      this.applyRestoredPosition(track, audio)
+      this.persistNarration(track)
       this.emit(track, 'metadata')
     }
     const onDurationChange = () => {
-      track.duration = Number(audio.duration) || track.durationHint || 0
+      track.duration = Number(audio.duration) || track.durationHint || track.duration || 0
+      this.persistNarration(track)
       this.emit(track, 'duration')
     }
     const onPlay = () => {
       track.state = 'playing'
+      track.activated = true
       track.error = null
+      this.persistNarration(track)
       this.emit(track, 'play')
     }
     const onPause = () => {
-      track.currentTime = Number(audio.currentTime) || track.currentTime || 0
+      track.currentTime = finiteNonNegative(audio.currentTime)
       if (track.state !== 'error' && track.state !== 'ended' && track.state !== 'idle') {
         track.state = 'paused'
       }
+      this.persistNarration(track)
       this.emit(track, 'pause')
     }
     const onEnded = () => {
-      track.currentTime = Number(audio.duration) || track.duration || 0
-      track.state = 'ended'
+      if (track.policy === 'narration') {
+        track.currentTime = 0
+        track.state = 'paused'
+        track.activated = true
+        track.restorePending = false
+        try {
+          audio.currentTime = 0
+        } catch {
+          // The session position is authoritative if the media element rejects the seek.
+        }
+        this.narrationSession.resetPosition(track.sessionKey)
+      } else {
+        track.currentTime = Number(audio.duration) || track.duration || 0
+        track.state = 'ended'
+      }
+      this.persistNarration(track)
       this.emit(track, 'ended')
     }
     const onTimeUpdate = () => {
-      track.currentTime = Number(audio.currentTime) || 0
+      track.currentTime = finiteNonNegative(audio.currentTime)
+      this.persistNarration(track)
       this.emit(track, 'time')
     }
     const onSeeked = () => {
-      track.currentTime = Number(audio.currentTime) || 0
+      track.currentTime = finiteNonNegative(audio.currentTime)
+      track.restorePending = false
+      this.persistNarration(track)
       this.emit(track, 'seek')
     }
     const onError = () => this.fail(track, audio.error)
@@ -201,15 +317,28 @@ export class AudioPlaybackManager {
   ensureSource(track) {
     const audio = this.createAudio(track)
     if (!audio.getAttribute('src')) audio.src = track.src
+    this.applyRestoredPosition(track, audio)
     return audio
   }
 
   fail(track, error) {
     track.state = 'error'
+    track.activated = track.activated || track.policy === 'narration'
     track.error = error || track.audio?.error || new Error('Unknown audio error')
     if (track.audio && !track.audio.paused) track.audio.pause()
+    this.persistNarration(track)
     console.warn(`Document audio failed: ${track.src}`, track.error)
     this.emit(track, 'error')
+  }
+
+  pauseTrack(track) {
+    if (!track) return
+    if (track.audio && !track.audio.paused) {
+      track.audio.pause()
+      return
+    }
+    if (track.policy === 'narration' && track.state === 'playing') track.state = 'paused'
+    this.persistNarration(track)
   }
 
   pauseOthers(currentTrack) {
@@ -220,19 +349,24 @@ export class AudioPlaybackManager {
   }
 
   pauseAll() {
-    for (const track of this.tracks.values()) {
-      if (!track.audio || track.audio.paused) continue
-      track.audio.pause()
-    }
+    for (const track of this.tracks.values()) this.pauseTrack(track)
   }
 
   releaseTrack(track, reason = 'release') {
     if (!track) return
     const audio = track.audio
-    track.state = 'idle'
-    track.error = null
-    track.currentTime = 0
-    track.duration = track.durationHint || 0
+
+    if (track.policy === 'narration') {
+      if (audio) track.currentTime = finiteNonNegative(audio.currentTime)
+      track.state = track.activated ? 'paused' : 'idle'
+      track.error = null
+      this.persistNarration(track)
+    } else {
+      track.state = 'idle'
+      track.error = null
+      track.currentTime = 0
+      track.duration = track.durationHint || 0
+    }
 
     if (audio) {
       if (!audio.paused) audio.pause()
@@ -253,6 +387,29 @@ export class AudioPlaybackManager {
     for (const track of this.tracks.values()) this.releaseTrack(track, reason)
   }
 
+  seek(block, seconds) {
+    const track = this.ensureTrack(block)
+    if (!track) return null
+
+    const duration = this.snapshotTrack(track).duration
+    const requested = finiteNonNegative(seconds)
+    const target = duration > 0 ? clamp(requested, 0, duration) : requested
+    track.currentTime = target
+    track.restorePending = false
+
+    if (track.audio) {
+      try {
+        track.audio.currentTime = target
+      } catch {
+        track.restorePending = track.policy === 'narration'
+      }
+    }
+
+    this.persistNarration(track)
+    this.emit(track, 'seek')
+    return this.snapshotTrack(track)
+  }
+
   async toggle(block) {
     const track = this.ensureTrack(block)
     if (!track || !this.powered) return
@@ -266,6 +423,10 @@ export class AudioPlaybackManager {
     this.syncVolume()
 
     if (track.state === 'error') this.releaseTrack(track, 'retry')
+    if (track.policy === 'narration') {
+      track.activated = true
+      this.persistNarration(track)
+    }
 
     const audio = this.ensureSource(track)
     try {
@@ -278,6 +439,7 @@ export class AudioPlaybackManager {
   destroy() {
     this.releaseAll('destroy')
     this.tracks.clear()
+    this.narrationBlock = null
     this.volumeObserver?.disconnect()
     document.removeEventListener('visibilitychange', this.onVisibilityChange)
   }
