@@ -26,8 +26,43 @@ export function parseFrontMatter(raw) {
   return [meta, body]
 }
 
+export function collectionDocumentPaths(root) {
+  if (!fs.existsSync(root)) return []
+
+  const documents = []
+  for (const entry of fs.readdirSync(root, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const entryPath = path.join(root, entry.name)
+    if (entry.isFile() && path.extname(entry.name).toLowerCase() === '.md') {
+      documents.push(entryPath)
+      continue
+    }
+    if (!entry.isDirectory()) continue
+
+    const indexPath = path.join(entryPath, 'index.md')
+    if (fs.existsSync(indexPath) && fs.statSync(indexPath).isFile()) documents.push(indexPath)
+  }
+  return documents
+}
+
+function decodedNarrationPath(value, documentPath) {
+  try {
+    return decodeURIComponent(new URL(value, 'https://portfolio.invalid').pathname)
+  } catch {
+    throw new Error(`${documentPath}: narration path has invalid URL encoding`)
+  }
+}
+
+function isWithin(root, candidate) {
+  return candidate === root || candidate.startsWith(`${root}${path.sep}`)
+}
+
 export function validateNarrationSource(source, documentPath, publicRoot = 'public') {
-  const value = String(source || '').trim()
+  if (source === undefined || source === null || source === '') return ''
+  if (typeof source !== 'string') {
+    throw new Error(`${documentPath}: narration must be a string URL path`)
+  }
+
+  const value = source.trim()
   if (!value) return ''
 
   if (!value.startsWith('/')) {
@@ -37,18 +72,25 @@ export function validateNarrationSource(source, documentPath, publicRoot = 'publ
     throw new Error(`${documentPath}: narration must live under /media/narration/`)
   }
 
-  const extension = path.extname(value).toLowerCase()
+  const decodedPath = decodedNarrationPath(value, documentPath)
+  const extension = path.extname(decodedPath).toLowerCase()
   if (!NARRATION_EXTENSIONS.has(extension)) {
     throw new Error(`${documentPath}: unsupported narration format: ${extension || '(none)'}`)
   }
 
   const narrationRoot = path.resolve(publicRoot, 'media', 'narration')
-  const assetPath = path.resolve(publicRoot, `.${value}`)
-  if (assetPath !== narrationRoot && !assetPath.startsWith(`${narrationRoot}${path.sep}`)) {
+  const assetPath = path.resolve(publicRoot, `.${decodedPath}`)
+  if (!isWithin(narrationRoot, assetPath)) {
     throw new Error(`${documentPath}: narration path escapes /media/narration/`)
   }
   if (!fs.existsSync(assetPath) || !fs.statSync(assetPath).isFile()) {
     throw new Error(`${documentPath}: narration file not found: ${value}`)
+  }
+
+  const realNarrationRoot = fs.realpathSync(narrationRoot)
+  const realAssetPath = fs.realpathSync(assetPath)
+  if (!isWithin(realNarrationRoot, realAssetPath)) {
+    throw new Error(`${documentPath}: narration file resolves outside /media/narration/`)
   }
 
   return value
