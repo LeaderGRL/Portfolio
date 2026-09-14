@@ -29,16 +29,6 @@ async function boot(page, path = '/') {
   await page.waitForTimeout(700)
 }
 
-async function expectInsideViewport(locator, width, height, tolerance = 1) {
-  const box = await locator.boundingBox()
-  expect(box).not.toBeNull()
-  expect(box.x).toBeGreaterThanOrEqual(-tolerance)
-  expect(box.y).toBeGreaterThanOrEqual(-tolerance)
-  expect(box.x + box.width).toBeLessThanOrEqual(width + tolerance)
-  expect(box.y + box.height).toBeLessThanOrEqual(height + tolerance)
-  return box
-}
-
 for (const viewport of [
   { width: 740, height: 480, variant: '3x2' },
   { width: 667, height: 375, variant: '16x9' },

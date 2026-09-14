@@ -45,7 +45,7 @@ function gistAdapter() {
         .replaceAll('"', '&quot;')
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;')
-      iframe.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff;overflow:auto}body{font:12px ui-monospace,SFMono-Regular,Consolas,monospace}.gist{margin:0!important}</style></head><body><script src="${scriptSrc}"><\/script></body></html>`
+      iframe.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff;overflow:auto}body{font:12px ui-monospace,SFMono-Regular,Consolas,monospace}.gist{margin:0!important}</style></head><body><script src="${scriptSrc}"></script></body></html>`
       host.append(iframe)
       return () => iframe.remove()
     },

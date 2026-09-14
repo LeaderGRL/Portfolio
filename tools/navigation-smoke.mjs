@@ -48,17 +48,17 @@ globalThis.location = dom.window.location
 globalThis.history = dom.window.history
 
 syncNavigationHistory({ route: 'projects', item: null, cursor: 1 }, 'replace')
-check(history.state?.cursor === 1, 'same-path replace persists collection cursor')
+check(globalThis.history.state?.cursor === 1, 'same-path replace persists collection cursor')
 
 syncNavigationHistory({ route: 'projects', item: content.projects[1], cursor: 1 }, 'push', { parentPath: '/projects' })
-check(location.pathname === '/projects/penw', 'detail push updates browser path')
-check(history.state?.parentPath === '/projects', 'detail history records its collection parent')
+check(globalThis.location.pathname === '/projects/penw', 'detail push updates browser path')
+check(globalThis.history.state?.parentPath === '/projects', 'detail history records its collection parent')
 
 syncNavigationMetadata({ route: 'projects', item: content.projects[0] })
-check(document.title === 'FROGBYTE — Jordan Grilly', 'document title follows active item')
-check(document.querySelector('meta[name="description"]')?.content === 'Rust engine', 'meta description follows active item')
-check(document.querySelector('meta[property="og:title"]')?.content === 'FROGBYTE — Jordan Grilly', 'Open Graph title follows active item')
-check(document.querySelector('link[rel="canonical"]')?.href === 'https://portfolio.example/projects/frogbyte', 'canonical URL follows deep link')
+check(globalThis.document.title === 'FROGBYTE — Jordan Grilly', 'document title follows active item')
+check(globalThis.document.querySelector('meta[name="description"]')?.content === 'Rust engine', 'meta description follows active item')
+check(globalThis.document.querySelector('meta[property="og:title"]')?.content === 'FROGBYTE — Jordan Grilly', 'Open Graph title follows active item')
+check(globalThis.document.querySelector('link[rel="canonical"]')?.href === 'https://portfolio.example/projects/frogbyte', 'canonical URL follows deep link')
 
 console.log(failed ? `\n  ${failed} navigation check(s) FAILED` : '\n  all navigation checks passed')
 process.exit(failed ? 1 : 0)

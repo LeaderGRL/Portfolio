@@ -1,8 +1,21 @@
 const INLINE_TOKEN = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_)/g
 const LINK_TOKEN = /^\[([^\]]+)\]\(([^)]+)\)$/
 
+/**
+ * @typedef {{ type: 'text' | 'strong' | 'code' | 'em', text: string }} InlineTextToken
+ * @typedef {{ type: 'link', text: string, href: string }} InlineLinkToken
+ * @typedef {InlineTextToken | InlineLinkToken} InlineMarkdownToken
+ * @typedef {{ tokens: InlineMarkdownToken[], text: string }} ParsedInlineMarkdown
+ */
+
+/**
+ * Parse the small inline Markdown subset shared by semantic and raster readers.
+ * @param {unknown} [value='']
+ * @returns {ParsedInlineMarkdown}
+ */
 export function parseInlineMarkdown(value = '') {
   const source = String(value)
+  /** @type {InlineMarkdownToken[]} */
   const tokens = []
   let cursor = 0
 

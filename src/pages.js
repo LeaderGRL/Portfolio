@@ -1,5 +1,5 @@
 import { CONTENT } from './content.js'
-import { CHAR_H, CHAR_W, PAD_X, PAD_Y, SRC_W, wrap } from './core.js'
+import { CHAR_H, CHAR_W, PAD_X, SRC_W, wrap } from './core.js'
 import { blit, getImage, getVideo } from './media.js'
 import { SHADE } from './terminal.js'
 import { bitmapText, bitmapWidth } from './type.js'

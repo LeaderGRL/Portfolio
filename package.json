@@ -11,17 +11,24 @@
     "assets": "node tools/assets.mjs",
     "ensure:assets": "node tools/ensure-assets.mjs",
     "audit:assets": "node tools/asset-audit.mjs",
+    "lint": "eslint src tools plugins tests playwright.config.js vite.config.js",
+    "check:js": "tsc -p jsconfig.json --noEmit",
+    "quality": "npm run lint && npm run check:js",
     "test:runtime": "node tools/font-boot-smoke.mjs && node tools/layout-engine-smoke.mjs && node tools/app-controller-smoke.mjs && node tools/frame-timing-smoke.mjs && node tools/smoke.mjs && node tools/smoke.mjs --gl && node tools/interactions.mjs && node tools/display-smoke.mjs && node tools/portrait-assets-smoke.mjs && node tools/document-schema-smoke.mjs && node tools/audio-block-smoke.mjs && node tools/touch-scroll-smoke.mjs && node tools/article-parser-smoke.mjs && node tools/inline-markdown-smoke.mjs && node tools/home-article-regression.mjs && node tools/navigation-smoke.mjs && node tools/performance-instrumentation-smoke.mjs && node tools/seo-smoke.mjs",
     "test:e2e": "playwright test",
     "perf:runtime": "playwright test tests/e2e/performance-instrumentation.spec.js --project=chromium --project=mobile-chromium --workers=1",
     "test:visual": "playwright test --project=visual-regression",
     "test:visual:update": "playwright test --project=visual-regression --update-snapshots",
-    "test": "npm run ensure:assets && npm run build && npm run test:runtime"
+    "test": "npm run quality && npm run ensure:assets && npm run build && npm run test:runtime"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.62.1",
+    "eslint": "^9.39.5",
+    "globals": "^17.12.0",
     "jsdom": "^25.0.0",
+    "typescript": "^7.0.2",
     "vite": "^6.4.3"
   },
   "dependencies": {
