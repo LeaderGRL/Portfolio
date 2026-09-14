@@ -41,6 +41,7 @@ export class NarrationPlayer {
     this.snapshot = null
     this.unsubscribe = null
     this.presentation = null
+    this.overlayTopInset = 0
 
     this.hint = document.getElementById('hint')
     this.baseHint = this.hint?.textContent || ''
@@ -123,6 +124,7 @@ export class NarrationPlayer {
     this.snapshot = null
     this.previousState = null
     this.presentation = null
+    this.overlayTopInset = 0
     this.live.textContent = ''
 
     if (this.item && this.playback.hasNarration()) {
@@ -220,7 +222,9 @@ export class NarrationPlayer {
   controlMetrics(geometry, activated = isActivated(this.snapshot)) {
     const width = Math.max(1, Number(geometry?.width) || 1)
     const height = Math.max(1, Number(geometry?.height) || NARRATION_HEIGHT)
-    const compact = geometry?.kind === 'sticky' || width < 420
+    const responsiveCompact = document.body.classList.contains('is-compact-stage') ||
+      document.body.classList.contains('is-landscape-mobile-stage')
+    const compact = geometry?.kind === 'sticky' || responsiveCompact || width < 420
     const buttonWidth = Math.min(activated ? (compact ? 62 : 70) : 126, width)
     const buttonHeight = Math.min(compact ? 26 : 28, height)
     const buttonTop = Math.min(compact ? 5 : 4, Math.max(0, height - buttonHeight))
@@ -305,6 +309,7 @@ export class NarrationPlayer {
       this.layer.hidden = true
       delete this.host.dataset.narrationPresentation
       this.presentation = null
+      this.overlayTopInset = 0
       return
     }
 
@@ -313,6 +318,7 @@ export class NarrationPlayer {
       this.layer.hidden = true
       delete this.host.dataset.narrationPresentation
       this.presentation = null
+      this.overlayTopInset = 0
       return
     }
 
@@ -320,6 +326,7 @@ export class NarrationPlayer {
     const height = this.rasteriser.height
     this.layer.hidden = false
     this.presentation = geometry.kind
+    this.overlayTopInset = geometry.kind === 'sticky' ? geometry.y + geometry.height : 0
     this.host.dataset.narrationPresentation = geometry.kind
     this.host.classList.toggle('is-sticky', geometry.kind === 'sticky')
     this.host.style.left = `${(geometry.x / width) * 100}%`
@@ -352,6 +359,8 @@ export class NarrationPlayer {
     const y = geometry.y
     const width = geometry.width
     const metrics = this.controlMetrics(geometry, activated)
+    const contentBottom = this.rasteriser.getDocumentContentBottom()
+    const clipTop = geometry.kind === 'sticky' ? 0 : 20
 
     ctx.save()
     ctx.setTransform(
@@ -365,9 +374,9 @@ export class NarrationPlayer {
     ctx.beginPath()
     ctx.rect(
       Math.max(8, this.rasteriser.columnX - 16),
-      0,
+      clipTop,
       this.rasteriser.columnWidth + 32,
-      Math.max(0, this.rasteriser.getDocumentContentBottom()),
+      Math.max(0, contentBottom - clipTop),
     )
     ctx.clip()
 
@@ -439,6 +448,7 @@ export class NarrationPlayer {
     this.item = null
     this.entry = null
     this.presentation = null
+    this.overlayTopInset = 0
   }
 }
 
