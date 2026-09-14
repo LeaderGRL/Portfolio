@@ -192,6 +192,7 @@ class ArticleCRTRuntime {
 
     this.audioPlayback.setPowered(!this.tube.classList.contains('is-powered-off'))
     this.narrationPlayer.sync()
+    this.inlineIntegrations.setTopInset(this.narrationPlayer.overlayTopInset)
     if (!this.isDocument()) return
 
     if (this.mediaViewer.isOpen) {
@@ -205,6 +206,14 @@ class ArticleCRTRuntime {
     if (this.documentRaster.videoNodes.some(video => !video.paused && !video.ended && video.readyState >= 2)) {
       this.app.dirty = true
     }
+  }
+
+  handleNarrationShortcut() {
+    if (this.destroyed || this.tube.classList.contains('is-powered-off')) return false
+    this.syncSource()
+    if (!this.isDocument() || !this.audioPlayback.hasNarration()) return false
+    void this.audioPlayback.toggleNarration()
+    return true
   }
 
   handleBack() {

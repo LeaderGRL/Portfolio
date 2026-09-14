@@ -2,6 +2,9 @@ import { formatTime } from './audio-playback-manager.js'
 import { installTouchScroll } from './touch-scroll.js'
 
 const NARRATION_HEIGHT = 58
+const STICKY_HEIGHT = 44
+const STICKY_TOP = 12
+const PRIMARY_CLIP_TOP = 20
 let narrationControlId = 0
 
 function clamp(value, min, max) {
@@ -9,6 +12,7 @@ function clamp(value, min, max) {
 }
 
 function isActivated(snapshot = {}) {
+  if (!snapshot) return false
   return Boolean(snapshot.activated || snapshot.state === 'playing' || snapshot.state === 'paused' || snapshot.state === 'error')
 }
 
@@ -38,6 +42,11 @@ export class NarrationPlayer {
     this.entry = null
     this.snapshot = null
     this.unsubscribe = null
+    this.presentation = null
+    this.overlayTopInset = 0
+
+    this.hint = document.getElementById('hint')
+    this.baseHint = this.hint?.textContent || ''
 
     this.layer = document.createElement('div')
     this.layer.className = 'document-narration-layer raster-layer'
@@ -99,6 +108,13 @@ export class NarrationPlayer {
     this.removeTouchScroll = installTouchScroll(this.button, { rasteriser: this.rasteriser })
   }
 
+  syncHint() {
+    if (!this.hint) return
+    const narrationHint = this.item ? ' · N NARRATE' : ''
+    const next = `${this.baseHint}${narrationHint}`
+    if (this.hint.textContent !== next) this.hint.textContent = next
+  }
+
   setDocument(item) {
     const nextKey = item?.narration ? `${item.id || ''}:${item.narration}` : ''
     const currentKey = this.item?.narration ? `${this.item.id || ''}:${this.item.narration}` : ''
@@ -109,11 +125,14 @@ export class NarrationPlayer {
     this.item = item?.narration ? item : null
     this.snapshot = null
     this.previousState = null
+    this.presentation = null
+    this.overlayTopInset = 0
     this.live.textContent = ''
 
     if (this.item && this.playback.hasNarration()) {
       const label = String(this.item.label || this.item.title || this.item.id || 'document')
       this.progress.setAttribute('aria-label', `Narration progress for ${label}`)
+      this.button.setAttribute('aria-keyshortcuts', 'N')
       this.host.dataset.narrationFor = String(this.item.id || '')
       this.unsubscribe = this.playback.subscribeNarration((snapshot, meta) => {
         this.snapshot = snapshot
@@ -123,9 +142,12 @@ export class NarrationPlayer {
       })
     } else {
       delete this.host.dataset.narrationFor
+      delete this.host.dataset.narrationPresentation
+      this.button.removeAttribute('aria-keyshortcuts')
       this.layer.hidden = true
     }
 
+    this.syncHint()
     this.reflow()
   }
 
@@ -168,25 +190,83 @@ export class NarrationPlayer {
     this.rasteriser.markDirty()
   }
 
-  syncControlGeometry(activated = isActivated(this.snapshot)) {
-    if (!this.entry) return
-    const width = Math.max(1, Number(this.entry.width) || 1)
-    const height = Math.max(1, Number(this.entry.height) || NARRATION_HEIGHT)
+  presentationGeometry() {
+    if (!this.entry || !this.item) return null
+
+    const top = this.entry.y - this.rasteriser.scroll
+    const contentBottom = this.rasteriser.getDocumentContentBottom()
+    const snapshot = this.snapshot || {}
+    const activated = isActivated(snapshot)
+    const primaryGeometry = {
+      kind: 'primary',
+      x: this.entry.x,
+      y: top,
+      width: this.entry.width,
+      height: this.entry.height,
+    }
+    const metrics = this.controlMetrics(primaryGeometry, activated)
+    const interactiveBottom = top + Math.max(
+      metrics.buttonTop + metrics.buttonHeight,
+      activated && !snapshot.failed ? metrics.progressTop + metrics.progressHeight : 0,
+    )
+    const primaryVisible = interactiveBottom > PRIMARY_CLIP_TOP && top < contentBottom
+
+    if (primaryVisible) return primaryGeometry
+    if (!activated) return null
+
+    const stickyHeight = Math.max(1, Math.min(STICKY_HEIGHT, contentBottom))
+    const stickyTop = Math.max(0, Math.min(STICKY_TOP, contentBottom - stickyHeight))
+    return {
+      kind: 'sticky',
+      x: this.entry.x,
+      y: stickyTop,
+      width: this.entry.width,
+      height: stickyHeight,
+    }
+  }
+
+  controlMetrics(geometry, activated = isActivated(this.snapshot)) {
+    const width = Math.max(1, Number(geometry?.width) || 1)
+    const height = Math.max(1, Number(geometry?.height) || NARRATION_HEIGHT)
+    const responsiveCompact = document.body.classList.contains('is-compact-stage') ||
+      document.body.classList.contains('is-landscape-mobile-stage')
+    const compact = geometry?.kind === 'sticky' || responsiveCompact || width < 420
+    const buttonWidth = Math.min(activated ? (compact ? 62 : 70) : 126, width)
+    const buttonHeight = Math.min(compact ? 26 : 28, height)
+    const buttonTop = Math.min(compact ? 5 : 4, Math.max(0, height - buttonHeight))
+    const progressLeft = Math.min(compact ? 74 : 84, width)
+    const progressHeight = Math.min(compact ? 20 : 22, height)
+    const progressTop = Math.min(compact ? 16 : 19, Math.max(0, height - progressHeight))
+
+    return {
+      compact,
+      buttonWidth,
+      buttonHeight,
+      buttonTop,
+      progressLeft,
+      progressTop,
+      progressHeight,
+    }
+  }
+
+  syncControlGeometry(activated = isActivated(this.snapshot), geometry = this.presentationGeometry()) {
+    if (!geometry) return
+    const width = Math.max(1, Number(geometry.width) || 1)
+    const height = Math.max(1, Number(geometry.height) || NARRATION_HEIGHT)
     const xPercent = value => `${(clamp(value, 0, width) / width) * 100}%`
     const yPercent = value => `${(clamp(value, 0, height) / height) * 100}%`
-    const buttonWidth = Math.min(activated ? 70 : 126, width)
-    const progressLeft = Math.min(84, width)
+    const metrics = this.controlMetrics(geometry, activated)
 
     this.button.style.left = '0'
-    this.button.style.top = yPercent(4)
-    this.button.style.width = xPercent(buttonWidth)
-    this.button.style.height = yPercent(28)
+    this.button.style.top = yPercent(metrics.buttonTop)
+    this.button.style.width = xPercent(metrics.buttonWidth)
+    this.button.style.height = yPercent(metrics.buttonHeight)
 
-    this.progress.style.left = xPercent(progressLeft)
+    this.progress.style.left = xPercent(metrics.progressLeft)
     this.progress.style.right = 'auto'
-    this.progress.style.top = yPercent(19)
-    this.progress.style.width = xPercent(Math.max(0, width - progressLeft))
-    this.progress.style.height = yPercent(22)
+    this.progress.style.top = yPercent(metrics.progressTop)
+    this.progress.style.width = xPercent(Math.max(0, width - metrics.progressLeft))
+    this.progress.style.height = yPercent(metrics.progressHeight)
   }
 
   syncControls(snapshot = {}, meta = {}) {
@@ -233,24 +313,35 @@ export class NarrationPlayer {
     )
     if (!active) {
       this.layer.hidden = true
+      delete this.host.dataset.narrationPresentation
+      this.presentation = null
+      this.overlayTopInset = 0
       return
     }
 
-    const top = this.entry.y - this.rasteriser.scroll
-    const bottom = top + this.entry.height
-    const contentBottom = this.rasteriser.getDocumentContentBottom()
-    const visible = bottom > 0 && top < contentBottom
-    this.layer.hidden = !visible
-    if (!visible) return
+    const geometry = this.presentationGeometry()
+    if (!geometry) {
+      this.layer.hidden = true
+      delete this.host.dataset.narrationPresentation
+      this.presentation = null
+      this.overlayTopInset = 0
+      return
+    }
 
     const width = this.rasteriser.width
     const height = this.rasteriser.height
-    this.host.style.left = `${(this.entry.x / width) * 100}%`
-    this.host.style.top = `${(top / height) * 100}%`
-    this.host.style.width = `${(this.entry.width / width) * 100}%`
-    this.host.style.height = `${(this.entry.height / height) * 100}%`
-    this.syncControlGeometry()
+    this.layer.hidden = false
+    this.presentation = geometry.kind
+    this.overlayTopInset = geometry.kind === 'sticky' ? geometry.y + geometry.height : 0
+    this.host.dataset.narrationPresentation = geometry.kind
+    this.host.classList.toggle('is-sticky', geometry.kind === 'sticky')
+    this.host.style.left = `${(geometry.x / width) * 100}%`
+    this.host.style.top = `${(geometry.y / height) * 100}%`
+    this.host.style.width = `${(geometry.width / width) * 100}%`
+    this.host.style.height = `${(geometry.height / height) * 100}%`
+    this.syncControlGeometry(isActivated(this.snapshot), geometry)
 
+    const contentBottom = this.rasteriser.getDocumentContentBottom()
     const clippedBottom = Math.max(0, Math.min(height, contentBottom))
     const inset = Math.max(0, height - clippedBottom)
     this.layer.style.clipPath = `inset(0 0 ${((inset / height) * 100).toFixed(6)}% 0)`
@@ -258,9 +349,8 @@ export class NarrationPlayer {
 
   paint() {
     if (!this.item || !this.entry || !this.snapshot) return
-    const y = this.entry.y - this.rasteriser.scroll
-    const contentBottom = this.rasteriser.getDocumentContentBottom()
-    if (y + this.entry.height < 14 || y > contentBottom) return
+    const geometry = this.presentationGeometry()
+    if (!geometry) return
 
     const ctx = this.rasteriser.ctx
     const colors = this.rasteriser._blockEnv().colors
@@ -271,8 +361,12 @@ export class NarrationPlayer {
     const current = Number(snapshot.currentTime) || 0
     const duration = Number(snapshot.duration) || 0
     const progress = duration > 0 ? clamp(current / duration, 0, 1) : 0
-    const x = this.entry.x
-    const width = this.entry.width
+    const x = geometry.x
+    const y = geometry.y
+    const width = geometry.width
+    const metrics = this.controlMetrics(geometry, activated)
+    const contentBottom = this.rasteriser.getDocumentContentBottom()
+    const clipTop = geometry.kind === 'sticky' ? 0 : PRIMARY_CLIP_TOP
 
     ctx.save()
     ctx.setTransform(
@@ -286,53 +380,63 @@ export class NarrationPlayer {
     ctx.beginPath()
     ctx.rect(
       Math.max(8, this.rasteriser.columnX - 16),
-      20,
+      clipTop,
       this.rasteriser.columnWidth + 32,
-      Math.max(0, contentBottom - 20),
+      Math.max(0, contentBottom - clipTop),
     )
     ctx.clip()
+
+    if (geometry.kind === 'sticky') {
+      ctx.fillStyle = 'rgba(3,16,9,.94)'
+      ctx.fillRect(x - 4, y, width + 8, geometry.height)
+      ctx.strokeStyle = colors.dim
+      ctx.strokeRect(x - 3.5, y + .5, width + 7, Math.max(0, geometry.height - 1))
+    }
+
     ctx.font = '700 9px ui-monospace, "SFMono-Regular", Consolas, monospace'
     ctx.textBaseline = 'alphabetic'
 
     if (!activated) {
-      const buttonW = Math.min(126, width)
-      const buttonH = 28
+      const buttonW = metrics.buttonWidth
+      const buttonH = metrics.buttonHeight
+      const buttonY = y + metrics.buttonTop
       ctx.fillStyle = 'rgba(47,208,109,.055)'
-      ctx.fillRect(x, y + 4, buttonW, buttonH)
+      ctx.fillRect(x, buttonY, buttonW, buttonH)
       ctx.strokeStyle = colors.dim
-      ctx.strokeRect(x + .5, y + 4.5, buttonW - 1, buttonH - 1)
+      ctx.strokeRect(x + .5, buttonY + .5, buttonW - 1, buttonH - 1)
       ctx.fillStyle = colors.amber
-      ctx.fillText('▶ NARRATE', x + 10, y + 22)
+      ctx.fillText('▶ NARRATE', x + 10, buttonY + 18)
       ctx.restore()
       return
     }
 
-    const buttonW = Math.min(70, width)
-    const buttonH = 28
+    const buttonW = metrics.buttonWidth
+    const buttonH = metrics.buttonHeight
+    const buttonY = y + metrics.buttonTop
     ctx.fillStyle = 'rgba(47,208,109,.055)'
-    ctx.fillRect(x, y + 4, buttonW, buttonH)
+    ctx.fillRect(x, buttonY, buttonW, buttonH)
     ctx.strokeStyle = failed ? colors.amber : colors.dim
-    ctx.strokeRect(x + .5, y + 4.5, buttonW - 1, buttonH - 1)
+    ctx.strokeRect(x + .5, buttonY + .5, buttonW - 1, buttonH - 1)
     ctx.fillStyle = failed ? colors.amber : playing ? colors.core : colors.amber
-    ctx.fillText(failed ? '↻ RETRY' : playing ? '❚❚ PAUSE' : '▶ PLAY', x + 9, y + 22)
+    ctx.fillText(failed ? '↻ RETRY' : playing ? '❚❚ PAUSE' : '▶ PLAY', x + (metrics.compact ? 6 : 9), buttonY + 18)
 
     if (failed) {
       ctx.fillStyle = colors.amber
-      ctx.fillText('NARRATION UNAVAILABLE', x + Math.min(84, width), y + 22)
+      ctx.fillText('NARRATION UNAVAILABLE', x + metrics.progressLeft, buttonY + 18)
       ctx.restore()
       return
     }
 
-    const timeX = x + Math.min(84, width)
+    const timeX = x + metrics.progressLeft
     ctx.fillStyle = colors.mid
     ctx.font = '600 7px ui-monospace, "SFMono-Regular", Consolas, monospace'
-    ctx.fillText(formatTime(current), timeX, y + 15)
+    ctx.fillText(formatTime(current), timeX, y + (metrics.compact ? 13 : 15))
     ctx.textAlign = 'right'
-    ctx.fillText(duration > 0 ? formatTime(duration) : '--:--', x + width, y + 15)
+    ctx.fillText(duration > 0 ? formatTime(duration) : '--:--', x + width, y + (metrics.compact ? 13 : 15))
     ctx.textAlign = 'left'
 
-    const barY = y + 26
-    const barW = Math.max(0, width - (timeX - x))
+    const barY = y + (metrics.compact ? 24 : 26)
+    const barW = Math.max(0, width - metrics.progressLeft)
     ctx.fillStyle = 'rgba(47,208,109,.14)'
     ctx.fillRect(timeX, barY, barW, 5)
     ctx.fillStyle = colors.mid
@@ -346,8 +450,11 @@ export class NarrationPlayer {
     this.host.removeEventListener('wheel', this.onWheel)
     this.removeTouchScroll?.()
     this.layer.remove()
+    if (this.hint && this.hint.textContent !== this.baseHint) this.hint.textContent = this.baseHint
     this.item = null
     this.entry = null
+    this.presentation = null
+    this.overlayTopInset = 0
   }
 }
 
