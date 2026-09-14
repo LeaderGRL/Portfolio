@@ -207,6 +207,103 @@
   box-shadow:inset 0 0 0 1px rgba(107,243,154,.48);
 }
 
+.document-narration-layer{
+  position:absolute;
+  inset:0;
+  z-index:4;
+  overflow:hidden;
+  pointer-events:none;
+}
+
+.document-narration-layer[hidden]{
+  display:none !important;
+}
+
+.document-narration-controls{
+  position:absolute;
+  pointer-events:none;
+}
+
+.document-narration-toggle,
+.document-narration-progress{
+  position:absolute;
+  pointer-events:auto;
+  -webkit-tap-highlight-color:transparent;
+}
+
+.document-narration-toggle{
+  left:0;
+  top:4px;
+  width:126px;
+  height:28px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:transparent;
+  cursor:pointer;
+  outline:0;
+}
+
+.document-narration-controls.is-activated .document-narration-toggle{
+  width:70px;
+}
+
+.document-narration-toggle:focus-visible{
+  outline:1px solid rgba(185,255,201,.82);
+  outline-offset:-1px;
+  background:rgba(107,243,154,.05);
+}
+
+.document-narration-progress{
+  left:84px;
+  right:0;
+  top:19px;
+  width:calc(100% - 84px);
+  height:22px;
+  margin:0;
+  padding:0;
+  appearance:none;
+  -webkit-appearance:none;
+  background:transparent;
+  cursor:ew-resize;
+  touch-action:none;
+  outline:0;
+}
+
+.document-narration-progress::-webkit-slider-runnable-track{
+  height:10px;
+  background:transparent;
+}
+
+.document-narration-progress::-webkit-slider-thumb{
+  width:14px;
+  height:18px;
+  margin-top:-4px;
+  border:0;
+  appearance:none;
+  -webkit-appearance:none;
+  background:transparent;
+}
+
+.document-narration-progress::-moz-range-track{
+  height:10px;
+  border:0;
+  background:transparent;
+}
+
+.document-narration-progress::-moz-range-thumb{
+  width:14px;
+  height:18px;
+  border:0;
+  background:transparent;
+}
+
+.document-narration-progress:focus-visible{
+  outline:1px solid rgba(185,255,201,.7);
+  outline-offset:-2px;
+  background:rgba(107,243,154,.035);
+}
+
 .tube.has-dom-surface::before,
 .tube.has-dom-surface::after,
 .tube.has-dom-surface .article-reader::before,
@@ -217,10 +314,12 @@
 }
 
 .tube.is-powered-off .display-surface,
-.tube.is-powered-off .document-inline-integrations{
+.tube.is-powered-off .document-inline-integrations,
+.tube.is-powered-off .document-narration-layer{
   pointer-events:none;
 }
 
-.tube.is-powered-off .document-inline-integrations{
+.tube.is-powered-off .document-inline-integrations,
+.tube.is-powered-off .document-narration-layer{
   display:none !important;
 }
