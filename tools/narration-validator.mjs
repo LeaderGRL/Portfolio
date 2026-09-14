@@ -30,16 +30,17 @@ export function collectionDocumentPaths(root) {
   if (!fs.existsSync(root)) return []
 
   const documents = []
-  for (const entry of fs.readdirSync(root, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-    const entryPath = path.join(root, entry.name)
-    if (entry.isFile() && path.extname(entry.name).toLowerCase() === '.md') {
+  for (const entry of fs.readdirSync(root).sort()) {
+    const entryPath = path.join(root, entry)
+    const stat = fs.statSync(entryPath)
+    if (stat.isFile() && path.extname(entry).toLowerCase() === '.md') {
       documents.push(entryPath)
       continue
     }
-    if (!entry.isDirectory()) continue
+    if (!stat.isDirectory()) continue
 
     const indexPath = path.join(entryPath, 'index.md')
-    if (fs.existsSync(indexPath) && fs.statSync(indexPath).isFile()) documents.push(indexPath)
+    if (fs.existsSync(indexPath)) documents.push(indexPath)
   }
   return documents
 }
