@@ -45,6 +45,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run JavaScript quality checks
+        run: npm run quality
+
       - name: Audit repository assets
         run: npm run audit:assets
 
