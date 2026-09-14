@@ -115,3 +115,24 @@ test('narration content traversal mirrors loaded collection documents', () => {
   const result = collectionDocumentPaths(root).map(file => path.relative(root, file).replaceAll('\\', '/'))
   assert.deepEqual(result, ['project/index.md', 'single.md'])
 })
+
+test('narration content traversal follows document symlinks like the content plugin', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jg1500-content-'))
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'jg1500-linked-content-'))
+  const linkedFileTarget = path.join(outside, 'linked.md')
+  const linkedDirTarget = path.join(outside, 'linked-project')
+  fs.writeFileSync(linkedFileTarget, '# Linked file')
+  fs.mkdirSync(linkedDirTarget, { recursive: true })
+  fs.writeFileSync(path.join(linkedDirTarget, 'index.md'), '# Linked project')
+
+  try {
+    fs.symlinkSync(linkedFileTarget, path.join(root, 'linked-file.md'))
+    fs.symlinkSync(linkedDirTarget, path.join(root, 'linked-dir'), process.platform === 'win32' ? 'junction' : 'dir')
+  } catch (error) {
+    if (process.platform === 'win32' && (error?.code === 'EPERM' || error?.code === 'EACCES')) return
+    throw error
+  }
+
+  const result = collectionDocumentPaths(root).map(file => path.relative(root, file).replaceAll('\\', '/'))
+  assert.deepEqual(result, ['linked-dir/index.md', 'linked-file.md'])
+})
