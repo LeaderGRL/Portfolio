@@ -32,11 +32,13 @@ Avoid appending shell-style `# comments` to npm commands in `cmd.exe`.
 ```bash
 npm run build          # dist/index.html + fingerprinted assets + dist/nginx.conf
 npm run preview        # preview the production Vite output
-npm run test:runtime   # jsdom/runtime/schema/navigation/SEO regression suite
+npm run test:runtime   # runtime/schema/navigation regression suite
+npm run test:content   # article/Markdown/content/SEO regression suite
 npm run test:e2e       # Playwright: Chromium, Firefox, WebKit and mobile
 npm run test:visual    # deterministic Chromium snapshots for critical viewports
+npm run test:all       # npm test + browser E2E + visual regression
 npm run audit:assets   # writes tmp/asset-audit.json
-npm test               # production build + runtime suite
+npm test               # quality + assets + production build + runtime + content suites
 ```
 
 The production build enforces separate raw-size budgets for HTML, initial JavaScript,
