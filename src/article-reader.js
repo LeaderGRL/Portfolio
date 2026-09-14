@@ -225,6 +225,12 @@ export function syncArticleReader(item) {
     source.rel = 'noreferrer noopener'
     header.append(source)
   }
+  if (item.narration) {
+    const spacer = make('div', 'article-reader__narration-spacer')
+    spacer.setAttribute('aria-hidden', 'true')
+    spacer.style.height = '58px'
+    header.append(spacer)
+  }
   reader.append(header)
 
   let context = item.label
