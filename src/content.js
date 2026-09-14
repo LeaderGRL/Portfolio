@@ -8,21 +8,7 @@
  * Nothing here is edited to change the site. Edit content/*.md.
  * ======================================================================== */
 import bundle from 'virtual:content'
-
-const listEntry = (d) => ({
-  id: d.id,
-  label: d.title,
-  sub: d.sub || '',
-  meta: d.status || d.year || '',
-  status: d.status || '',
-  listMeta: d.listMeta || '',
-  year: d.year || '',
-  stack: d.stack || [],
-  link: d.link || '',
-  theme: d.theme || 'default',
-  order: Number.isFinite(Number(d.order)) ? Number(d.order) : null,
-  blocks: d.blocks || [],
-})
+import { toContentEntry } from './content-entry.js'
 
 function seriesNumber(entry) {
   const match = /\b(?:PART|ECS)\s*#?\s*(\d+)\b/i.exec(entry.label || '')
@@ -54,7 +40,7 @@ export const CONTENT = {
   model: bundle.model,
   made: bundle.made,
   contact: bundle.contact.map(c => [c.label, c.value]),
-  projects: sortCollection(bundle.projects.map(listEntry)),
-  articles: sortCollection(bundle.articles.map(listEntry)),
+  projects: sortCollection(bundle.projects.map(toContentEntry)),
+  articles: sortCollection(bundle.articles.map(toContentEntry)),
   pages: bundle.pages,
 }
