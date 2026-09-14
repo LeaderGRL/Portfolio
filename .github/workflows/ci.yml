@@ -40,7 +40,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install asset pipeline dependencies
-        run: python -m pip install pillow numpy scipy
+        run: python -m pip install pillow numpy scipy miniaudio
 
       - name: Install dependencies
         run: npm ci

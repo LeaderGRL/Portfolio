@@ -6,7 +6,8 @@ import { JSDOM } from 'jsdom'
 
 const ROOT = process.cwd()
 const REPORT_PATH = path.join(ROOT, 'tmp', 'media-audit.json')
-const WEBP_VERIFY_SCRIPT = path.join(ROOT, 'tools', 'verify-webp.py')
+const RASTER_VERIFY_SCRIPT = path.join(ROOT, 'tools', 'verify-raster.py')
+const MP3_VERIFY_SCRIPT = path.join(ROOT, 'tools', 'verify-mp3.py')
 const MEDIA_ROOTS = [
   path.join(ROOT, 'public', 'media'),
   path.join(ROOT, 'content', 'media'),
@@ -23,6 +24,7 @@ const IMAGE_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.sv
 const VIDEO_EXTENSIONS = new Set(['.m4v', '.mov', '.mp4', '.webm'])
 const AUDIO_EXTENSIONS = new Set(['.aac', '.flac', '.m4a', '.mp3', '.ogg', '.opus', '.wav'])
 const PARSED_IMAGE_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.webp'])
+const DECODED_RASTER_EXTENSIONS = new Set(['.gif', '.jpeg', '.jpg', '.png', '.webp'])
 const PARSED_VIDEO_EXTENSIONS = new Set(['.m4v', '.mov', '.mp4'])
 const PARSED_AUDIO_EXTENSIONS = new Set(['.mp3'])
 
@@ -857,16 +859,7 @@ function parseGlb(buffer) {
   return { codec: 'glb2' }
 }
 
-function verifyWebpPayloads(items) {
-  const targets = items.filter(item => (
-    item.referenced
-    && path.extname(item.path).toLowerCase() === '.webp'
-    && item.codec?.startsWith('webp')
-    && item.width
-    && item.height
-  ))
-  if (!targets.length) return new Set()
-
+function runPythonVerifier(script, payload, label) {
   const candidates = [
     ...(process.env.JG1500_PYTHON ? [process.env.JG1500_PYTHON] : []),
     ...(process.platform === 'win32' ? ['py -3', 'python', 'python3'] : ['python3', 'python']),
@@ -874,9 +867,9 @@ function verifyWebpPayloads(items) {
   let lastError = ''
   for (const cmd of candidates) {
     const [bin, ...pre] = cmd.includes(' ') && !cmd.endsWith('.exe') ? cmd.split(' ') : [cmd]
-    const run = spawnSync(bin, [...pre, WEBP_VERIFY_SCRIPT], {
+    const run = spawnSync(bin, [...pre, script], {
       cwd: ROOT,
-      input: JSON.stringify(targets.map(item => item.path)),
+      input: JSON.stringify(payload),
       encoding: 'utf8',
       maxBuffer: 10 * 1024 * 1024,
     })
@@ -886,18 +879,53 @@ function verifyWebpPayloads(items) {
     }
 
     try {
-      const decoded = JSON.parse(run.stdout)
-      return new Set(targets.filter(item => {
-        const result = decoded[item.path]
-        return !result || result.width !== item.width || result.height !== item.height
-      }).map(item => item.path))
+      return JSON.parse(run.stdout)
     } catch (error) {
       lastError = error.message
     }
   }
 
-  throw new Error(`Unable to validate WebP payloads with Pillow: ${lastError || 'no compatible Python interpreter found'}`)
+  throw new Error(`Unable to validate ${label}: ${lastError || 'no compatible Python interpreter found'}`)
 }
+
+function verifyRasterPayloads(items) {
+  const targets = items.filter(item => (
+    item.referenced
+    && DECODED_RASTER_EXTENSIONS.has(path.extname(item.path).toLowerCase())
+    && item.codec
+    && item.width
+    && item.height
+  ))
+  if (!targets.length) return new Set()
+
+  const decoded = runPythonVerifier(
+    RASTER_VERIFY_SCRIPT,
+    targets.map(item => item.path),
+    'raster image payloads with Pillow',
+  )
+  return new Set(targets.filter(item => {
+    const result = decoded[item.path]
+    return !result || result.width !== item.width || result.height !== item.height
+  }).map(item => item.path))
+}
+
+function verifyMp3Payloads(items) {
+  const targets = items.filter(item => (
+    item.referenced
+    && path.extname(item.path).toLowerCase() === '.mp3'
+    && item.codec === 'mp3'
+    && item.durationSeconds
+  ))
+  if (!targets.length) return new Set()
+
+  const decoded = runPythonVerifier(
+    MP3_VERIFY_SCRIPT,
+    targets.map(item => item.path),
+    'MP3 payloads with miniaudio',
+  )
+  return new Set(targets.filter(item => decoded[item.path] !== true).map(item => item.path))
+}
+
 function metadata(buffer, ext) {
   if (ext === '.png') return parsePng(buffer)
   if (ext === '.gif') return parseGif(buffer)
@@ -912,8 +940,9 @@ function metadata(buffer, ext) {
 }
 
 function textFiles() {
-  return TEXT_ROOTS.flatMap(root => walk(path.join(ROOT, root)))
+  return [...TEXT_ROOTS.flatMap(root => walk(path.join(ROOT, root))), path.join(ROOT, 'index.html')]
     .filter(file => /\.(?:css|html|js|json|md|mjs|py)$/i.test(file))
+    .filter(file => fs.existsSync(file))
     .filter(file => path.basename(file).toLowerCase() !== 'readme.md')
     .map(file => ({ path: rel(file), text: fs.readFileSync(file, 'utf8') }))
 }
@@ -976,14 +1005,16 @@ function auditFile(file, texts) {
   }
 }
 
-function validate(items, webpDecodeFailures = new Set()) {
+function validate(items, rasterDecodeFailures = new Set(), mp3DecodeFailures = new Set()) {
   const failures = []
   for (const item of items) {
     if (!item.referenced) continue
     const ext = path.extname(item.path).toLowerCase()
     if (item.kind === 'image' && PARSED_IMAGE_EXTENSIONS.has(ext)) {
       if (!item.width || !item.height) failures.push(`${item.path}: missing image dimensions`)
-      if (ext === '.webp' && webpDecodeFailures.has(item.path)) failures.push(`${item.path}: invalid WebP image payload`)
+      if (DECODED_RASTER_EXTENSIONS.has(ext) && rasterDecodeFailures.has(item.path)) {
+        failures.push(`${item.path}: invalid raster image payload`)
+      }
     }
     if (item.kind === 'image' && ext === '.svg' && item.codec !== 'svg') {
       failures.push(`${item.path}: invalid SVG document`)
@@ -1005,6 +1036,7 @@ function validate(items, webpDecodeFailures = new Set()) {
     if (item.kind === 'audio') {
       if (!item.durationSeconds) failures.push(`${item.path}: missing audio duration`)
       if (!item.bitrateKbps) failures.push(`${item.path}: missing audio bitrate`)
+      if (ext === '.mp3' && mp3DecodeFailures.has(item.path)) failures.push(`${item.path}: invalid MP3 payload`)
     }
     if (item.kind === 'model' && ext === '.glb' && item.codec !== 'glb2') {
       failures.push(`${item.path}: invalid GLB container`)
@@ -1019,7 +1051,8 @@ const files = [...new Set(MEDIA_ROOTS.flatMap(walk))]
   .sort((a, b) => rel(a).localeCompare(rel(b)))
 const media = files.map(file => auditFile(file, texts))
   .filter(item => !item.path.startsWith('assets/src/') || item.referenced)
-const webpDecodeFailures = verifyWebpPayloads(media)
+const rasterDecodeFailures = verifyRasterPayloads(media)
+const mp3DecodeFailures = verifyMp3Payloads(media)
 
 const byKind = Object.fromEntries(['image', 'video', 'audio', 'model', 'other'].map(kind => {
   const items = media.filter(item => item.kind === kind)
@@ -1033,11 +1066,13 @@ for (const item of media) {
 const duplicateGroups = [...byHash.entries()]
   .filter(([, paths]) => paths.length > 1)
   .map(([hash, paths]) => ({ hash, paths }))
-const failures = validate(media, webpDecodeFailures)
+const failures = validate(media, rasterDecodeFailures, mp3DecodeFailures)
 const incompleteMetadata = media.filter(item => {
   const ext = path.extname(item.path).toLowerCase()
   if (item.kind === 'image' && PARSED_IMAGE_EXTENSIONS.has(ext)) {
-    return !item.width || !item.height || (ext === '.webp' && webpDecodeFailures.has(item.path))
+    return !item.width
+      || !item.height
+      || (DECODED_RASTER_EXTENSIONS.has(ext) && rasterDecodeFailures.has(item.path))
   }
   if (item.kind === 'image' && ext === '.svg') return item.codec !== 'svg'
   if (item.kind === 'video') {
@@ -1048,7 +1083,10 @@ const incompleteMetadata = media.filter(item => {
       || !item.bitrateKbps
   }
   if (item.kind === 'audio') {
-    return !PARSED_AUDIO_EXTENSIONS.has(ext) || !item.durationSeconds || !item.bitrateKbps
+    return !PARSED_AUDIO_EXTENSIONS.has(ext)
+      || !item.durationSeconds
+      || !item.bitrateKbps
+      || (ext === '.mp3' && mp3DecodeFailures.has(item.path))
   }
   if (item.kind === 'model' && ext === '.glb') return item.codec !== 'glb2'
   return false
