@@ -207,6 +207,14 @@ class ArticleCRTRuntime {
     }
   }
 
+  handleNarrationShortcut() {
+    if (this.destroyed || this.tube.classList.contains('is-powered-off')) return false
+    this.syncSource()
+    if (!this.isDocument() || !this.audioPlayback.hasNarration()) return false
+    void this.audioPlayback.toggleNarration()
+    return true
+  }
+
   handleBack() {
     if (!this.mediaViewer.isOpen) return false
     this.mediaViewer.close()
