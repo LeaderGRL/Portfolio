@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { JSDOM } from 'jsdom'
 
 const ROOT = process.cwd()
 const REPORT_PATH = path.join(ROOT, 'tmp', 'media-audit.json')
@@ -95,68 +96,221 @@ function parsePng(buffer) {
 }
 
 function parseGif(buffer) {
-  if (buffer.length < 10 || !/^GIF8[79]a$/.test(buffer.toString('ascii', 0, 6))) return null
-  return { width: buffer.readUInt16LE(6), height: buffer.readUInt16LE(8), codec: 'gif' }
+  if (buffer.length < 14 || !/^GIF8[79]a$/.test(buffer.toString('ascii', 0, 6))) return null
+  const width = buffer.readUInt16LE(6)
+  const height = buffer.readUInt16LE(8)
+  if (!width || !height) return null
+
+  const skipSubBlocks = start => {
+    let offset = start
+    let bytes = 0
+    while (offset < buffer.length) {
+      const size = buffer[offset++]
+      if (size === 0) return { next: offset, bytes }
+      if (offset + size > buffer.length) return null
+      bytes += size
+      offset += size
+    }
+    return null
+  }
+
+  let offset = 13
+  const packed = buffer[10]
+  if (packed & 0x80) {
+    const colorTableBytes = 3 * (1 << ((packed & 0x07) + 1))
+    if (offset + colorTableBytes > buffer.length) return null
+    offset += colorTableBytes
+  }
+
+  let sawImageData = false
+  while (offset < buffer.length) {
+    const block = buffer[offset++]
+    if (block === 0x3b) {
+      if (!sawImageData || offset !== buffer.length) return null
+      return { width, height, codec: 'gif' }
+    }
+    if (block === 0x21) {
+      if (offset >= buffer.length) return null
+      offset++
+      const extension = skipSubBlocks(offset)
+      if (!extension) return null
+      offset = extension.next
+      continue
+    }
+    if (block !== 0x2c || offset + 9 > buffer.length) return null
+
+    const descriptorPacked = buffer[offset + 8]
+    offset += 9
+    if (descriptorPacked & 0x80) {
+      const colorTableBytes = 3 * (1 << ((descriptorPacked & 0x07) + 1))
+      if (offset + colorTableBytes > buffer.length) return null
+      offset += colorTableBytes
+    }
+    if (offset >= buffer.length) return null
+    const minimumCodeSize = buffer[offset++]
+    if (minimumCodeSize < 2 || minimumCodeSize > 8) return null
+    const imageData = skipSubBlocks(offset)
+    if (!imageData || imageData.bytes === 0) return null
+    sawImageData = true
+    offset = imageData.next
+  }
+
+  return null
 }
 
 function parseJpeg(buffer) {
   if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null
   let offset = 2
-  while (offset + 9 < buffer.length) {
-    if (buffer[offset] !== 0xff) { offset++; continue }
-    const marker = buffer[offset + 1]
-    offset += 2
-    if (marker === 0xd8 || marker === 0xd9) continue
-    if (marker === 0xda) break
-    if (offset + 2 > buffer.length) break
-    const size = buffer.readUInt16BE(offset)
-    if (size < 2 || offset + size > buffer.length) break
-    if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf].includes(marker)) {
-      return {
-        width: buffer.readUInt16BE(offset + 5),
-        height: buffer.readUInt16BE(offset + 3),
-        codec: marker === 0xc2 ? 'jpeg-progressive' : 'jpeg',
-      }
+  let dimensions = null
+  let sawScan = false
+  let sawEntropyData = false
+  let sawEnd = false
+  const frameMarkers = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf])
+
+  while (offset < buffer.length) {
+    if (buffer[offset] !== 0xff) return null
+    while (offset < buffer.length && buffer[offset] === 0xff) offset++
+    if (offset >= buffer.length) return null
+    const marker = buffer[offset++]
+    if (marker === 0x00 || marker === 0xd8) return null
+    if (marker === 0xd9) {
+      sawEnd = true
+      break
     }
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue
+    if (offset + 2 > buffer.length) return null
+    const size = buffer.readUInt16BE(offset)
+    if (size < 2 || offset + size > buffer.length) return null
+
+    if (frameMarkers.has(marker)) {
+      if (size < 8) return null
+      const width = buffer.readUInt16BE(offset + 5)
+      const height = buffer.readUInt16BE(offset + 3)
+      if (!width || !height) return null
+      dimensions = { width, height, codec: marker === 0xc2 ? 'jpeg-progressive' : 'jpeg' }
+    }
+
+    if (marker !== 0xda) {
+      offset += size
+      continue
+    }
+
+    sawScan = true
     offset += size
+    while (offset < buffer.length) {
+      if (buffer[offset] !== 0xff) {
+        sawEntropyData = true
+        offset++
+        continue
+      }
+
+      const markerStart = offset
+      while (offset < buffer.length && buffer[offset] === 0xff) offset++
+      if (offset >= buffer.length) return null
+      const scanMarker = buffer[offset]
+      if (scanMarker === 0x00) {
+        sawEntropyData = true
+        offset++
+        continue
+      }
+      if (scanMarker >= 0xd0 && scanMarker <= 0xd7) {
+        offset++
+        continue
+      }
+      offset = markerStart
+      break
+    }
   }
-  return null
+
+  if (!dimensions || !sawScan || !sawEntropyData || !sawEnd || offset !== buffer.length) return null
+  return dimensions
+}
+
+function webpFramePayload(buffer, start, end) {
+  let offset = start
+  while (offset + 8 <= end) {
+    const type = buffer.toString('ascii', offset, offset + 4)
+    const size = buffer.readUInt32LE(offset + 4)
+    const data = offset + 8
+    const next = data + size + (size & 1)
+    if (data + size > end || next > end) return false
+    if (type === 'VP8 ' && size > 10 && buffer[data + 3] === 0x9d && buffer[data + 4] === 0x01 && buffer[data + 5] === 0x2a) return true
+    if (type === 'VP8L' && size > 5 && buffer[data] === 0x2f) return true
+    offset = next
+  }
+  return false
 }
 
 function parseWebp(buffer) {
   if (buffer.length < 20 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WEBP') return null
+  if (buffer.readUInt32LE(4) + 8 !== buffer.length) return null
   let offset = 12
+  let dimensions = null
+  let sawPayload = false
   while (offset + 8 <= buffer.length) {
     const type = buffer.toString('ascii', offset, offset + 4)
     const size = buffer.readUInt32LE(offset + 4)
     const data = offset + 8
-    if (data + size > buffer.length) break
+    const next = data + size + (size & 1)
+    if (data + size > buffer.length || next > buffer.length) return null
     if (type === 'VP8X' && size >= 10) {
       const width = 1 + buffer.readUIntLE(data + 4, 3)
       const height = 1 + buffer.readUIntLE(data + 7, 3)
-      return { width, height, codec: 'webp-vp8x' }
+      if (!width || !height) return null
+      dimensions = { width, height, codec: 'webp-vp8x' }
     }
-    if (type === 'VP8 ' && size >= 10 && buffer[data + 3] === 0x9d && buffer[data + 4] === 0x01 && buffer[data + 5] === 0x2a) {
-      return {
+    if (type === 'VP8 ' && size > 10 && buffer[data + 3] === 0x9d && buffer[data + 4] === 0x01 && buffer[data + 5] === 0x2a) {
+      const frame = {
         width: buffer.readUInt16LE(data + 6) & 0x3fff,
         height: buffer.readUInt16LE(data + 8) & 0x3fff,
         codec: 'webp-vp8',
       }
+      if (!frame.width || !frame.height) return null
+      if (!dimensions) dimensions = frame
+      sawPayload = true
     }
-    if (type === 'VP8L' && size >= 5 && buffer[data] === 0x2f) {
+    if (type === 'VP8L' && size > 5 && buffer[data] === 0x2f) {
       const b1 = buffer[data + 1]
       const b2 = buffer[data + 2]
       const b3 = buffer[data + 3]
       const b4 = buffer[data + 4]
-      return {
+      const frame = {
         width: 1 + (((b2 & 0x3f) << 8) | b1),
         height: 1 + (((b4 & 0x0f) << 10) | (b3 << 2) | ((b2 & 0xc0) >> 6)),
         codec: 'webp-vp8l',
       }
+      if (!dimensions) dimensions = frame
+      sawPayload = true
     }
-    offset = data + size + (size % 2)
+    if (type === 'ANMF') {
+      if (size <= 16 || !webpFramePayload(buffer, data + 16, data + size)) return null
+      sawPayload = true
+    }
+    offset = next
   }
-  return null
+  if (offset !== buffer.length || !dimensions || !sawPayload) return null
+  return dimensions
+}
+
+function parseSvg(buffer) {
+  const text = buffer.toString('utf8')
+  if (!text.trim() || text.includes('\ufffd')) return null
+  try {
+    const dom = new JSDOM(text, { contentType: 'image/svg+xml' })
+    const root = dom.window.document.documentElement
+    if (!root || root.localName !== 'svg') return null
+    const result = { codec: 'svg' }
+    const width = Number.parseFloat(root.getAttribute('width') || '')
+    const height = Number.parseFloat(root.getAttribute('height') || '')
+    if (width > 0 && height > 0) return { ...result, width, height }
+    const viewBox = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number)
+    if (viewBox.length === 4 && viewBox.every(Number.isFinite) && viewBox[2] > 0 && viewBox[3] > 0) {
+      return { ...result, width: viewBox[2], height: viewBox[3] }
+    }
+    return result
+  } catch {
+    return null
+  }
 }
 
 function readBoxes(buffer, start = 0, end = buffer.length) {
@@ -575,6 +729,7 @@ function metadata(buffer, ext) {
   if (ext === '.gif') return parseGif(buffer)
   if (ext === '.jpg' || ext === '.jpeg') return parseJpeg(buffer)
   if (ext === '.webp') return parseWebp(buffer)
+  if (ext === '.svg') return parseSvg(buffer)
   if (ext === '.avif') return parseAvif(buffer)
   if (ext === '.mp4' || ext === '.m4v' || ext === '.mov') return parseMp4(buffer)
   if (ext === '.mp3') return parseMp3(buffer)
@@ -655,6 +810,9 @@ function validate(items) {
     if (item.kind === 'image' && PARSED_IMAGE_EXTENSIONS.has(ext)) {
       if (!item.width || !item.height) failures.push(`${item.path}: missing image dimensions`)
     }
+    if (item.kind === 'image' && ext === '.svg' && item.codec !== 'svg') {
+      failures.push(`${item.path}: invalid SVG document`)
+    }
     if (item.kind === 'video' && !PARSED_VIDEO_EXTENSIONS.has(ext)) {
       failures.push(`${item.path}: unsupported video metadata format (${ext})`)
       continue
@@ -703,6 +861,7 @@ const failures = validate(media)
 const incompleteMetadata = media.filter(item => {
   const ext = path.extname(item.path).toLowerCase()
   if (item.kind === 'image' && PARSED_IMAGE_EXTENSIONS.has(ext)) return !item.width || !item.height
+  if (item.kind === 'image' && ext === '.svg') return item.codec !== 'svg'
   if (item.kind === 'video') {
     return !PARSED_VIDEO_EXTENSIONS.has(ext)
       || !item.durationSeconds
