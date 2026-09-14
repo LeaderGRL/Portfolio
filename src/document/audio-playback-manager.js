@@ -158,7 +158,7 @@ export class AudioPlaybackManager {
   }
 
   setDocument(item) {
-    const nextKey = narrationDocumentKey(this.route, item)
+    const nextKey = narrationDocumentKey(this.route, item) || null
     const nextNarration = item?.narration && nextKey
       ? {
           src: String(item.narration),
@@ -172,7 +172,7 @@ export class AudioPlaybackManager {
 
     this.releaseAll('document-change')
     this.tracks.clear()
-    this.documentKey = nextKey || null
+    this.documentKey = nextKey
     this.narrationBlock = nextNarration
   }
 
