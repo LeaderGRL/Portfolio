@@ -5,6 +5,7 @@ import { createDefaultBlockRegistry } from './document/default-blocks.js'
 import { createDefaultIntegrationRegistry } from './document/default-integrations.js'
 import { AudioPlaybackManager } from './document/audio-playback-manager.js'
 import { enhanceAudioBlocks, registerAudioIntegration } from './document/audio-blocks.js'
+import { NarrationPlayer } from './document/narration-player.js'
 import { InlineIntegrationController } from './document/inline-integrations.js'
 import { SafeLocal3DManager } from './document/safe-local-3d.js'
 import { enhanceModel3DFallback } from './document/model3d-fallback.js'
@@ -83,6 +84,15 @@ class ArticleCRTRuntime {
       registry: this.integrations,
     })
 
+    this.narrationPlayer = new NarrationPlayer({
+      tube,
+      rasteriser: this.documentRaster,
+      playback: this.audioPlayback,
+      onChange: () => {
+        app.dirty = true
+      },
+    })
+
     this.audioPlayback.setPowered(!tube.classList.contains('is-powered-off'))
     this.articleRaster = this.documentRaster
     this.destroyed = false
@@ -111,11 +121,13 @@ class ArticleCRTRuntime {
   syncSource() {
     if (this.destroyed) return
     const documentItem = this.isDocument() ? this.app.state.item : null
+
+    this.audioPlayback.setRoute(this.app.state?.route || '')
+    this.audioPlayback.setDocument(documentItem)
     syncArticleReader(documentItem)
 
     const itemChanged = this.documentRaster.setItem(documentItem)
-    this.audioPlayback.setRoute(this.app.state?.route || '')
-    this.audioPlayback.setDocument(documentItem)
+    this.narrationPlayer.setDocument(documentItem)
     if (itemChanged) {
       this.mediaViewer.close()
       this.inlineIntegrations.clear()
@@ -142,6 +154,7 @@ class ArticleCRTRuntime {
     if (!this.isDocument()) return false
 
     this.documentRaster.paint(true)
+    this.narrationPlayer.paint()
     this.progressOverlay.paint(this.documentRaster)
     return true
   }
@@ -159,6 +172,7 @@ class ArticleCRTRuntime {
       : null
     const fullscreen = Boolean(this.app.state?.fullscreen)
     if (!this.documentRaster.setViewport(layout, { fullscreen })) return
+    this.narrationPlayer.reflow()
     this.restoreReadingPosition(position)
     // Only view-bound controls are remounted. Persistent audio state survives.
     this.inlineIntegrations.clear()
@@ -177,6 +191,7 @@ class ArticleCRTRuntime {
     if (this.destroyed) return
 
     this.audioPlayback.setPowered(!this.tube.classList.contains('is-powered-off'))
+    this.narrationPlayer.sync()
     if (!this.isDocument()) return
 
     if (this.mediaViewer.isOpen) {
@@ -203,6 +218,7 @@ class ArticleCRTRuntime {
   destroy() {
     if (this.destroyed) return
     this.destroyed = true
+    this.narrationPlayer.destroy()
     this.inlineIntegrations.destroy()
     this.audioPlayback.destroy()
     this.mediaViewer.destroy()
