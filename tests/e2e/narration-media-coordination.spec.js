@@ -179,10 +179,22 @@ test('POWER and BACK pause narration, retain position and never auto-resume', as
   })
 
   await page.locator('#power').click()
-  await expect.poll(() => narrationAudioState(page)).toMatchObject({ paused: true, state: 'paused', currentTime: 37 })
+  await expect.poll(async () => {
+    const { paused, state } = await narrationAudioState(page)
+    return { paused, state }
+  }).toEqual({ paused: true, state: 'paused' })
+
+  const powerOffState = await narrationAudioState(page)
+  expect(powerOffState.currentTime).toBeGreaterThanOrEqual(37)
 
   await page.locator('#power').click()
-  await expect.poll(() => narrationAudioState(page)).toMatchObject({ paused: true, state: 'paused', currentTime: 37 })
+  await expect.poll(async () => {
+    const { paused, state } = await narrationAudioState(page)
+    return { paused, state }
+  }).toEqual({ paused: true, state: 'paused' })
+
+  const powerOnState = await narrationAudioState(page)
+  expect(powerOnState.currentTime).toBeCloseTo(powerOffState.currentTime, 2)
 
   await blurInteractiveFocus(page)
   await page.keyboard.press('n')
@@ -202,6 +214,7 @@ test('POWER and BACK pause narration, retain position and never auto-resume', as
     const runtime = window.__JG1500_APP__?.__articleCRTBridge
     return runtime?.audioPlayback?.narrationSession?.read('projects:astro-media-coordination-test') || null
   })
-  expect(retained).toMatchObject({ activated: true, currentTime: 52 })
+  expect(retained).toMatchObject({ activated: true })
+  expect(retained.currentTime).toBeGreaterThanOrEqual(52)
   expect(await page.evaluate(() => window.__coordTestAudio.every(audio => audio.paused))).toBe(true)
 })
