@@ -55,6 +55,7 @@ jobs:
         run: npm run audit:media
 
       - name: Upload asset audit
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: asset-audit

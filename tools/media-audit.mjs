@@ -17,6 +17,8 @@ const MEDIA_EXTENSIONS = new Set([
 const IMAGE_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.svg', '.webp'])
 const VIDEO_EXTENSIONS = new Set(['.m4v', '.mov', '.mp4', '.webm'])
 const AUDIO_EXTENSIONS = new Set(['.aac', '.flac', '.m4a', '.mp3', '.ogg', '.opus', '.wav'])
+const PARSED_VIDEO_EXTENSIONS = new Set(['.m4v', '.mov', '.mp4'])
+const PARSED_AUDIO_EXTENSIONS = new Set(['.mp3'])
 
 function walk(root) {
   if (!fs.existsSync(root)) return []
@@ -309,7 +311,11 @@ function findReferences(file, texts) {
     const projectDir = parts.length > 3 ? parts.slice(0, 3).join('/') : 'content/projects'
     candidates = texts.filter(entry => entry.path.startsWith(projectDir + '/') || entry.path === `${projectDir}.md`)
   } else if (repoPath.startsWith('content/media/')) {
-    candidates = texts.filter(entry => entry.path.startsWith('content/articles/') || entry.path.startsWith('content/pages/'))
+    candidates = texts.filter(entry => (
+      entry.path.startsWith('content/articles/')
+      || entry.path.startsWith('content/pages/')
+      || entry.path.startsWith('content/projects/')
+    ))
   }
   return candidates.filter(entry => tokens.some(token => entry.text.includes(token))).map(entry => entry.path)
 }
@@ -337,18 +343,27 @@ function validate(items) {
   const failures = []
   for (const item of items) {
     if (!item.referenced) continue
+    const ext = path.extname(item.path).toLowerCase()
     if (item.kind === 'image' && /\.(?:gif|jpe?g|png|webp)$/i.test(item.path)) {
       if (!item.width || !item.height) failures.push(`${item.path}: missing image dimensions`)
     }
-    if (/\.mp4$/i.test(item.path)) {
-      if (!item.durationSeconds) failures.push(`${item.path}: missing MP4 duration`)
-      if (!item.codec || item.codec === 'mp4') failures.push(`${item.path}: missing MP4 codec`)
-      if (!item.width || !item.height) failures.push(`${item.path}: missing MP4 video dimensions`)
-      if (!item.bitrateKbps) failures.push(`${item.path}: missing MP4 bitrate`)
+    if (item.kind === 'video' && !PARSED_VIDEO_EXTENSIONS.has(ext)) {
+      failures.push(`${item.path}: unsupported video metadata format (${ext})`)
+      continue
     }
-    if (/\.mp3$/i.test(item.path)) {
-      if (!item.durationSeconds) failures.push(`${item.path}: missing MP3 duration`)
-      if (!item.bitrateKbps) failures.push(`${item.path}: missing MP3 bitrate`)
+    if (item.kind === 'audio' && !PARSED_AUDIO_EXTENSIONS.has(ext)) {
+      failures.push(`${item.path}: unsupported audio metadata format (${ext})`)
+      continue
+    }
+    if (item.kind === 'video') {
+      if (!item.durationSeconds) failures.push(`${item.path}: missing video duration`)
+      if (!item.codec || item.codec === 'mp4') failures.push(`${item.path}: missing video codec`)
+      if (!item.width || !item.height) failures.push(`${item.path}: missing video dimensions`)
+      if (!item.bitrateKbps) failures.push(`${item.path}: missing video bitrate`)
+    }
+    if (item.kind === 'audio') {
+      if (!item.durationSeconds) failures.push(`${item.path}: missing audio duration`)
+      if (!item.bitrateKbps) failures.push(`${item.path}: missing audio bitrate`)
     }
   }
   return failures
@@ -374,9 +389,18 @@ const duplicateGroups = [...byHash.entries()]
   .map(([hash, paths]) => ({ hash, paths }))
 const failures = validate(media)
 const incompleteMetadata = media.filter(item => {
+  const ext = path.extname(item.path).toLowerCase()
   if (item.kind === 'image' && /\.(?:gif|jpe?g|png|webp)$/i.test(item.path)) return !item.width || !item.height
-  if (/\.mp4$/i.test(item.path)) return !item.durationSeconds || !item.width || !item.height || !item.bitrateKbps
-  if (/\.mp3$/i.test(item.path)) return !item.durationSeconds || !item.bitrateKbps
+  if (item.kind === 'video') {
+    return !PARSED_VIDEO_EXTENSIONS.has(ext)
+      || !item.durationSeconds
+      || !item.width
+      || !item.height
+      || !item.bitrateKbps
+  }
+  if (item.kind === 'audio') {
+    return !PARSED_AUDIO_EXTENSIONS.has(ext) || !item.durationSeconds || !item.bitrateKbps
+  }
   return false
 }).map(item => ({ path: item.path, referenced: item.referenced }))
 const report = {
