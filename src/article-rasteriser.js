@@ -1,5 +1,6 @@
 import { SRC_H, SRC_W } from './core.js'
 import { getDocumentTheme } from './document/themes.js'
+import { parseInlineMarkdown } from './document/inline-markdown.js'
 
 const COLORS = {
   bg: '#031009',
@@ -17,16 +18,6 @@ const FONT = 'ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monos
 
 function words(text = '') {
   return String(text).replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
-}
-
-function stripInline(text = '') {
-  return String(text)
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/__([^_]+)__/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\*([^*\n]+)\*/g, '$1')
-    .replace(/_([^_\n]+)_/g, '$1')
 }
 
 export class ArticleRasteriser {
@@ -123,7 +114,7 @@ export class ArticleRasteriser {
     this._font(size, weight)
     const out = []
     let line = ''
-    for (const word of words(stripInline(text))) {
+    for (const word of words(parseInlineMarkdown(text).text)) {
       // A URL or a long identifier must wrap too on a narrow reading column.
       if (g.measureText(word).width > width) {
         if (line) out.push(line)
