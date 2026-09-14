@@ -85,6 +85,14 @@ export class NarrationPlayer {
     this.progress.addEventListener('input', seek)
     this.progress.addEventListener('change', seek)
 
+    this.onWheel = event => {
+      event.preventDefault()
+      event.stopPropagation()
+      const reader = this.rasteriser?.reader
+      if (reader) reader.scrollTop += event.deltaY
+    }
+    this.host.addEventListener('wheel', this.onWheel, { passive: false })
+
     this.host.append(this.button, this.progress, this.description, this.live)
     this.layer.append(this.host)
     this.tube?.append(this.layer)
@@ -101,6 +109,7 @@ export class NarrationPlayer {
     this.item = item?.narration ? item : null
     this.snapshot = null
     this.previousState = null
+    this.live.textContent = ''
 
     if (this.item && this.playback.hasNarration()) {
       const label = String(this.item.label || this.item.title || this.item.id || 'document')
@@ -127,6 +136,7 @@ export class NarrationPlayer {
     const existing = layout.find(entry => entry.type === 'narration-header')
     if (existing) {
       this.entry = existing
+      this.syncControlGeometry()
       return
     }
 
@@ -154,7 +164,29 @@ export class NarrationPlayer {
       0,
       this.rasteriser.contentHeight - this.rasteriser.getDocumentContentBottom(),
     )
+    this.syncControlGeometry()
     this.rasteriser.markDirty()
+  }
+
+  syncControlGeometry(activated = isActivated(this.snapshot)) {
+    if (!this.entry) return
+    const width = Math.max(1, Number(this.entry.width) || 1)
+    const height = Math.max(1, Number(this.entry.height) || NARRATION_HEIGHT)
+    const xPercent = value => `${(clamp(value, 0, width) / width) * 100}%`
+    const yPercent = value => `${(clamp(value, 0, height) / height) * 100}%`
+    const buttonWidth = Math.min(activated ? 70 : 126, width)
+    const progressLeft = Math.min(84, width)
+
+    this.button.style.left = '0'
+    this.button.style.top = yPercent(4)
+    this.button.style.width = xPercent(buttonWidth)
+    this.button.style.height = yPercent(28)
+
+    this.progress.style.left = xPercent(progressLeft)
+    this.progress.style.right = 'auto'
+    this.progress.style.top = yPercent(19)
+    this.progress.style.width = xPercent(Math.max(0, width - progressLeft))
+    this.progress.style.height = yPercent(22)
   }
 
   syncControls(snapshot = {}, meta = {}) {
@@ -169,6 +201,7 @@ export class NarrationPlayer {
 
     this.host.classList.toggle('is-activated', activated)
     this.host.classList.toggle('is-error', failed)
+    this.syncControlGeometry(activated)
     this.button.setAttribute('aria-pressed', playing ? 'true' : 'false')
     this.button.setAttribute(
       'aria-label',
@@ -216,6 +249,7 @@ export class NarrationPlayer {
     this.host.style.top = `${(top / height) * 100}%`
     this.host.style.width = `${(this.entry.width / width) * 100}%`
     this.host.style.height = `${(this.entry.height / height) * 100}%`
+    this.syncControlGeometry()
 
     const clippedBottom = Math.max(0, Math.min(height, contentBottom))
     const inset = Math.max(0, height - clippedBottom)
@@ -309,6 +343,7 @@ export class NarrationPlayer {
   destroy() {
     this.unsubscribe?.()
     this.unsubscribe = null
+    this.host.removeEventListener('wheel', this.onWheel)
     this.removeTouchScroll?.()
     this.layer.remove()
     this.item = null
