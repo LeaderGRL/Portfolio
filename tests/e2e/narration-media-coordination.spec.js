@@ -72,13 +72,26 @@ async function narrationAudioState(page) {
   return page.evaluate(() => {
     const runtime = window.__JG1500_APP__?.__articleCRTBridge
     const snapshot = runtime?.audioPlayback?.snapshotNarration?.()
-    const audio = window.__coordTestAudio?.find(item => item.getAttribute('src') === '/media/Astro/menu.mp3')
+    const audio = runtime?.audioPlayback?.tracks?.get('narration:projects:astro-media-coordination-test')?.audio
     return {
       paused: audio?.paused ?? true,
       state: snapshot?.state || null,
       currentTime: snapshot?.currentTime || 0,
     }
   })
+}
+
+async function documentAudioState(page, src) {
+  return page.evaluate(source => {
+    const playback = window.__JG1500_APP__?.__articleCRTBridge?.audioPlayback
+    const track = playback?.tracks?.get(source)
+    const snapshot = track ? playback.snapshotTrack(track) : null
+    return {
+      paused: track?.audio?.paused ?? true,
+      state: snapshot?.state || null,
+      currentTime: snapshot?.currentTime || 0,
+    }
+  }, src)
 }
 
 test('narration, normal audio and audible local video arbitrate through one document runtime', async ({ page }, testInfo) => {
@@ -101,13 +114,13 @@ test('narration, normal audio and audible local video arbitrate through one docu
 
   const menu = await scrollToSoundtrack(page)
   await menu.click({ force: true })
-  await expect(menu).toHaveAttribute('aria-label', 'Pause MENU')
+  await expect.poll(() => documentAudioState(page, '/media/Astro/menu.mp3')).toMatchObject({ paused: false, state: 'playing' })
   await expect.poll(() => narrationAudioState(page)).toMatchObject({ paused: true, state: 'paused' })
 
   const again = await scrollToGameplayVideo(page)
   await again.hotspot.click({ force: true })
   await expect.poll(() => again.video.evaluate(node => node.paused)).toBe(false)
-  await expect(menu).toHaveAttribute('aria-label', 'Play MENU')
+  await expect.poll(() => documentAudioState(page, '/media/Astro/menu.mp3')).toMatchObject({ paused: true, state: 'paused' })
 
   await blurInteractiveFocus(page)
   await page.keyboard.press('n')
@@ -140,7 +153,8 @@ test('POWER and BACK pause narration, retain position and never auto-resume', as
   await expect.poll(() => narrationAudioState(page)).toMatchObject({ paused: false, state: 'playing' })
 
   await page.evaluate(() => {
-    const audio = window.__coordTestAudio?.find(item => item.getAttribute('src') === '/media/Astro/menu.mp3')
+    const audio = window.__JG1500_APP__?.__articleCRTBridge?.audioPlayback?.tracks
+      ?.get('narration:projects:astro-media-coordination-test')?.audio
     audio.currentTime = 37
     audio.dispatchEvent(new Event('timeupdate'))
   })
@@ -155,7 +169,8 @@ test('POWER and BACK pause narration, retain position and never auto-resume', as
   await page.keyboard.press('n')
   await expect.poll(() => narrationAudioState(page)).toMatchObject({ paused: false, state: 'playing' })
   await page.evaluate(() => {
-    const audio = window.__coordTestAudio?.find(item => item.getAttribute('src') === '/media/Astro/menu.mp3')
+    const audio = window.__JG1500_APP__?.__articleCRTBridge?.audioPlayback?.tracks
+      ?.get('narration:projects:astro-media-coordination-test')?.audio
     audio.currentTime = 52
     audio.dispatchEvent(new Event('timeupdate'))
   })
