@@ -18,12 +18,12 @@ const MEDIA_ROOTS = [
 ]
 const TEXT_ROOTS = ['content', 'src', 'plugins']
 const MEDIA_EXTENSIONS = new Set([
-  '.avif', '.gif', '.glb', '.jpeg', '.jpg', '.m4v', '.mov', '.mp3',
-  '.mp4', '.png', '.svg', '.webp',
+  '.aac', '.avif', '.flac', '.gif', '.glb', '.jpeg', '.jpg', '.m4a', '.m4v',
+  '.mov', '.mp3', '.mp4', '.ogg', '.opus', '.png', '.svg', '.wav', '.webm', '.webp',
 ])
 const IMAGE_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.svg', '.webp'])
-const VIDEO_EXTENSIONS = new Set(['.m4v', '.mov', '.mp4'])
-const AUDIO_EXTENSIONS = new Set(['.mp3'])
+const VIDEO_EXTENSIONS = new Set(['.m4v', '.mov', '.mp4', '.webm'])
+const AUDIO_EXTENSIONS = new Set(['.aac', '.flac', '.m4a', '.mp3', '.ogg', '.opus', '.wav'])
 const PARSED_IMAGE_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.webp'])
 const DECODED_RASTER_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.webp'])
 const PILLOW_RASTER_EXTENSIONS = new Set(['.gif', '.jpeg', '.jpg', '.png', '.webp'])
