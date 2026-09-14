@@ -1,10 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { spawnSync } from 'node:child_process'
 import { JSDOM } from 'jsdom'
 
 const ROOT = process.cwd()
 const REPORT_PATH = path.join(ROOT, 'tmp', 'media-audit.json')
+const WEBP_VERIFY_SCRIPT = path.join(ROOT, 'tools', 'verify-webp.py')
 const MEDIA_ROOTS = [
   path.join(ROOT, 'public', 'media'),
   path.join(ROOT, 'content', 'media'),
@@ -352,6 +354,123 @@ function readSizedUInt(buffer, offset, size, end = buffer.length) {
   return { value: Number(value), next: offset + size }
 }
 
+function mp4ChunkOffsets(buffer, stblChildren) {
+  const offsetBoxes = stblChildren.filter(box => box.type === 'stco' || box.type === 'co64')
+  if (offsetBoxes.length !== 1) return null
+  const box = offsetBoxes[0]
+  const width = box.type === 'co64' ? 8 : 4
+  if (box.dataOffset + 8 > box.end || buffer[box.dataOffset] !== 0) return null
+  const count = buffer.readUInt32BE(box.dataOffset + 4)
+  const entriesOffset = box.dataOffset + 8
+  if (!count || entriesOffset + count * width !== box.end) return null
+
+  const offsets = []
+  for (let index = 0; index < count; index++) {
+    const offset = entriesOffset + index * width
+    const value = width === 8 ? buffer.readBigUInt64BE(offset) : BigInt(buffer.readUInt32BE(offset))
+    if (value > BigInt(Number.MAX_SAFE_INTEGER)) return null
+    offsets.push(Number(value))
+  }
+  return offsets
+}
+
+function mp4SampleSizes(buffer, stblChildren) {
+  const sizeBoxes = stblChildren.filter(box => box.type === 'stsz' || box.type === 'stz2')
+  if (sizeBoxes.length !== 1) return null
+  const box = sizeBoxes[0]
+  if (box.dataOffset + 12 > box.end || buffer[box.dataOffset] !== 0) return null
+
+  if (box.type === 'stsz') {
+    const fixedSize = buffer.readUInt32BE(box.dataOffset + 4)
+    const count = buffer.readUInt32BE(box.dataOffset + 8)
+    if (!count) return null
+    if (fixedSize) {
+      if (box.dataOffset + 12 !== box.end) return null
+      return { count, get: () => fixedSize }
+    }
+    const entriesOffset = box.dataOffset + 12
+    if (entriesOffset + count * 4 !== box.end) return null
+    return { count, get: index => buffer.readUInt32BE(entriesOffset + index * 4) }
+  }
+
+  const fieldSize = buffer[box.dataOffset + 7]
+  const count = buffer.readUInt32BE(box.dataOffset + 8)
+  if (!count || ![4, 8, 16].includes(fieldSize)) return null
+  const entriesOffset = box.dataOffset + 12
+  const bytesRequired = fieldSize === 4 ? Math.ceil(count / 2) : count * (fieldSize / 8)
+  if (entriesOffset + bytesRequired !== box.end) return null
+  if (fieldSize === 4) {
+    return {
+      count,
+      get: index => {
+        const value = buffer[entriesOffset + Math.floor(index / 2)]
+        return index % 2 === 0 ? value >> 4 : value & 0x0f
+      },
+    }
+  }
+  if (fieldSize === 8) return { count, get: index => buffer[entriesOffset + index] }
+  return { count, get: index => buffer.readUInt16BE(entriesOffset + index * 2) }
+}
+
+function mp4SampleToChunk(buffer, stblChildren) {
+  const boxes = stblChildren.filter(box => box.type === 'stsc')
+  if (boxes.length !== 1) return null
+  const box = boxes[0]
+  if (box.dataOffset + 8 > box.end || buffer[box.dataOffset] !== 0) return null
+  const count = buffer.readUInt32BE(box.dataOffset + 4)
+  const entriesOffset = box.dataOffset + 8
+  if (!count || entriesOffset + count * 12 !== box.end) return null
+
+  const entries = []
+  for (let index = 0; index < count; index++) {
+    const offset = entriesOffset + index * 12
+    const entry = {
+      firstChunk: buffer.readUInt32BE(offset),
+      samplesPerChunk: buffer.readUInt32BE(offset + 4),
+      sampleDescriptionIndex: buffer.readUInt32BE(offset + 8),
+    }
+    if (!entry.firstChunk || !entry.samplesPerChunk || !entry.sampleDescriptionIndex) return null
+    if (index === 0 && entry.firstChunk !== 1) return null
+    if (index > 0 && entry.firstChunk <= entries[index - 1].firstChunk) return null
+    entries.push(entry)
+  }
+  return entries
+}
+
+function validateMp4SampleExtents(buffer, stbl, mdats) {
+  const stblChildren = childBoxes(buffer, stbl)
+  if (!stblChildren.complete) return false
+  const chunkOffsets = mp4ChunkOffsets(buffer, stblChildren)
+  const sampleSizes = mp4SampleSizes(buffer, stblChildren)
+  const sampleToChunk = mp4SampleToChunk(buffer, stblChildren)
+  if (!chunkOffsets || !sampleSizes || !sampleToChunk) return false
+  if (sampleToChunk.at(-1).firstChunk > chunkOffsets.length) return false
+
+  let sampleIndex = 0
+  let mappingIndex = 0
+  for (let chunkIndex = 1; chunkIndex <= chunkOffsets.length; chunkIndex++) {
+    while (mappingIndex + 1 < sampleToChunk.length && sampleToChunk[mappingIndex + 1].firstChunk <= chunkIndex) {
+      mappingIndex++
+    }
+    const mapping = sampleToChunk[mappingIndex]
+    let chunkBytes = 0
+    for (let index = 0; index < mapping.samplesPerChunk; index++) {
+      if (sampleIndex >= sampleSizes.count) return false
+      const sampleBytes = sampleSizes.get(sampleIndex++)
+      if (!sampleBytes || !Number.isSafeInteger(sampleBytes)) return false
+      chunkBytes += sampleBytes
+      if (!Number.isSafeInteger(chunkBytes)) return false
+    }
+
+    const start = chunkOffsets[chunkIndex - 1]
+    const end = start + chunkBytes
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end <= start) return false
+    if (!mdats.some(box => start >= box.dataOffset && end <= box.end)) return false
+  }
+
+  return sampleIndex === sampleSizes.count
+}
+
 function parsePrimaryItemId(buffer, pitm) {
   if (!pitm || pitm.dataOffset + 6 > pitm.end) return null
   const version = buffer[pitm.dataOffset]
@@ -538,8 +657,9 @@ function parseMp4(buffer) {
   const top = readBoxes(buffer)
   if (!top.complete) return null
   const moov = top.find(box => box.type === 'moov')
-  const mdat = top.find(box => box.type === 'mdat' && box.end > box.dataOffset)
-  if (!moov || !mdat) return null
+  const mdats = top.filter(box => box.type === 'mdat' && box.end > box.dataOffset)
+  const firstMdat = mdats[0]
+  if (!moov || !firstMdat) return null
 
   let durationSeconds = null
   const mvhd = child(buffer, moov, 'mvhd')
@@ -560,6 +680,7 @@ function parseMp4(buffer) {
   let height = null
   let videoCodec = null
   let audioCodec = null
+  let validatedMediaTracks = 0
   for (const trak of childBoxes(buffer, moov).filter(box => box.type === 'trak')) {
     const mdia = child(buffer, trak, 'mdia')
     if (!mdia) continue
@@ -570,6 +691,8 @@ function parseMp4(buffer) {
     const stbl = minf && child(buffer, minf, 'stbl')
     const stsd = stbl && child(buffer, stbl, 'stsd')
     if (!stsd || stsd.dataOffset + 16 > stsd.end) continue
+    if ((handler === 'vide' || handler === 'soun') && !validateMp4SampleExtents(buffer, stbl, mdats)) return null
+    if (handler === 'vide' || handler === 'soun') validatedMediaTracks++
     const entryOffset = stsd.dataOffset + 8
     if (entryOffset + 8 > stsd.end) continue
     const codec = buffer.toString('ascii', entryOffset + 4, entryOffset + 8)
@@ -584,13 +707,14 @@ function parseMp4(buffer) {
     }
   }
 
+  if (!validatedMediaTracks) return null
   const codecs = [videoCodec, audioCodec].filter(Boolean)
   return {
     width,
     height,
     durationSeconds,
     codec: codecs.join('+') || 'mp4',
-    fastStart: Boolean(moov && mdat && moov.offset < mdat.offset),
+    fastStart: Boolean(moov.offset < firstMdat.offset),
   }
 }
 
@@ -718,11 +842,61 @@ function parseGlb(buffer) {
   }
 
   if (offset !== buffer.length || !json || typeof json !== 'object' || json.asset?.version !== '2.0') return null
-  const requiredBinaryBytes = Array.isArray(json.buffers)
-    ? json.buffers.filter(entry => entry && !entry.uri).reduce((sum, entry) => sum + (Number(entry.byteLength) || 0), 0)
-    : 0
+  const buffers = Array.isArray(json.buffers) ? json.buffers : []
+  const images = Array.isArray(json.images) ? json.images : []
+  if (buffers.some(entry => entry && entry.uri !== undefined)) return null
+  if (images.some(entry => entry && entry.uri !== undefined)) return null
+  let requiredBinaryBytes = 0
+  for (const entry of buffers) {
+    const byteLength = Number(entry?.byteLength)
+    if (!Number.isSafeInteger(byteLength) || byteLength < 0) return null
+    requiredBinaryBytes += byteLength
+    if (!Number.isSafeInteger(requiredBinaryBytes)) return null
+  }
   if (requiredBinaryBytes > binaryBytes) return null
   return { codec: 'glb2' }
+}
+
+function verifyWebpPayloads(items) {
+  const targets = items.filter(item => (
+    item.referenced
+    && path.extname(item.path).toLowerCase() === '.webp'
+    && item.codec?.startsWith('webp')
+    && item.width
+    && item.height
+  ))
+  if (!targets.length) return new Set()
+
+  const candidates = [
+    ...(process.env.JG1500_PYTHON ? [process.env.JG1500_PYTHON] : []),
+    ...(process.platform === 'win32' ? ['py -3', 'python', 'python3'] : ['python3', 'python']),
+  ]
+  let lastError = ''
+  for (const cmd of candidates) {
+    const [bin, ...pre] = cmd.includes(' ') && !cmd.endsWith('.exe') ? cmd.split(' ') : [cmd]
+    const run = spawnSync(bin, [...pre, WEBP_VERIFY_SCRIPT], {
+      cwd: ROOT,
+      input: JSON.stringify(targets.map(item => item.path)),
+      encoding: 'utf8',
+      maxBuffer: 10 * 1024 * 1024,
+    })
+    if (run.status !== 0) {
+      lastError = run.stderr?.trim() || run.error?.message || `exit ${run.status}`
+      continue
+    }
+
+    try {
+      const decoded = JSON.parse(run.stdout)
+      return new Set(targets.filter(item => {
+        const result = decoded[item.path]
+        return !result || result.width !== item.width || result.height !== item.height
+      }).map(item => item.path))
+    } catch (error) {
+      lastError = error.message
+    }
+  }
+
+  throw new Error(`Unable to validate WebP payloads with Pillow: ${lastError || 'no compatible Python interpreter found'}`)
 }
 function metadata(buffer, ext) {
   if (ext === '.png') return parsePng(buffer)
@@ -802,13 +976,14 @@ function auditFile(file, texts) {
   }
 }
 
-function validate(items) {
+function validate(items, webpDecodeFailures = new Set()) {
   const failures = []
   for (const item of items) {
     if (!item.referenced) continue
     const ext = path.extname(item.path).toLowerCase()
     if (item.kind === 'image' && PARSED_IMAGE_EXTENSIONS.has(ext)) {
       if (!item.width || !item.height) failures.push(`${item.path}: missing image dimensions`)
+      if (ext === '.webp' && webpDecodeFailures.has(item.path)) failures.push(`${item.path}: invalid WebP image payload`)
     }
     if (item.kind === 'image' && ext === '.svg' && item.codec !== 'svg') {
       failures.push(`${item.path}: invalid SVG document`)
@@ -844,6 +1019,7 @@ const files = [...new Set(MEDIA_ROOTS.flatMap(walk))]
   .sort((a, b) => rel(a).localeCompare(rel(b)))
 const media = files.map(file => auditFile(file, texts))
   .filter(item => !item.path.startsWith('assets/src/') || item.referenced)
+const webpDecodeFailures = verifyWebpPayloads(media)
 
 const byKind = Object.fromEntries(['image', 'video', 'audio', 'model', 'other'].map(kind => {
   const items = media.filter(item => item.kind === kind)
@@ -857,10 +1033,12 @@ for (const item of media) {
 const duplicateGroups = [...byHash.entries()]
   .filter(([, paths]) => paths.length > 1)
   .map(([hash, paths]) => ({ hash, paths }))
-const failures = validate(media)
+const failures = validate(media, webpDecodeFailures)
 const incompleteMetadata = media.filter(item => {
   const ext = path.extname(item.path).toLowerCase()
-  if (item.kind === 'image' && PARSED_IMAGE_EXTENSIONS.has(ext)) return !item.width || !item.height
+  if (item.kind === 'image' && PARSED_IMAGE_EXTENSIONS.has(ext)) {
+    return !item.width || !item.height || (ext === '.webp' && webpDecodeFailures.has(item.path))
+  }
   if (item.kind === 'image' && ext === '.svg') return item.codec !== 'svg'
   if (item.kind === 'video') {
     return !PARSED_VIDEO_EXTENSIONS.has(ext)
