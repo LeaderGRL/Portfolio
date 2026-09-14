@@ -124,6 +124,7 @@ function createHarness(t, { volume = 35 } = {}) {
 
   const session = new NarrationSession()
   const manager = new AudioPlaybackManager({ narrationSession: session })
+  manager.setRoute('projects')
   t.after(() => {
     manager.destroy()
     globalThis.document = previous.document
@@ -142,7 +143,7 @@ const astro = {
 
 test('narration stays lazy until explicit playback activation', async t => {
   const { manager, audios } = createHarness(t)
-  manager.setDocument(astro, 'projects')
+  manager.setDocument(astro)
 
   assert.equal(manager.hasNarration(), true)
   assert.equal(manager.snapshotNarration().state, 'idle')
@@ -156,16 +157,16 @@ test('narration stays lazy until explicit playback activation', async t => {
 
 test('narration progress survives document changes and restores paused', async t => {
   const { manager, session, audios } = createHarness(t)
-  manager.setDocument(astro, 'projects')
+  manager.setDocument(astro)
   await manager.toggleNarration()
 
   audios[0].currentTime = 42
   audios[0].emit('timeupdate')
-  manager.setDocument({ id: 'other', label: 'OTHER' }, 'projects')
+  manager.setDocument({ id: 'other', label: 'OTHER' })
 
   assert.equal(session.read('projects:astro').currentTime, 42)
 
-  manager.setDocument(astro, 'projects')
+  manager.setDocument(astro)
   const restored = manager.snapshotNarration()
   assert.equal(restored.currentTime, 42)
   assert.equal(restored.state, 'paused')
@@ -182,12 +183,12 @@ test('ordinary document audio remains document-scoped', async t => {
   const { manager, audios } = createHarness(t)
   const soundtrack = { src: '/media/Astro/theme.mp3', label: 'Theme' }
 
-  manager.setDocument({ id: 'astro', label: 'ASTRO' }, 'projects')
+  manager.setDocument({ id: 'astro', label: 'ASTRO' })
   await manager.toggle(soundtrack)
   audios[0].currentTime = 31
   audios[0].emit('timeupdate')
 
-  manager.setDocument({ id: 'other', label: 'OTHER' }, 'projects')
+  manager.setDocument({ id: 'other', label: 'OTHER' })
   assert.equal(audios[0].src, '')
   assert.equal(manager.snapshot(soundtrack).currentTime, 0)
   assert.equal(manager.snapshot(soundtrack).state, 'idle')
@@ -195,7 +196,7 @@ test('ordinary document audio remains document-scoped', async t => {
 
 test('narration seek updates live playback and session state', async t => {
   const { manager, session, audios } = createHarness(t)
-  manager.setDocument(astro, 'projects')
+  manager.setDocument(astro)
   await manager.toggleNarration()
 
   const snapshot = manager.seekNarration(75)
@@ -206,7 +207,7 @@ test('narration seek updates live playback and session state', async t => {
 
 test('ended narration resets to zero and remains activated but paused', async t => {
   const { manager, session, audios } = createHarness(t)
-  manager.setDocument(astro, 'projects')
+  manager.setDocument(astro)
   await manager.toggleNarration()
 
   audios[0].duration = 90
@@ -222,7 +223,7 @@ test('ended narration resets to zero and remains activated but paused', async t 
 
 test('POWER and document visibility pause narration without autoplaying later', async t => {
   const { manager, audios, document } = createHarness(t)
-  manager.setDocument(astro, 'projects')
+  manager.setDocument(astro)
   await manager.toggleNarration()
   audios[0].currentTime = 24
 
@@ -247,7 +248,7 @@ test('POWER and document visibility pause narration without autoplaying later', 
 
 test('physical volume zero mutes narration without pausing playback', async t => {
   const { manager, audios } = createHarness(t, { volume: 0 })
-  manager.setDocument(astro, 'projects')
+  manager.setDocument(astro)
   await manager.toggleNarration()
 
   assert.equal(audios[0].volume, 0)
