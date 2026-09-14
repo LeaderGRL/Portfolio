@@ -31,6 +31,9 @@ RUN npm ci
 # Copy the project sources
 COPY . .
 
+# Run static JavaScript quality checks before production work
+RUN npm run quality
+
 # Generate production assets
 RUN npm run assets
 

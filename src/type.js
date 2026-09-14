@@ -96,7 +96,7 @@ export const BITMAP_5x7 = {
 
 /** Draw a headline into `ctx` with the bitmap face. Returns pixel width. */
 export function bitmapText(ctx, text, x, y, scale, color, gap = 1) {
-  const glyphW = 5 * scale, glyphH = 7 * scale, adv = glyphW + gap * scale;
+  const glyphW = 5 * scale, adv = glyphW + gap * scale;
   ctx.fillStyle = color;
   let cx = x;
   for (const raw of text.toUpperCase()) {
