@@ -122,6 +122,11 @@ export class InputController {
       }
       if (interactive && (!softkey || key === 'Enter' || key === ' ')) return
 
+      if (key === 'n' || key === 'N') {
+        if (!event.repeat && app.documentRuntime?.handleNarrationShortcut?.()) event.preventDefault()
+        return
+      }
+
       const number = '12345'.indexOf(key)
       if (number >= 0) {
         app.navKeys[ROUTES[number + 1].id].tap()
