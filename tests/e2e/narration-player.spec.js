@@ -53,13 +53,15 @@ async function injectNarration(page, src = '/media/Astro/menu.mp3') {
   return toggle
 }
 
-test('non-narratable documents expose no active narration control', async ({ page }, testInfo) => {
+test('non-narratable documents expose no active narration control or N shortcut hint', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Narration interaction contract only needs one browser engine')
   await installNarrationHarness(page)
   await boot(page)
 
   await expect(page.locator('.document-narration-layer')).toBeHidden()
   await expect(page.locator('.document-narration-toggle')).not.toBeVisible()
+  await expect(page.locator('#hint')).not.toContainText('N NARRATE')
+  await page.keyboard.press('n')
   expect(await page.evaluate(() => window.__narrationTestAudio.length)).toBe(0)
 })
 
@@ -78,6 +80,75 @@ test('wheel over narration controls scrolls the document reader', async ({ page 
     cancelable: true,
   })
   await expect.poll(() => reader.evaluate(node => node.scrollTop)).toBeGreaterThan(0)
+})
+
+test('contextual N shortcut toggles narration without stealing focused interactive controls', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Narration keyboard routing only needs one desktop browser engine')
+  await installNarrationHarness(page)
+  await boot(page)
+  const toggle = await injectNarration(page)
+
+  await expect(page.locator('#hint')).toContainText('N NARRATE')
+  await expect(toggle).toHaveAttribute('aria-keyshortcuts', 'N')
+  expect(await page.evaluate(() => window.__narrationTestAudio.length)).toBe(0)
+
+  await page.keyboard.press('n')
+  await expect(toggle).toHaveAttribute('aria-label', 'Pause narration for ASTRO')
+  expect(await page.evaluate(() => window.__narrationTestAudio.length)).toBe(1)
+
+  await page.keyboard.press('N')
+  await expect(toggle).toHaveAttribute('aria-label', 'Play narration for ASTRO')
+
+  await toggle.focus()
+  await toggle.press('n')
+  await expect(toggle).toHaveAttribute('aria-label', 'Play narration for ASTRO')
+
+  await page.evaluate(() => {
+    const app = window.__JG1500_APP__
+    app.state.item = { ...app.state.item, narration: '' }
+    app.dirty = true
+    app.__articleCRTBridge?.syncSource()
+  })
+  await expect(page.locator('#hint')).not.toContainText('N NARRATE')
+  await page.locator('body').click({ position: { x: 1, y: 1 }, force: true })
+  await page.keyboard.press('n')
+  expect(await page.evaluate(() => window.__narrationTestAudio.length)).toBe(1)
+})
+
+test('activated narration becomes one sticky control surface without changing document height', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Sticky narration behaviour only needs one desktop browser engine')
+  await installNarrationHarness(page)
+  await boot(page)
+  const toggle = await injectNarration(page)
+  const host = page.locator('.document-narration-controls')
+  const reader = page.locator('#article-reader')
+
+  const initialScrollHeight = await reader.evaluate(node => node.scrollHeight)
+  await reader.evaluate(node => { node.scrollTop = node.scrollHeight })
+  await expect(page.locator('.document-narration-layer')).toBeHidden()
+  await expect(host).not.toHaveAttribute('data-narration-presentation', 'sticky')
+
+  await reader.evaluate(node => { node.scrollTop = 0 })
+  await expect(toggle).toBeVisible()
+  await toggle.click({ force: true })
+  await expect(toggle).toHaveAttribute('aria-label', 'Pause narration for ASTRO')
+  expect(await page.evaluate(() => window.__narrationTestAudio.length)).toBe(1)
+
+  await reader.evaluate(node => { node.scrollTop = node.scrollHeight })
+  await expect(host).toHaveAttribute('data-narration-presentation', 'sticky')
+  await expect(page.locator('.document-narration-layer')).toBeVisible()
+  await expect(page.locator('.document-narration-progress')).toBeVisible()
+  expect(await reader.evaluate(node => node.scrollHeight)).toBe(initialScrollHeight)
+  expect(await page.evaluate(() => window.__narrationTestAudio.length)).toBe(1)
+  await page.screenshot({ path: testInfo.outputPath('narration-player-sticky.png'), fullPage: true })
+
+  await toggle.click({ force: true })
+  await expect(toggle).toHaveAttribute('aria-label', 'Play narration for ASTRO')
+  expect(await page.evaluate(() => window.__narrationTestAudio.length)).toBe(1)
+
+  await reader.evaluate(node => { node.scrollTop = 0 })
+  await expect(host).toHaveAttribute('data-narration-presentation', 'primary')
+  await expect(toggle).toBeVisible()
 })
 
 test('narration supports native keyboard activation, seek, end state and quiet time updates', async ({ page }, testInfo) => {
@@ -206,7 +277,7 @@ test('narration native hit targets follow raster geometry in fullscreen', async 
   expect(Math.abs(activeGeometry.actualProgressWidthRatio - activeGeometry.expectedProgressWidthRatio)).toBeLessThan(0.015)
 })
 
-test('narration touch controls can start playback and seek', async ({ page }, testInfo) => {
+test('mobile sticky narration keeps play and seek controls inside the usable CRT aperture', async ({ page }, testInfo) => {
   test.skip(!isMobileChromium(testInfo), 'Touch contract runs on the mobile Chromium project')
   await installNarrationHarness(page)
   await boot(page)
@@ -223,9 +294,42 @@ test('narration touch controls can start playback and seek', async ({ page }, te
   expect(box).not.toBeNull()
   await page.touchscreen.tap(box.x + box.width * 0.6, box.y + box.height * 0.5)
   await expect.poll(() => page.evaluate(() => window.__narrationTestAudio[0]?.currentTime || 0)).toBeGreaterThan(0)
+
+  await page.locator('#article-reader').evaluate(node => { node.scrollTop = node.scrollHeight })
+  const host = page.locator('.document-narration-controls')
+  await expect(host).toHaveAttribute('data-narration-presentation', 'sticky')
+  await expect(progress).toBeVisible()
+
+  const geometry = await page.evaluate(() => {
+    const player = window.__JG1500_APP__?.__articleCRTBridge?.narrationPlayer
+    const tube = document.getElementById('tube')?.getBoundingClientRect()
+    const hostRect = player?.host?.getBoundingClientRect()
+    const rasteriser = player?.rasteriser
+    if (!tube || !hostRect || !rasteriser) return null
+    const usableBottom = tube.top + tube.height * (rasteriser.getDocumentContentBottom() / rasteriser.height)
+    return {
+      tubeTop: tube.top,
+      tubeLeft: tube.left,
+      tubeRight: tube.right,
+      hostTop: hostRect.top,
+      hostLeft: hostRect.left,
+      hostRight: hostRect.right,
+      hostBottom: hostRect.bottom,
+      usableBottom,
+    }
+  })
+  expect(geometry).not.toBeNull()
+  expect(geometry.hostTop).toBeGreaterThanOrEqual(geometry.tubeTop - 1)
+  expect(geometry.hostLeft).toBeGreaterThanOrEqual(geometry.tubeLeft - 1)
+  expect(geometry.hostRight).toBeLessThanOrEqual(geometry.tubeRight + 1)
+  expect(geometry.hostBottom).toBeLessThanOrEqual(geometry.usableBottom + 2)
+  await page.screenshot({ path: testInfo.outputPath('narration-player-sticky-mobile.png'), fullPage: true })
+
+  await toggle.tap()
+  await expect(toggle).toHaveAttribute('aria-label', 'Play narration for ASTRO')
 })
 
-test('narration failure exposes a local retry action', async ({ page }, testInfo) => {
+test('narration failure exposes local retry through N', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Narration failure path only needs one browser engine')
   await installNarrationHarness(page)
   await page.route('**/media/Astro/menu.mp3', route => route.fulfill({
@@ -236,11 +340,16 @@ test('narration failure exposes a local retry action', async ({ page }, testInfo
 
   await boot(page)
   const toggle = await injectNarration(page)
-  await toggle.click({ force: true })
+  await page.keyboard.press('n')
 
   await expect(toggle).toHaveAttribute('aria-label', 'Retry narration for ASTRO')
   await expect(toggle).toHaveAttribute('aria-pressed', 'false')
   await expect(page.locator('.document-narration-progress')).toBeHidden()
   await expect(page.locator('.document-narration-description')).toContainText('Narration unavailable for ASTRO')
   await expect(page.locator('.document-narration-live')).toContainText('Narration unavailable for ASTRO')
+  expect(await page.evaluate(() => window.__narrationTestAudio.length)).toBe(1)
+
+  await page.keyboard.press('n')
+  await expect.poll(() => page.evaluate(() => window.__narrationTestAudio.length)).toBe(2)
+  await expect(toggle).toHaveAttribute('aria-label', 'Retry narration for ASTRO')
 })
