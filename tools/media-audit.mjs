@@ -51,8 +51,47 @@ function classify(ext) {
 }
 
 function parsePng(buffer) {
-  if (buffer.length < 24 || buffer.toString('ascii', 1, 4) !== 'PNG') return null
-  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20), codec: 'png' }
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  if (buffer.length < 33 || !buffer.subarray(0, 8).equals(signature)) return null
+
+  let offset = 8
+  let width = null
+  let height = null
+  let sawHeader = false
+  let sawImageData = false
+  let sawEnd = false
+
+  while (offset + 12 <= buffer.length) {
+    const size = buffer.readUInt32BE(offset)
+    const type = buffer.toString('ascii', offset + 4, offset + 8)
+    const dataOffset = offset + 8
+    const chunkEnd = dataOffset + size
+    const nextOffset = chunkEnd + 4
+    if (nextOffset > buffer.length) return null
+
+    if (!sawHeader) {
+      if (type !== 'IHDR' || size !== 13) return null
+      width = buffer.readUInt32BE(dataOffset)
+      height = buffer.readUInt32BE(dataOffset + 4)
+      if (!width || !height) return null
+      sawHeader = true
+    } else if (type === 'IHDR') {
+      return null
+    }
+
+    if (type === 'IDAT') sawImageData = true
+    if (type === 'IEND') {
+      if (size !== 0 || nextOffset !== buffer.length) return null
+      sawEnd = true
+      offset = nextOffset
+      break
+    }
+
+    offset = nextOffset
+  }
+
+  if (!sawHeader || !sawImageData || !sawEnd || offset !== buffer.length) return null
+  return { width, height, codec: 'png' }
 }
 
 function parseGif(buffer) {
@@ -150,6 +189,168 @@ function child(buffer, box, type) {
   return childBoxes(buffer, box).find(entry => entry.type === type) || null
 }
 
+function readSizedUInt(buffer, offset, size, end = buffer.length) {
+  if (size === 0) return { value: 0, next: offset }
+  if (size < 0 || size > 8 || offset + size > end) return null
+  let value = 0n
+  for (let index = 0; index < size; index++) value = (value << 8n) | BigInt(buffer[offset + index])
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) return null
+  return { value: Number(value), next: offset + size }
+}
+
+function parsePrimaryItemId(buffer, pitm) {
+  if (!pitm || pitm.dataOffset + 6 > pitm.end) return null
+  const version = buffer[pitm.dataOffset]
+  const offset = pitm.dataOffset + 4
+  if (version === 0) return offset + 2 <= pitm.end ? buffer.readUInt16BE(offset) : null
+  if (version === 1) return offset + 4 <= pitm.end ? buffer.readUInt32BE(offset) : null
+  return null
+}
+
+function avifItemHasPayload(buffer, iloc, itemId, idat, mdats) {
+  if (!iloc || iloc.dataOffset + 8 > iloc.end) return false
+  const version = buffer[iloc.dataOffset]
+  if (![0, 1, 2].includes(version)) return false
+
+  let offset = iloc.dataOffset + 4
+  const sizeByte = buffer[offset++]
+  const baseByte = buffer[offset++]
+  const offsetSize = sizeByte >> 4
+  const lengthSize = sizeByte & 0x0f
+  const baseOffsetSize = baseByte >> 4
+  const indexSize = (version === 1 || version === 2) ? (baseByte & 0x0f) : 0
+  if ([offsetSize, lengthSize, baseOffsetSize, indexSize].some(size => size > 8)) return false
+
+  const countWidth = version < 2 ? 2 : 4
+  const countRead = readSizedUInt(buffer, offset, countWidth, iloc.end)
+  if (!countRead) return false
+  const itemCount = countRead.value
+  offset = countRead.next
+
+  for (let itemIndex = 0; itemIndex < itemCount; itemIndex++) {
+    const idWidth = version < 2 ? 2 : 4
+    const idRead = readSizedUInt(buffer, offset, idWidth, iloc.end)
+    if (!idRead) return false
+    const currentId = idRead.value
+    offset = idRead.next
+
+    let constructionMethod = 0
+    if (version === 1 || version === 2) {
+      const methodRead = readSizedUInt(buffer, offset, 2, iloc.end)
+      if (!methodRead) return false
+      constructionMethod = methodRead.value & 0x0f
+      offset = methodRead.next
+    }
+
+    const dataReferenceRead = readSizedUInt(buffer, offset, 2, iloc.end)
+    if (!dataReferenceRead) return false
+    const dataReferenceIndex = dataReferenceRead.value
+    offset = dataReferenceRead.next
+
+    const baseRead = readSizedUInt(buffer, offset, baseOffsetSize, iloc.end)
+    if (!baseRead) return false
+    const baseOffset = baseRead.value
+    offset = baseRead.next
+
+    const extentCountRead = readSizedUInt(buffer, offset, 2, iloc.end)
+    if (!extentCountRead) return false
+    const extentCount = extentCountRead.value
+    offset = extentCountRead.next
+    let matchedBytes = 0
+    let matchedValid = currentId === itemId && dataReferenceIndex === 0 && extentCount > 0
+
+    for (let extentIndex = 0; extentIndex < extentCount; extentIndex++) {
+      if ((version === 1 || version === 2) && indexSize > 0) {
+        const indexRead = readSizedUInt(buffer, offset, indexSize, iloc.end)
+        if (!indexRead) return false
+        offset = indexRead.next
+      }
+      const extentOffsetRead = readSizedUInt(buffer, offset, offsetSize, iloc.end)
+      if (!extentOffsetRead) return false
+      offset = extentOffsetRead.next
+      const extentLengthRead = readSizedUInt(buffer, offset, lengthSize, iloc.end)
+      if (!extentLengthRead) return false
+      offset = extentLengthRead.next
+
+      if (currentId !== itemId) continue
+      const extentLength = extentLengthRead.value
+      if (!extentLength) {
+        matchedValid = false
+        continue
+      }
+
+      if (constructionMethod === 0) {
+        const start = baseOffset + extentOffsetRead.value
+        const end = start + extentLength
+        const payload = mdats.find(box => start >= box.dataOffset && end <= box.end)
+        if (!payload) matchedValid = false
+      } else if (constructionMethod === 1 && idat) {
+        const start = idat.dataOffset + baseOffset + extentOffsetRead.value
+        const end = start + extentLength
+        if (start < idat.dataOffset || end > idat.end) matchedValid = false
+      } else {
+        matchedValid = false
+      }
+      matchedBytes += extentLength
+    }
+
+    if (currentId === itemId) return matchedValid && matchedBytes > 0
+  }
+
+  return false
+}
+
+function avifPrimaryDimensions(buffer, iprp, itemId) {
+  if (!iprp) return null
+  const iprpChildren = childBoxes(buffer, iprp)
+  if (!iprpChildren.complete) return null
+  const ipco = iprpChildren.find(box => box.type === 'ipco')
+  const ipma = iprpChildren.find(box => box.type === 'ipma')
+  if (!ipco || !ipma) return null
+
+  const properties = childBoxes(buffer, ipco)
+  if (!properties.complete || ipma.dataOffset + 8 > ipma.end) return null
+  const version = buffer[ipma.dataOffset]
+  if (![0, 1].includes(version)) return null
+  const flags = buffer.readUIntBE(ipma.dataOffset + 1, 3)
+  const largeAssociations = Boolean(flags & 1)
+  let offset = ipma.dataOffset + 4
+  if (offset + 4 > ipma.end) return null
+  const entryCount = buffer.readUInt32BE(offset)
+  offset += 4
+
+  for (let entryIndex = 0; entryIndex < entryCount; entryIndex++) {
+    const idWidth = version === 0 ? 2 : 4
+    const idRead = readSizedUInt(buffer, offset, idWidth, ipma.end)
+    if (!idRead || idRead.next + 1 > ipma.end) return null
+    const currentId = idRead.value
+    offset = idRead.next
+    const associationCount = buffer[offset++]
+    const propertyIndexes = []
+
+    for (let associationIndex = 0; associationIndex < associationCount; associationIndex++) {
+      const associationRead = readSizedUInt(buffer, offset, largeAssociations ? 2 : 1, ipma.end)
+      if (!associationRead) return null
+      offset = associationRead.next
+      const mask = largeAssociations ? 0x7fff : 0x7f
+      const propertyIndex = associationRead.value & mask
+      if (propertyIndex) propertyIndexes.push(propertyIndex)
+    }
+
+    if (currentId !== itemId) continue
+    for (const propertyIndex of propertyIndexes) {
+      const property = properties[propertyIndex - 1]
+      if (!property || property.type !== 'ispe' || property.dataOffset + 12 > property.end) continue
+      const width = buffer.readUInt32BE(property.dataOffset + 4)
+      const height = buffer.readUInt32BE(property.dataOffset + 8)
+      if (width && height) return { width, height }
+    }
+    return null
+  }
+
+  return null
+}
+
 function parseAvif(buffer) {
   const top = readBoxes(buffer)
   if (!top.complete) return null
@@ -158,23 +359,25 @@ function parseAvif(buffer) {
   const meta = top.find(box => box.type === 'meta')
   if (!ftyp || !meta || ftyp.dataOffset + 8 > ftyp.end || meta.dataOffset + 4 > meta.end) return null
 
-  const brands = []
-  for (let offset = ftyp.dataOffset; offset + 4 <= ftyp.end; offset += 4) {
+  const brands = [buffer.toString('ascii', ftyp.dataOffset, ftyp.dataOffset + 4)]
+  for (let offset = ftyp.dataOffset + 8; offset + 4 <= ftyp.end; offset += 4) {
     brands.push(buffer.toString('ascii', offset, offset + 4))
   }
   if (!brands.includes('avif') && !brands.includes('avis')) return null
 
   const metaChildren = readBoxes(buffer, meta.dataOffset + 4, meta.end)
   if (!metaChildren.complete) return null
+  const pitm = metaChildren.find(box => box.type === 'pitm')
+  const iloc = metaChildren.find(box => box.type === 'iloc')
   const iprp = metaChildren.find(box => box.type === 'iprp')
-  const ipco = iprp && child(buffer, iprp, 'ipco')
-  const ispe = ipco && child(buffer, ipco, 'ispe')
-  if (!ispe || ispe.dataOffset + 12 > ispe.end) return null
-
-  const width = buffer.readUInt32BE(ispe.dataOffset + 4)
-  const height = buffer.readUInt32BE(ispe.dataOffset + 8)
-  if (!width || !height) return null
-  return { width, height, codec: 'avif' }
+  const idat = metaChildren.find(box => box.type === 'idat') || null
+  const itemId = parsePrimaryItemId(buffer, pitm)
+  if (itemId === null) return null
+  const dimensions = avifPrimaryDimensions(buffer, iprp, itemId)
+  if (!dimensions) return null
+  const mdats = top.filter(box => box.type === 'mdat' && box.end > box.dataOffset)
+  if (!avifItemHasPayload(buffer, iloc, itemId, idat, mdats)) return null
+  return { ...dimensions, codec: 'avif' }
 }
 
 function parseMp4(buffer) {
@@ -326,6 +529,47 @@ function hasValidMp3Tail(buffer, offset) {
   return true
 }
 
+function parseGlb(buffer) {
+  if (buffer.length < 20 || buffer.toString('ascii', 0, 4) !== 'glTF') return null
+  const version = buffer.readUInt32LE(4)
+  const declaredLength = buffer.readUInt32LE(8)
+  if (version !== 2 || declaredLength !== buffer.length) return null
+
+  let offset = 12
+  let json = null
+  let binaryBytes = 0
+  let chunkIndex = 0
+  while (offset + 8 <= buffer.length) {
+    const chunkLength = buffer.readUInt32LE(offset)
+    const chunkType = buffer.readUInt32LE(offset + 4)
+    const dataOffset = offset + 8
+    const end = dataOffset + chunkLength
+    if (chunkLength % 4 !== 0 || end > buffer.length) return null
+    if (chunkIndex === 0 && chunkType !== 0x4e4f534a) return null
+
+    if (chunkType === 0x4e4f534a) {
+      if (json !== null) return null
+      const jsonText = buffer.subarray(dataOffset, end).toString('utf8').trimEnd()
+      try {
+        json = JSON.parse(jsonText)
+      } catch {
+        return null
+      }
+    } else if (chunkType === 0x004e4942) {
+      binaryBytes += chunkLength
+    }
+
+    offset = end
+    chunkIndex++
+  }
+
+  if (offset !== buffer.length || !json || typeof json !== 'object' || json.asset?.version !== '2.0') return null
+  const requiredBinaryBytes = Array.isArray(json.buffers)
+    ? json.buffers.filter(entry => entry && !entry.uri).reduce((sum, entry) => sum + (Number(entry.byteLength) || 0), 0)
+    : 0
+  if (requiredBinaryBytes > binaryBytes) return null
+  return { codec: 'glb2' }
+}
 function metadata(buffer, ext) {
   if (ext === '.png') return parsePng(buffer)
   if (ext === '.gif') return parseGif(buffer)
@@ -334,7 +578,7 @@ function metadata(buffer, ext) {
   if (ext === '.avif') return parseAvif(buffer)
   if (ext === '.mp4' || ext === '.m4v' || ext === '.mov') return parseMp4(buffer)
   if (ext === '.mp3') return parseMp3(buffer)
-  if (ext === '.glb') return { codec: 'glb' }
+  if (ext === '.glb') return parseGlb(buffer)
   return { codec: ext.replace(/^\./, '') || 'unknown' }
 }
 
@@ -429,6 +673,9 @@ function validate(items) {
       if (!item.durationSeconds) failures.push(`${item.path}: missing audio duration`)
       if (!item.bitrateKbps) failures.push(`${item.path}: missing audio bitrate`)
     }
+    if (item.kind === 'model' && ext === '.glb' && item.codec !== 'glb2') {
+      failures.push(`${item.path}: invalid GLB container`)
+    }
   }
   return failures
 }
@@ -438,6 +685,7 @@ const files = [...new Set(MEDIA_ROOTS.flatMap(walk))]
   .filter(file => MEDIA_EXTENSIONS.has(path.extname(file).toLowerCase()))
   .sort((a, b) => rel(a).localeCompare(rel(b)))
 const media = files.map(file => auditFile(file, texts))
+  .filter(item => !item.path.startsWith('assets/src/') || item.referenced)
 
 const byKind = Object.fromEntries(['image', 'video', 'audio', 'model', 'other'].map(kind => {
   const items = media.filter(item => item.kind === kind)
@@ -465,6 +713,7 @@ const incompleteMetadata = media.filter(item => {
   if (item.kind === 'audio') {
     return !PARSED_AUDIO_EXTENSIONS.has(ext) || !item.durationSeconds || !item.bitrateKbps
   }
+  if (item.kind === 'model' && ext === '.glb') return item.codec !== 'glb2'
   return false
 }).map(item => ({ path: item.path, referenced: item.referenced }))
 const report = {
