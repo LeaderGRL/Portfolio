@@ -114,6 +114,7 @@ class ArticleCRTRuntime {
     syncArticleReader(documentItem)
 
     const itemChanged = this.documentRaster.setItem(documentItem)
+    this.audioPlayback.setRoute(this.app.state?.route || '')
     this.audioPlayback.setDocument(documentItem)
     if (itemChanged) {
       this.mediaViewer.close()
