@@ -4,6 +4,7 @@ import { installTouchScroll } from './touch-scroll.js'
 const NARRATION_HEIGHT = 58
 const STICKY_HEIGHT = 44
 const STICKY_TOP = 12
+const PRIMARY_CLIP_TOP = 20
 let narrationControlId = 0
 
 function clamp(value, min, max) {
@@ -11,6 +12,7 @@ function clamp(value, min, max) {
 }
 
 function isActivated(snapshot = {}) {
+  if (!snapshot) return false
   return Boolean(snapshot.activated || snapshot.state === 'playing' || snapshot.state === 'paused' || snapshot.state === 'error')
 }
 
@@ -192,21 +194,25 @@ export class NarrationPlayer {
     if (!this.entry || !this.item) return null
 
     const top = this.entry.y - this.rasteriser.scroll
-    const bottom = top + this.entry.height
     const contentBottom = this.rasteriser.getDocumentContentBottom()
-    const primaryVisible = bottom > 0 && top < contentBottom
-
-    if (primaryVisible) {
-      return {
-        kind: 'primary',
-        x: this.entry.x,
-        y: top,
-        width: this.entry.width,
-        height: this.entry.height,
-      }
+    const snapshot = this.snapshot || {}
+    const activated = isActivated(snapshot)
+    const primaryGeometry = {
+      kind: 'primary',
+      x: this.entry.x,
+      y: top,
+      width: this.entry.width,
+      height: this.entry.height,
     }
+    const metrics = this.controlMetrics(primaryGeometry, activated)
+    const interactiveBottom = top + Math.max(
+      metrics.buttonTop + metrics.buttonHeight,
+      activated && !snapshot.failed ? metrics.progressTop + metrics.progressHeight : 0,
+    )
+    const primaryVisible = interactiveBottom > PRIMARY_CLIP_TOP && top < contentBottom
 
-    if (!isActivated(this.snapshot)) return null
+    if (primaryVisible) return primaryGeometry
+    if (!activated) return null
 
     const stickyHeight = Math.max(1, Math.min(STICKY_HEIGHT, contentBottom))
     const stickyTop = Math.max(0, Math.min(STICKY_TOP, contentBottom - stickyHeight))
@@ -360,7 +366,7 @@ export class NarrationPlayer {
     const width = geometry.width
     const metrics = this.controlMetrics(geometry, activated)
     const contentBottom = this.rasteriser.getDocumentContentBottom()
-    const clipTop = geometry.kind === 'sticky' ? 0 : 20
+    const clipTop = geometry.kind === 'sticky' ? 0 : PRIMARY_CLIP_TOP
 
     ctx.save()
     ctx.setTransform(
