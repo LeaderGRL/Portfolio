@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { parseFrontMatter, validateNarrationSource } from '../../../plugins/content.js'
+import { parseFrontMatter, validateNarrationSource } from '../../../tools/narration-validator.mjs'
 import { toContentEntry } from '../../../src/content-entry.js'
 
 test('front matter preserves narration metadata into runtime content entries', () => {
