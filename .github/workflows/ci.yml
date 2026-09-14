@@ -51,19 +51,6 @@ jobs:
       - name: Audit repository assets
         run: npm run audit:assets
 
-      - name: Audit delivered media
-        run: npm run audit:media
-
-      - name: Upload asset audit
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: asset-audit
-          path: |
-            tmp/asset-audit.json
-            tmp/media-audit.json
-          retention-days: 14
-
       - name: Restore generated asset cache
         id: generated-assets-cache
         uses: actions/cache@v6
@@ -76,6 +63,19 @@ jobs:
       - name: Generate assets
         if: steps.generated-assets-cache.outputs.cache-hit != 'true'
         run: npm run assets
+
+      - name: Audit delivered media
+        run: npm run audit:media
+
+      - name: Upload asset audit
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: asset-audit
+          path: |
+            tmp/asset-audit.json
+            tmp/media-audit.json
+          retention-days: 14
 
       - name: Build production bundle
         run: npm run build

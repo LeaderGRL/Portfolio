@@ -8,6 +8,8 @@ const MEDIA_ROOTS = [
   path.join(ROOT, 'public', 'media'),
   path.join(ROOT, 'content', 'media'),
   path.join(ROOT, 'content', 'projects'),
+  path.join(ROOT, 'assets', 'src'),
+  path.join(ROOT, 'assets', 'build'),
 ]
 const TEXT_ROOTS = ['content', 'src', 'plugins']
 const MEDIA_EXTENSIONS = new Set([
@@ -17,6 +19,7 @@ const MEDIA_EXTENSIONS = new Set([
 const IMAGE_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.svg', '.webp'])
 const VIDEO_EXTENSIONS = new Set(['.m4v', '.mov', '.mp4', '.webm'])
 const AUDIO_EXTENSIONS = new Set(['.aac', '.flac', '.m4a', '.mp3', '.ogg', '.opus', '.wav'])
+const PARSED_IMAGE_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.webp'])
 const PARSED_VIDEO_EXTENSIONS = new Set(['.m4v', '.mov', '.mp4'])
 const PARSED_AUDIO_EXTENSIONS = new Set(['.mp3'])
 
@@ -135,6 +138,7 @@ function readBoxes(buffer, start = 0, end = buffer.length) {
     boxes.push({ type, offset, size, headerSize, dataOffset: offset + headerSize, end: offset + size })
     offset += size
   }
+  boxes.complete = offset === end
   return boxes
 }
 
@@ -146,11 +150,39 @@ function child(buffer, box, type) {
   return childBoxes(buffer, box).find(entry => entry.type === type) || null
 }
 
+function parseAvif(buffer) {
+  const top = readBoxes(buffer)
+  if (!top.complete) return null
+
+  const ftyp = top.find(box => box.type === 'ftyp')
+  const meta = top.find(box => box.type === 'meta')
+  if (!ftyp || !meta || ftyp.dataOffset + 8 > ftyp.end || meta.dataOffset + 4 > meta.end) return null
+
+  const brands = []
+  for (let offset = ftyp.dataOffset; offset + 4 <= ftyp.end; offset += 4) {
+    brands.push(buffer.toString('ascii', offset, offset + 4))
+  }
+  if (!brands.includes('avif') && !brands.includes('avis')) return null
+
+  const metaChildren = readBoxes(buffer, meta.dataOffset + 4, meta.end)
+  if (!metaChildren.complete) return null
+  const iprp = metaChildren.find(box => box.type === 'iprp')
+  const ipco = iprp && child(buffer, iprp, 'ipco')
+  const ispe = ipco && child(buffer, ipco, 'ispe')
+  if (!ispe || ispe.dataOffset + 12 > ispe.end) return null
+
+  const width = buffer.readUInt32BE(ispe.dataOffset + 4)
+  const height = buffer.readUInt32BE(ispe.dataOffset + 8)
+  if (!width || !height) return null
+  return { width, height, codec: 'avif' }
+}
+
 function parseMp4(buffer) {
   const top = readBoxes(buffer)
+  if (!top.complete) return null
   const moov = top.find(box => box.type === 'moov')
-  const mdat = top.find(box => box.type === 'mdat')
-  if (!moov) return null
+  const mdat = top.find(box => box.type === 'mdat' && box.end > box.dataOffset)
+  if (!moov || !mdat) return null
 
   let durationSeconds = null
   const mvhd = child(buffer, moov, 'mvhd')
@@ -261,6 +293,7 @@ function parseMp3(buffer) {
     offset += frame.frameSize
   }
   if (!frames) return null
+  if (!hasValidMp3Tail(buffer, offset)) return null
   return {
     codec: 'mp3',
     durationSeconds,
@@ -269,11 +302,36 @@ function parseMp3(buffer) {
   }
 }
 
+function hasValidMp3Tail(buffer, offset) {
+  if (offset === buffer.length) return true
+
+  let end = buffer.length
+  if (end - offset >= 128 && buffer.toString('ascii', end - 128, end - 125) === 'TAG') {
+    end -= 128
+  }
+
+  if (end - offset >= 32 && buffer.toString('ascii', end - 32, end - 24) === 'APETAGEX') {
+    const footer = end - 32
+    const size = buffer.readUInt32LE(footer + 12)
+    if (size < 32 || size > end - offset) return false
+    end -= size
+    if (end - offset >= 32 && buffer.toString('ascii', end - 32, end - 24) === 'APETAGEX') {
+      end -= 32
+    }
+  }
+
+  for (let index = offset; index < end; index++) {
+    if (buffer[index] !== 0) return false
+  }
+  return true
+}
+
 function metadata(buffer, ext) {
   if (ext === '.png') return parsePng(buffer)
   if (ext === '.gif') return parseGif(buffer)
   if (ext === '.jpg' || ext === '.jpeg') return parseJpeg(buffer)
   if (ext === '.webp') return parseWebp(buffer)
+  if (ext === '.avif') return parseAvif(buffer)
   if (ext === '.mp4' || ext === '.m4v' || ext === '.mov') return parseMp4(buffer)
   if (ext === '.mp3') return parseMp3(buffer)
   if (ext === '.glb') return { codec: 'glb' }
@@ -297,9 +355,15 @@ function referenceTokens(file) {
     return [repoPath.slice('content/media/'.length)]
   }
   if (repoPath.startsWith('content/projects/')) {
-    return [path.posix.basename(repoPath)]
+    const parts = repoPath.split('/')
+    const projectRelativePath = parts.length > 3 ? parts.slice(3).join('/') : path.posix.basename(repoPath)
+    return [projectRelativePath, encodeURI(projectRelativePath)]
   }
-  return [repoPath]
+  if (repoPath.startsWith('assets/build/')) {
+    const ext = path.posix.extname(repoPath)
+    return [repoPath, encodeURI(repoPath), `assets/build/*${ext}`]
+  }
+  return [repoPath, encodeURI(repoPath)]
 }
 
 function findReferences(file, texts) {
@@ -344,7 +408,7 @@ function validate(items) {
   for (const item of items) {
     if (!item.referenced) continue
     const ext = path.extname(item.path).toLowerCase()
-    if (item.kind === 'image' && /\.(?:gif|jpe?g|png|webp)$/i.test(item.path)) {
+    if (item.kind === 'image' && PARSED_IMAGE_EXTENSIONS.has(ext)) {
       if (!item.width || !item.height) failures.push(`${item.path}: missing image dimensions`)
     }
     if (item.kind === 'video' && !PARSED_VIDEO_EXTENSIONS.has(ext)) {
@@ -390,7 +454,7 @@ const duplicateGroups = [...byHash.entries()]
 const failures = validate(media)
 const incompleteMetadata = media.filter(item => {
   const ext = path.extname(item.path).toLowerCase()
-  if (item.kind === 'image' && /\.(?:gif|jpe?g|png|webp)$/i.test(item.path)) return !item.width || !item.height
+  if (item.kind === 'image' && PARSED_IMAGE_EXTENSIONS.has(ext)) return !item.width || !item.height
   if (item.kind === 'video') {
     return !PARSED_VIDEO_EXTENSIONS.has(ext)
       || !item.durationSeconds
