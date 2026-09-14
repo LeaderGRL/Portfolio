@@ -224,6 +224,9 @@
   pointer-events:none;
 }
 
+/* NarrationPlayer maps logical raster geometry to percentages on these native
+   controls. Keep CSS responsible only for interaction appearance so fullscreen
+   and responsive layouts cannot drift from the painted CRT controls. */
 .document-narration-toggle,
 .document-narration-progress{
   position:absolute;
@@ -232,20 +235,12 @@
 }
 
 .document-narration-toggle{
-  left:0;
-  top:4px;
-  width:126px;
-  height:28px;
   padding:0;
   border:0;
   background:transparent;
   color:transparent;
   cursor:pointer;
   outline:0;
-}
-
-.document-narration-controls.is-activated .document-narration-toggle{
-  width:70px;
 }
 
 .document-narration-toggle:focus-visible{
@@ -255,11 +250,6 @@
 }
 
 .document-narration-progress{
-  left:84px;
-  right:0;
-  top:19px;
-  width:calc(100% - 84px);
-  height:22px;
   margin:0;
   padding:0;
   appearance:none;
