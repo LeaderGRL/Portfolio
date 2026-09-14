@@ -84,6 +84,9 @@ jobs:
       - name: Run runtime tests
         run: npm run test:runtime
 
+      - name: Run content tests
+        run: npm run test:content
+
       - name: Upload production bundle
         uses: actions/upload-artifact@v7
         with:
@@ -147,7 +150,7 @@ jobs:
       # Each browser project gets its own runner. This keeps software-GL tests
       # isolated while reducing wall-clock CI time from one long serial suite.
       - name: Run browser tests
-        run: npm run test:e2e -- --project=${{ matrix.project }}
+        run: npx playwright test --project=${{ matrix.project }}
 
       - name: Upload Playwright diagnostics
         if: always()
