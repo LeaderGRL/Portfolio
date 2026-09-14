@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { spawnSync } from 'node:child_process'
+import { pathToFileURL } from 'node:url'
 import { JSDOM } from 'jsdom'
 import ffmpegPath from 'ffmpeg-static'
 
@@ -306,8 +307,8 @@ function parseSvg(buffer) {
     const root = dom.window.document.documentElement
     if (!root || root.localName !== 'svg') return null
     const result = { codec: 'svg' }
-    const width = Number.parseFloat(root.getAttribute('width') || '')
-    const height = Number.parseFloat(root.getAttribute('height') || '')
+    const width = parseSvgLength(root.getAttribute('width'))
+    const height = parseSvgLength(root.getAttribute('height'))
     if (width > 0 && height > 0) return { ...result, width, height }
     const viewBox = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number)
     if (viewBox.length === 4 && viewBox.every(Number.isFinite) && viewBox[2] > 0 && viewBox[3] > 0) {
@@ -317,6 +318,24 @@ function parseSvg(buffer) {
   } catch {
     return null
   }
+}
+
+function parseSvgLength(value) {
+  if (typeof value !== 'string') return null
+  const match = value.trim().match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s*(px|in|cm|mm|q|pt|pc)?$/i)
+  if (!match) return null
+  const amount = Number(match[1])
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  const pixelsPerUnit = {
+    px: 1,
+    in: 96,
+    cm: 96 / 2.54,
+    mm: 96 / 25.4,
+    q: 96 / 101.6,
+    pt: 96 / 72,
+    pc: 16,
+  }
+  return amount * pixelsPerUnit[(match[2] || 'px').toLowerCase()]
 }
 
 function readBoxes(buffer, start = 0, end = buffer.length) {
@@ -483,6 +502,26 @@ function mp4TrackId(buffer, trak) {
   if (offset < tkhd.dataOffset || offset + 4 > tkhd.end) return null
   const trackId = buffer.readUInt32BE(offset)
   return trackId || null
+}
+
+function mp4TrackSwapsDimensions(buffer, trak) {
+  const tkhd = child(buffer, trak, 'tkhd')
+  if (!tkhd || tkhd.dataOffset + 4 > tkhd.end) return false
+  const version = buffer[tkhd.dataOffset]
+  const matrixOffset = tkhd.dataOffset + (version === 1 ? 52 : version === 0 ? 40 : -1)
+  if (matrixOffset < tkhd.dataOffset || matrixOffset + 36 > tkhd.end) return false
+  const a = buffer.readInt32BE(matrixOffset)
+  const b = buffer.readInt32BE(matrixOffset + 4)
+  const c = buffer.readInt32BE(matrixOffset + 12)
+  const d = buffer.readInt32BE(matrixOffset + 16)
+  return Math.abs(b) > Math.abs(a) && Math.abs(c) > Math.abs(d)
+}
+
+function mp4DurationSeconds(duration, timescale, version) {
+  if (!timescale) return null
+  if (version === 0) return duration === 0xffffffff ? null : duration / timescale
+  if (version !== 1 || duration === 0xffffffffffffffffn || duration > BigInt(Number.MAX_SAFE_INTEGER)) return null
+  return Number(duration) / timescale
 }
 
 function mp4TrackTimescale(buffer, trak) {
@@ -822,14 +861,14 @@ function parseMp4(buffer) {
       const duration = buffer.readUInt32BE(mvhd.dataOffset + 16)
       if (timescale) {
         movieTimescale = timescale
-        durationSeconds = duration / timescale
+        durationSeconds = mp4DurationSeconds(duration, timescale, version)
       }
     } else if (version === 1 && mvhd.dataOffset + 32 <= mvhd.end) {
       const timescale = buffer.readUInt32BE(mvhd.dataOffset + 20)
-      const duration = Number(buffer.readBigUInt64BE(mvhd.dataOffset + 24))
+      const duration = buffer.readBigUInt64BE(mvhd.dataOffset + 24)
       if (timescale) {
         movieTimescale = timescale
-        durationSeconds = duration / timescale
+        durationSeconds = mp4DurationSeconds(duration, timescale, version)
       }
     }
   }
@@ -839,10 +878,10 @@ function parseMp4(buffer) {
     if (mehd && mehd.dataOffset + 8 <= mehd.end) {
       const version = buffer[mehd.dataOffset]
       if (version === 0 && mehd.dataOffset + 8 <= mehd.end) {
-        durationSeconds = buffer.readUInt32BE(mehd.dataOffset + 4) / movieTimescale
+        durationSeconds = mp4DurationSeconds(buffer.readUInt32BE(mehd.dataOffset + 4), movieTimescale, version)
       } else if (version === 1 && mehd.dataOffset + 12 <= mehd.end) {
         const duration = buffer.readBigUInt64BE(mehd.dataOffset + 4)
-        if (duration <= BigInt(Number.MAX_SAFE_INTEGER)) durationSeconds = Number(duration) / movieTimescale
+        durationSeconds = mp4DurationSeconds(duration, movieTimescale, version)
       }
     }
   }
@@ -873,6 +912,7 @@ function parseMp4(buffer) {
       if (entryOffset + 36 <= stsd.end) {
         width = buffer.readUInt16BE(entryOffset + 32)
         height = buffer.readUInt16BE(entryOffset + 34)
+        if (width && height && mp4TrackSwapsDimensions(buffer, trak)) [width, height] = [height, width]
       }
     } else if (handler === 'soun') {
       audioCodec = codec
@@ -988,7 +1028,22 @@ function decodeDataUri(value) {
   const isBase64 = metadata.split(';').some(token => token.toLowerCase() === 'base64')
 
   try {
-    if (!isBase64) return Buffer.from(decodeURIComponent(payload), 'utf8')
+    if (!isBase64) {
+      const bytes = []
+      for (let index = 0; index < payload.length; index++) {
+        if (payload[index] === '%') {
+          const encodedByte = payload.slice(index + 1, index + 3)
+          if (!/^[0-9a-f]{2}$/i.test(encodedByte)) return null
+          bytes.push(Number.parseInt(encodedByte, 16))
+          index += 2
+          continue
+        }
+        const byte = payload.charCodeAt(index)
+        if (byte > 0x7f) return null
+        bytes.push(byte)
+      }
+      return Buffer.from(bytes)
+    }
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(payload) || payload.length % 4 === 1) return null
     const decoded = Buffer.from(payload, 'base64')
     const canonicalInput = payload.replace(/=+$/, '')
@@ -1080,6 +1135,46 @@ function validateGlbAccessor(accessor, bufferViews) {
   return glbRangeFits(bufferViews[valuesViewIndex], valuesOffset, sparseCount, elementSize, elementSize)
 }
 
+function decodesAsImage(payload, mimeType) {
+  if (!ffmpegPath) throw new Error('Unable to validate embedded GLB images: ffmpeg-static has no binary for this platform')
+  if (!Buffer.isBuffer(payload) || !payload.length) return false
+  const parser = new Map([
+    ['image/avif', parseAvif],
+    ['image/gif', parseGif],
+    ['image/jpeg', parseJpeg],
+    ['image/jpg', parseJpeg],
+    ['image/png', parsePng],
+    ['image/webp', parseWebp],
+  ]).get(mimeType.toLowerCase())
+  if (!parser) return false
+  let imagePayload = parser(payload) ? payload : null
+  for (let padding = 1; !imagePayload && padding <= 3 && padding < payload.length; padding++) {
+    const trailing = payload.subarray(payload.length - padding)
+    if (![...trailing].every(byte => byte === 0 || byte === 0x20)) break
+    const candidate = payload.subarray(0, payload.length - padding)
+    if (parser(candidate)) imagePayload = candidate
+  }
+  if (!imagePayload) return false
+  const run = spawnSync(ffmpegPath, [
+    '-nostdin',
+    '-hide_banner',
+    '-loglevel', 'error',
+    '-xerror',
+    '-err_detect', 'explode',
+    '-i', 'pipe:0',
+    '-map', '0:v:0',
+    '-frames:v', '1',
+    '-f', 'null',
+    '-',
+  ], {
+    cwd: ROOT,
+    input: imagePayload,
+    maxBuffer: 10 * 1024 * 1024,
+    timeout: 30_000,
+  })
+  return run.status === 0
+}
+
 function parseGlb(buffer) {
   if (buffer.length < 20 || buffer.toString('ascii', 0, 4) !== 'glTF') return null
   const version = buffer.readUInt32LE(4)
@@ -1122,20 +1217,25 @@ function parseGlb(buffer) {
   if (binaryChunks.length > 1) return null
 
   const bufferLengths = []
+  const bufferPayloads = []
   let usedBinaryChunk = false
   for (const [index, entry] of buffers.entries()) {
     const byteLength = Number(entry?.byteLength)
     if (!Number.isSafeInteger(byteLength) || byteLength <= 0) return null
+    let payload
     if (entry?.uri === undefined) {
       if (usedBinaryChunk || !binaryChunks.length || index !== 0) return null
-      const binaryLength = binaryChunks[0].byteLength
+      const binaryChunk = binaryChunks[0]
+      const binaryLength = binaryChunk.byteLength
       if (binaryLength < byteLength || binaryLength - byteLength > 3) return null
+      payload = buffer.subarray(binaryChunk.dataOffset, binaryChunk.dataOffset + byteLength)
       usedBinaryChunk = true
     } else {
-      const payload = decodeDataUri(entry.uri)
+      payload = decodeDataUri(entry.uri)
       if (!payload || payload.length !== byteLength) return null
     }
     bufferLengths.push(byteLength)
+    bufferPayloads.push(payload)
   }
   if (binaryChunks.length && !usedBinaryChunk) return null
 
@@ -1163,12 +1263,19 @@ function parseGlb(buffer) {
     if (hasUri === hasBufferView) return null
     if (hasUri) {
       if (typeof image.uri !== 'string' || !image.uri.startsWith('data:image/')) return null
+      const mimeType = image.uri.slice(5, image.uri.indexOf(',')).split(';')[0]
       const payload = decodeDataUri(image.uri)
-      if (!payload?.length) return null
+      if (!decodesAsImage(payload, mimeType)) return null
     } else {
-      const bufferView = Number(image.bufferView)
-      if (!Number.isSafeInteger(bufferView) || bufferView < 0 || bufferView >= bufferViews.length) return null
+      const bufferViewIndex = Number(image.bufferView)
+      if (!Number.isSafeInteger(bufferViewIndex) || bufferViewIndex < 0 || bufferViewIndex >= bufferViews.length) return null
       if (typeof image.mimeType !== 'string' || !image.mimeType.startsWith('image/')) return null
+      const view = bufferViews[bufferViewIndex]
+      const payload = bufferPayloads[view.buffer].subarray(
+        view.byteOffset || 0,
+        (view.byteOffset || 0) + view.byteLength,
+      )
+      if (!decodesAsImage(payload, image.mimeType)) return null
     }
   }
   return { codec: 'glb2' }
@@ -1328,11 +1435,15 @@ function textFiles() {
     .map(file => ({ path: rel(file), text: fs.readFileSync(file, 'utf8') }))
 }
 
+function encodePathSegments(value) {
+  return value.split('/').map(segment => encodeURIComponent(segment)).join('/')
+}
+
 function referenceTokens(file) {
   const repoPath = rel(file)
   if (repoPath.startsWith('public/')) {
     const webPath = '/' + repoPath.slice('public/'.length)
-    return [webPath, encodeURI(webPath)]
+    return [webPath, encodePathSegments(webPath)]
   }
   if (repoPath.startsWith('content/media/')) {
     return [repoPath.slice('content/media/'.length)]
@@ -1340,13 +1451,13 @@ function referenceTokens(file) {
   if (repoPath.startsWith('content/projects/')) {
     const parts = repoPath.split('/')
     const projectRelativePath = parts.length > 3 ? parts.slice(3).join('/') : path.posix.basename(repoPath)
-    return [projectRelativePath, encodeURI(projectRelativePath)]
+    return [projectRelativePath, encodePathSegments(projectRelativePath)]
   }
   if (repoPath.startsWith('assets/build/')) {
     const ext = path.posix.extname(repoPath)
-    return [repoPath, encodeURI(repoPath), `assets/build/*${ext}`]
+    return [repoPath, encodePathSegments(repoPath), `assets/build/*${ext}`]
   }
-  return [repoPath, encodeURI(repoPath)]
+  return [repoPath, encodePathSegments(repoPath)]
 }
 
 function findReferences(file, texts) {
@@ -1432,96 +1543,114 @@ function validate(
   return failures
 }
 
-const texts = textFiles()
-const files = [...new Set(MEDIA_ROOTS.flatMap(walk))]
-  .filter(file => MEDIA_EXTENSIONS.has(path.extname(file).toLowerCase()))
-  .sort((a, b) => rel(a).localeCompare(rel(b)))
-const media = files.map(file => auditFile(file, texts))
-  .filter(item => (
-    !item.path.startsWith('assets/src/')
-    && !item.path.startsWith('content/media/')
-    && !item.path.startsWith('content/projects/')
-  ) || item.referenced)
-const rasterDecodeFailures = verifyRasterPayloads(media)
-const mp3DecodeFailures = verifyMp3Payloads(media)
-const videoDecodeFailures = verifyVideoPayloads(media)
+function runAudit() {
+  const texts = textFiles()
+  const files = [...new Set(MEDIA_ROOTS.flatMap(walk))]
+    .filter(file => MEDIA_EXTENSIONS.has(path.extname(file).toLowerCase()))
+    .sort((a, b) => rel(a).localeCompare(rel(b)))
+  const media = files.map(file => auditFile(file, texts))
+    .filter(item => (
+      !item.path.startsWith('assets/src/')
+      && !item.path.startsWith('content/media/')
+      && !item.path.startsWith('content/projects/')
+    ) || item.referenced)
+  const rasterDecodeFailures = verifyRasterPayloads(media)
+  const mp3DecodeFailures = verifyMp3Payloads(media)
+  const videoDecodeFailures = verifyVideoPayloads(media)
 
-const byKind = Object.fromEntries(['image', 'video', 'audio', 'model', 'other'].map(kind => {
-  const items = media.filter(item => item.kind === kind)
-  return [kind, { files: items.length, bytes: items.reduce((sum, item) => sum + item.bytes, 0) }]
-}))
-const byHash = new Map()
-for (const item of media) {
-  if (!byHash.has(item.sha256)) byHash.set(item.sha256, [])
-  byHash.get(item.sha256).push(item.path)
-}
-const duplicateGroups = [...byHash.entries()]
-  .filter(([, paths]) => paths.length > 1)
-  .map(([hash, paths]) => ({ hash, paths }))
-const failures = validate(media, rasterDecodeFailures, mp3DecodeFailures, videoDecodeFailures)
-const incompleteMetadata = media.filter(item => {
-  const ext = path.extname(item.path).toLowerCase()
-  if (item.kind === 'image' && PARSED_IMAGE_EXTENSIONS.has(ext)) {
-    return !item.width
-      || !item.height
-      || (DECODED_RASTER_EXTENSIONS.has(ext) && rasterDecodeFailures.has(item.path))
+  const byKind = Object.fromEntries(['image', 'video', 'audio', 'model', 'other'].map(kind => {
+    const items = media.filter(item => item.kind === kind)
+    return [kind, { files: items.length, bytes: items.reduce((sum, item) => sum + item.bytes, 0) }]
+  }))
+  const byHash = new Map()
+  for (const item of media) {
+    if (!byHash.has(item.sha256)) byHash.set(item.sha256, [])
+    byHash.get(item.sha256).push(item.path)
   }
-  if (item.kind === 'image' && ext === '.svg') return item.codec !== 'svg'
-  if (item.kind === 'video') {
-    return !PARSED_VIDEO_EXTENSIONS.has(ext)
-      || !item.durationSeconds
-      || !item.width
-      || !item.height
-      || !item.bitrateKbps
-      || videoDecodeFailures.has(item.path)
+  const duplicateGroups = [...byHash.entries()]
+    .filter(([, paths]) => paths.length > 1)
+    .map(([hash, paths]) => ({ hash, paths }))
+  const failures = validate(media, rasterDecodeFailures, mp3DecodeFailures, videoDecodeFailures)
+  const incompleteMetadata = media.filter(item => {
+    const ext = path.extname(item.path).toLowerCase()
+    if (item.kind === 'image' && PARSED_IMAGE_EXTENSIONS.has(ext)) {
+      return !item.width
+        || !item.height
+        || (DECODED_RASTER_EXTENSIONS.has(ext) && rasterDecodeFailures.has(item.path))
+    }
+    if (item.kind === 'image' && ext === '.svg') return item.codec !== 'svg'
+    if (item.kind === 'video') {
+      return !PARSED_VIDEO_EXTENSIONS.has(ext)
+        || !item.durationSeconds
+        || !item.width
+        || !item.height
+        || !item.bitrateKbps
+        || videoDecodeFailures.has(item.path)
+    }
+    if (item.kind === 'audio') {
+      return !PARSED_AUDIO_EXTENSIONS.has(ext)
+        || !item.durationSeconds
+        || !item.bitrateKbps
+        || (ext === '.mp3' && mp3DecodeFailures.has(item.path))
+    }
+    if (item.kind === 'model' && ext === '.glb') return item.codec !== 'glb2'
+    return false
+  }).map(item => ({ path: item.path, referenced: item.referenced }))
+  const report = {
+    generatedAt: new Date().toISOString(),
+    totals: {
+      files: media.length,
+      bytes: media.reduce((sum, item) => sum + item.bytes, 0),
+      byKind,
+    },
+    duplicateGroups,
+    incompleteMetadata,
+    unreferenced: media.filter(item => !item.referenced).map(item => ({ path: item.path, bytes: item.bytes, sha256: item.sha256 })),
+    largest: [...media].sort((a, b) => b.bytes - a.bytes).slice(0, 20).map(({ path, kind, bytes, durationSeconds, bitrateKbps, width, height, codec }) => ({
+      path, kind, bytes, durationSeconds, bitrateKbps, width, height, codec,
+    })),
+    media,
   }
-  if (item.kind === 'audio') {
-    return !PARSED_AUDIO_EXTENSIONS.has(ext)
-      || !item.durationSeconds
-      || !item.bitrateKbps
-      || (ext === '.mp3' && mp3DecodeFailures.has(item.path))
+
+  fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true })
+  fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2) + '\n')
+
+  const mib = value => (value / 1024 / 1024).toFixed(2)
+  console.log(`media: ${report.totals.files} files / ${mib(report.totals.bytes)} MiB`)
+  for (const [kind, total] of Object.entries(report.totals.byKind)) {
+    if (total.files) console.log(`  ${kind.padEnd(6)} ${String(total.files).padStart(3)} files / ${mib(total.bytes).padStart(6)} MiB`)
   }
-  if (item.kind === 'model' && ext === '.glb') return item.codec !== 'glb2'
-  return false
-}).map(item => ({ path: item.path, referenced: item.referenced }))
-const report = {
-  generatedAt: new Date().toISOString(),
-  totals: {
-    files: media.length,
-    bytes: media.reduce((sum, item) => sum + item.bytes, 0),
-    byKind,
-  },
-  duplicateGroups,
-  incompleteMetadata,
-  unreferenced: media.filter(item => !item.referenced).map(item => ({ path: item.path, bytes: item.bytes, sha256: item.sha256 })),
-  largest: [...media].sort((a, b) => b.bytes - a.bytes).slice(0, 20).map(({ path, kind, bytes, durationSeconds, bitrateKbps, width, height, codec }) => ({
-    path, kind, bytes, durationSeconds, bitrateKbps, width, height, codec,
-  })),
-  media,
+  console.log(`unreferenced candidates: ${report.unreferenced.length}`)
+  console.log(`exact duplicate groups : ${report.duplicateGroups.length}`)
+  console.log(`metadata review items  : ${report.incompleteMetadata.length}`)
+  console.log('\nlargest media:')
+  for (const item of report.largest.slice(0, 10)) {
+    const detail = item.durationSeconds
+      ? ` / ${item.durationSeconds.toFixed(1)}s / ${item.bitrateKbps || '?'} kbps`
+      : item.width && item.height ? ` / ${item.width}x${item.height}` : ''
+    console.log(`  ${mib(item.bytes).padStart(7)} MiB  ${item.path}${detail}`)
+  }
+  console.log(`\nreport: ${rel(REPORT_PATH)}`)
+
+  if (process.argv.includes('--check') && failures.length) {
+    console.error('\nmedia audit validation failed:')
+    for (const failure of failures) console.error(`  - ${failure}`)
+    process.exitCode = 1
+  }
+  return report
 }
 
-fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true })
-fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2) + '\n')
+const entrypoint = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : null
+if (entrypoint === import.meta.url) runAudit()
 
-const mib = value => (value / 1024 / 1024).toFixed(2)
-console.log(`media: ${report.totals.files} files / ${mib(report.totals.bytes)} MiB`)
-for (const [kind, total] of Object.entries(report.totals.byKind)) {
-  if (total.files) console.log(`  ${kind.padEnd(6)} ${String(total.files).padStart(3)} files / ${mib(total.bytes).padStart(6)} MiB`)
-}
-console.log(`unreferenced candidates: ${report.unreferenced.length}`)
-console.log(`exact duplicate groups : ${report.duplicateGroups.length}`)
-console.log(`metadata review items  : ${report.incompleteMetadata.length}`)
-console.log('\nlargest media:')
-for (const item of report.largest.slice(0, 10)) {
-  const detail = item.durationSeconds
-    ? ` / ${item.durationSeconds.toFixed(1)}s / ${item.bitrateKbps || '?'} kbps`
-    : item.width && item.height ? ` / ${item.width}x${item.height}` : ''
-  console.log(`  ${mib(item.bytes).padStart(7)} MiB  ${item.path}${detail}`)
-}
-console.log(`\nreport: ${rel(REPORT_PATH)}`)
-
-if (process.argv.includes('--check') && failures.length) {
-  console.error('\nmedia audit validation failed:')
-  for (const failure of failures) console.error(`  - ${failure}`)
-  process.exitCode = 1
+export {
+  decodeDataUri,
+  encodePathSegments,
+  mp4DurationSeconds,
+  mp4TrackSwapsDimensions,
+  parseGlb,
+  parseSvg,
+  parseSvgLength,
+  referenceTokens,
+  runAudit,
 }
