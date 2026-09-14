@@ -173,9 +173,14 @@ test('narration progress survives document changes and restores paused', async t
   assert.equal(restored.playing, false)
   assert.equal(audios.length, 1)
 
+  const seeked = manager.seekNarration(75)
+  assert.equal(seeked.currentTime, 75)
+  assert.equal(session.read('projects:astro').currentTime, 75)
+  assert.equal(audios.length, 1)
+
   await manager.toggleNarration()
   assert.equal(audios.length, 2)
-  assert.equal(audios[1].currentTime, 42)
+  assert.equal(audios[1].currentTime, 75)
   assert.equal(manager.snapshotNarration().playing, true)
 })
 
@@ -192,6 +197,20 @@ test('ordinary document audio remains document-scoped', async t => {
   assert.equal(audios[0].src, '')
   assert.equal(manager.snapshot(soundtrack).currentTime, 0)
   assert.equal(manager.snapshot(soundtrack).state, 'idle')
+})
+
+test('narration seek before first playback is applied when audio is created', async t => {
+  const { manager, session, audios } = createHarness(t)
+  manager.setDocument(astro)
+
+  const snapshot = manager.seekNarration(65)
+  assert.equal(snapshot.currentTime, 65)
+  assert.equal(session.read('projects:astro').currentTime, 65)
+  assert.equal(audios.length, 0)
+
+  await manager.toggleNarration()
+  assert.equal(audios.length, 1)
+  assert.equal(audios[0].currentTime, 65)
 })
 
 test('narration seek updates live playback and session state', async t => {
