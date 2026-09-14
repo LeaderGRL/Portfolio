@@ -131,7 +131,9 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # Browser jobs consume the bundle built above and never run media tooling.
+        # Skip ffmpeg-static's download script in each matrix runner.
+        run: npm ci --ignore-scripts
 
       - name: Restore Playwright browser cache
         id: playwright-cache
