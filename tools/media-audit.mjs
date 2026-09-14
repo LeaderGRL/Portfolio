@@ -25,7 +25,8 @@ const IMAGE_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.sv
 const VIDEO_EXTENSIONS = new Set(['.m4v', '.mov', '.mp4', '.webm'])
 const AUDIO_EXTENSIONS = new Set(['.aac', '.flac', '.m4a', '.mp3', '.ogg', '.opus', '.wav'])
 const PARSED_IMAGE_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.webp'])
-const DECODED_RASTER_EXTENSIONS = new Set(['.gif', '.jpeg', '.jpg', '.png', '.webp'])
+const DECODED_RASTER_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.webp'])
+const PILLOW_RASTER_EXTENSIONS = new Set(['.gif', '.jpeg', '.jpg', '.png', '.webp'])
 const PARSED_VIDEO_EXTENSIONS = new Set(['.m4v', '.mov', '.mp4'])
 const PARSED_AUDIO_EXTENSIONS = new Set(['.mp3'])
 
@@ -474,6 +475,152 @@ function validateMp4SampleExtents(buffer, stbl, mdats) {
   return sampleIndex === sampleSizes.count
 }
 
+function mp4TrackId(buffer, trak) {
+  const tkhd = child(buffer, trak, 'tkhd')
+  if (!tkhd || tkhd.dataOffset + 4 > tkhd.end) return null
+  const version = buffer[tkhd.dataOffset]
+  const offset = tkhd.dataOffset + (version === 1 ? 20 : version === 0 ? 12 : -1)
+  if (offset < tkhd.dataOffset || offset + 4 > tkhd.end) return null
+  const trackId = buffer.readUInt32BE(offset)
+  return trackId || null
+}
+
+function mp4TrackTimescale(buffer, trak) {
+  const mdia = child(buffer, trak, 'mdia')
+  const mdhd = mdia && child(buffer, mdia, 'mdhd')
+  if (!mdhd || mdhd.dataOffset + 4 > mdhd.end) return null
+  const version = buffer[mdhd.dataOffset]
+  const offset = mdhd.dataOffset + (version === 1 ? 20 : version === 0 ? 12 : -1)
+  if (offset < mdhd.dataOffset || offset + 4 > mdhd.end) return null
+  const timescale = buffer.readUInt32BE(offset)
+  return timescale || null
+}
+
+function mp4TrexDefaultDurations(buffer, moov) {
+  const defaults = new Map()
+  const mvex = child(buffer, moov, 'mvex')
+  if (!mvex) return defaults
+  for (const trex of childBoxes(buffer, mvex).filter(box => box.type === 'trex')) {
+    if (trex.dataOffset + 16 > trex.end) continue
+    const trackId = buffer.readUInt32BE(trex.dataOffset + 4)
+    const defaultSampleDuration = buffer.readUInt32BE(trex.dataOffset + 12)
+    if (trackId) defaults.set(trackId, defaultSampleDuration)
+  }
+  return defaults
+}
+
+function mp4Tfhd(buffer, tfhd) {
+  if (!tfhd || tfhd.dataOffset + 8 > tfhd.end) return null
+  const flags = buffer.readUIntBE(tfhd.dataOffset + 1, 3)
+  const trackId = buffer.readUInt32BE(tfhd.dataOffset + 4)
+  if (!trackId) return null
+  let offset = tfhd.dataOffset + 8
+
+  const skip = size => {
+    if (offset + size > tfhd.end) return false
+    offset += size
+    return true
+  }
+
+  if ((flags & 0x000001) && !skip(8)) return null
+  if ((flags & 0x000002) && !skip(4)) return null
+  let defaultSampleDuration = null
+  if (flags & 0x000008) {
+    if (offset + 4 > tfhd.end) return null
+    defaultSampleDuration = buffer.readUInt32BE(offset)
+    offset += 4
+  }
+  if ((flags & 0x000010) && !skip(4)) return null
+  if ((flags & 0x000020) && !skip(4)) return null
+  return { trackId, defaultSampleDuration }
+}
+
+function mp4TfdtBaseTime(buffer, tfdt) {
+  if (!tfdt || tfdt.dataOffset + 8 > tfdt.end) return null
+  const version = buffer[tfdt.dataOffset]
+  if (version === 0) return buffer.readUInt32BE(tfdt.dataOffset + 4)
+  if (version !== 1 || tfdt.dataOffset + 12 > tfdt.end) return null
+  const value = buffer.readBigUInt64BE(tfdt.dataOffset + 4)
+  return value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : null
+}
+
+function mp4TrunDuration(buffer, trun, defaultSampleDuration) {
+  if (!trun || trun.dataOffset + 8 > trun.end) return null
+  const flags = buffer.readUIntBE(trun.dataOffset + 1, 3)
+  const sampleCount = buffer.readUInt32BE(trun.dataOffset + 4)
+  let offset = trun.dataOffset + 8
+  if (flags & 0x000001) offset += 4
+  if (flags & 0x000004) offset += 4
+  if (offset > trun.end) return null
+
+  const hasDuration = Boolean(flags & 0x000100)
+  const perSampleFields = [0x000100, 0x000200, 0x000400, 0x000800].filter(flag => flags & flag).length
+  const perSampleBytes = perSampleFields * 4
+  const sampleBytes = sampleCount * perSampleBytes
+  if (!Number.isSafeInteger(sampleBytes) || offset + sampleBytes !== trun.end) return null
+  if (!hasDuration) {
+    if (!Number.isSafeInteger(defaultSampleDuration) || defaultSampleDuration < 0) return null
+    const total = defaultSampleDuration * sampleCount
+    return Number.isSafeInteger(total) ? total : null
+  }
+
+  let total = 0
+  for (let index = 0; index < sampleCount; index++) {
+    const duration = buffer.readUInt32BE(offset)
+    total += duration
+    if (!Number.isSafeInteger(total)) return null
+    offset += perSampleBytes
+  }
+  return total
+}
+
+function fragmentedMp4Duration(buffer, top, moov) {
+  const timescales = new Map()
+  for (const trak of childBoxes(buffer, moov).filter(box => box.type === 'trak')) {
+    const trackId = mp4TrackId(buffer, trak)
+    const timescale = mp4TrackTimescale(buffer, trak)
+    if (trackId && timescale) timescales.set(trackId, timescale)
+  }
+  if (!timescales.size) return null
+
+  const defaultDurations = mp4TrexDefaultDurations(buffer, moov)
+  const trackEnds = new Map()
+  for (const moof of top.filter(box => box.type === 'moof')) {
+    const moofChildren = childBoxes(buffer, moof)
+    if (!moofChildren.complete) return null
+    for (const traf of moofChildren.filter(box => box.type === 'traf')) {
+      const trafChildren = childBoxes(buffer, traf)
+      if (!trafChildren.complete) return null
+      const tfhd = mp4Tfhd(buffer, trafChildren.find(box => box.type === 'tfhd'))
+      if (!tfhd || !timescales.has(tfhd.trackId)) continue
+      const defaultSampleDuration = tfhd.defaultSampleDuration ?? defaultDurations.get(tfhd.trackId)
+      const tfdt = trafChildren.find(box => box.type === 'tfdt')
+      const baseTime = tfdt ? mp4TfdtBaseTime(buffer, tfdt) : (trackEnds.get(tfhd.trackId) || 0)
+      if (baseTime === null) return null
+
+      let fragmentDuration = 0
+      let sawSamples = false
+      for (const trun of trafChildren.filter(box => box.type === 'trun')) {
+        const duration = mp4TrunDuration(buffer, trun, defaultSampleDuration)
+        if (duration === null) return null
+        fragmentDuration += duration
+        if (!Number.isSafeInteger(fragmentDuration)) return null
+        sawSamples = true
+      }
+      if (!sawSamples) continue
+      const end = baseTime + fragmentDuration
+      if (!Number.isSafeInteger(end)) return null
+      trackEnds.set(tfhd.trackId, Math.max(trackEnds.get(tfhd.trackId) || 0, end))
+    }
+  }
+
+  let durationSeconds = 0
+  for (const [trackId, end] of trackEnds) {
+    durationSeconds = Math.max(durationSeconds, end / timescales.get(trackId))
+  }
+  return durationSeconds || null
+}
+
 function parsePrimaryItemId(buffer, pitm) {
   if (!pitm || pitm.dataOffset + 6 > pitm.end) return null
   const version = buffer[pitm.dataOffset]
@@ -663,21 +810,43 @@ function parseMp4(buffer) {
   const mdats = top.filter(box => box.type === 'mdat' && box.end > box.dataOffset)
   const firstMdat = mdats[0]
   if (!moov || !firstMdat) return null
+  const fragmented = top.some(box => box.type === 'moof') || Boolean(child(buffer, moov, 'mvex'))
 
   let durationSeconds = null
+  let movieTimescale = null
   const mvhd = child(buffer, moov, 'mvhd')
   if (mvhd) {
     const version = buffer[mvhd.dataOffset]
     if (version === 0 && mvhd.dataOffset + 20 <= mvhd.end) {
       const timescale = buffer.readUInt32BE(mvhd.dataOffset + 12)
       const duration = buffer.readUInt32BE(mvhd.dataOffset + 16)
-      if (timescale) durationSeconds = duration / timescale
+      if (timescale) {
+        movieTimescale = timescale
+        durationSeconds = duration / timescale
+      }
     } else if (version === 1 && mvhd.dataOffset + 32 <= mvhd.end) {
       const timescale = buffer.readUInt32BE(mvhd.dataOffset + 20)
       const duration = Number(buffer.readBigUInt64BE(mvhd.dataOffset + 24))
-      if (timescale) durationSeconds = duration / timescale
+      if (timescale) {
+        movieTimescale = timescale
+        durationSeconds = duration / timescale
+      }
     }
   }
+  if (fragmented && movieTimescale && !durationSeconds) {
+    const mvex = child(buffer, moov, 'mvex')
+    const mehd = mvex && child(buffer, mvex, 'mehd')
+    if (mehd && mehd.dataOffset + 8 <= mehd.end) {
+      const version = buffer[mehd.dataOffset]
+      if (version === 0 && mehd.dataOffset + 8 <= mehd.end) {
+        durationSeconds = buffer.readUInt32BE(mehd.dataOffset + 4) / movieTimescale
+      } else if (version === 1 && mehd.dataOffset + 12 <= mehd.end) {
+        const duration = buffer.readBigUInt64BE(mehd.dataOffset + 4)
+        if (duration <= BigInt(Number.MAX_SAFE_INTEGER)) durationSeconds = Number(duration) / movieTimescale
+      }
+    }
+  }
+  if (fragmented && !durationSeconds) durationSeconds = fragmentedMp4Duration(buffer, top, moov)
 
   let width = null
   let height = null
@@ -694,7 +863,7 @@ function parseMp4(buffer) {
     const stbl = minf && child(buffer, minf, 'stbl')
     const stsd = stbl && child(buffer, stbl, 'stsd')
     if (!stsd || stsd.dataOffset + 16 > stsd.end) continue
-    if ((handler === 'vide' || handler === 'soun') && !validateMp4SampleExtents(buffer, stbl, mdats)) return null
+    if ((handler === 'vide' || handler === 'soun') && !fragmented && !validateMp4SampleExtents(buffer, stbl, mdats)) return null
     if (handler === 'vide' || handler === 'soun') validatedMediaTracks++
     const entryOffset = stsd.dataOffset + 8
     if (entryOffset + 8 > stsd.end) continue
@@ -810,6 +979,107 @@ function hasValidMp3Tail(buffer, offset) {
   return true
 }
 
+function decodeDataUri(value) {
+  if (typeof value !== 'string' || !value.startsWith('data:')) return null
+  const comma = value.indexOf(',')
+  if (comma < 5) return null
+  const metadata = value.slice(5, comma)
+  const payload = value.slice(comma + 1)
+  const isBase64 = metadata.split(';').some(token => token.toLowerCase() === 'base64')
+
+  try {
+    if (!isBase64) return Buffer.from(decodeURIComponent(payload), 'utf8')
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(payload) || payload.length % 4 === 1) return null
+    const decoded = Buffer.from(payload, 'base64')
+    const canonicalInput = payload.replace(/=+$/, '')
+    const canonicalOutput = decoded.toString('base64').replace(/=+$/, '')
+    return canonicalInput === canonicalOutput ? decoded : null
+  } catch {
+    return null
+  }
+}
+
+const GLB_COMPONENT_BYTES = new Map([
+  [5120, 1],
+  [5121, 1],
+  [5122, 2],
+  [5123, 2],
+  [5125, 4],
+  [5126, 4],
+])
+
+const GLB_TYPE_SHAPES = new Map([
+  ['SCALAR', [1, 1]],
+  ['VEC2', [1, 2]],
+  ['VEC3', [1, 3]],
+  ['VEC4', [1, 4]],
+  ['MAT2', [2, 2]],
+  ['MAT3', [3, 3]],
+  ['MAT4', [4, 4]],
+])
+
+function glbAccessorElementSize(componentBytes, type) {
+  const shape = GLB_TYPE_SHAPES.get(type)
+  if (!shape) return null
+  const [columns, rows] = shape
+  if (columns === 1) return rows * componentBytes
+  const columnBytes = rows * componentBytes
+  const alignedColumnBytes = Math.ceil(columnBytes / 4) * 4
+  return columns * alignedColumnBytes
+}
+
+function glbRangeFits(bufferView, byteOffset, count, stride, elementSize) {
+  if (!Number.isSafeInteger(byteOffset) || byteOffset < 0) return false
+  if (!Number.isSafeInteger(count) || count <= 0) return false
+  const lastElementOffset = byteOffset + (count - 1) * stride
+  const end = lastElementOffset + elementSize
+  return Number.isSafeInteger(end) && end <= Number(bufferView?.byteLength)
+}
+
+function validateGlbAccessor(accessor, bufferViews) {
+  if (!accessor || typeof accessor !== 'object') return false
+  const componentType = Number(accessor.componentType)
+  const componentBytes = GLB_COMPONENT_BYTES.get(componentType)
+  const elementSize = glbAccessorElementSize(componentBytes, accessor.type)
+  const count = Number(accessor.count)
+  if (!componentBytes || !elementSize || !Number.isSafeInteger(count) || count <= 0) return false
+
+  const byteOffset = accessor.byteOffset === undefined ? 0 : Number(accessor.byteOffset)
+  if (!Number.isSafeInteger(byteOffset) || byteOffset < 0 || byteOffset % componentBytes !== 0) return false
+
+  if (accessor.bufferView !== undefined) {
+    const bufferViewIndex = Number(accessor.bufferView)
+    if (!Number.isSafeInteger(bufferViewIndex) || bufferViewIndex < 0 || bufferViewIndex >= bufferViews.length) return false
+    const bufferView = bufferViews[bufferViewIndex]
+    const stride = bufferView.byteStride === undefined ? elementSize : Number(bufferView.byteStride)
+    if (!Number.isSafeInteger(stride) || stride < elementSize) return false
+    if (!glbRangeFits(bufferView, byteOffset, count, stride, elementSize)) return false
+  } else if (byteOffset !== 0) {
+    return false
+  }
+
+  if (accessor.sparse === undefined) return true
+  const sparse = accessor.sparse
+  const sparseCount = Number(sparse?.count)
+  if (!Number.isSafeInteger(sparseCount) || sparseCount <= 0 || sparseCount > count) return false
+
+  const indices = sparse?.indices
+  const indexComponentType = Number(indices?.componentType)
+  const indexComponentBytes = new Map([[5121, 1], [5123, 2], [5125, 4]]).get(indexComponentType)
+  const indicesViewIndex = Number(indices?.bufferView)
+  const indicesOffset = indices?.byteOffset === undefined ? 0 : Number(indices.byteOffset)
+  if (!indexComponentBytes || !Number.isSafeInteger(indicesViewIndex) || indicesViewIndex < 0 || indicesViewIndex >= bufferViews.length) return false
+  if (!Number.isSafeInteger(indicesOffset) || indicesOffset < 0 || indicesOffset % indexComponentBytes !== 0) return false
+  if (!glbRangeFits(bufferViews[indicesViewIndex], indicesOffset, sparseCount, indexComponentBytes, indexComponentBytes)) return false
+
+  const values = sparse?.values
+  const valuesViewIndex = Number(values?.bufferView)
+  const valuesOffset = values?.byteOffset === undefined ? 0 : Number(values.byteOffset)
+  if (!Number.isSafeInteger(valuesViewIndex) || valuesViewIndex < 0 || valuesViewIndex >= bufferViews.length) return false
+  if (!Number.isSafeInteger(valuesOffset) || valuesOffset < 0 || valuesOffset % componentBytes !== 0) return false
+  return glbRangeFits(bufferViews[valuesViewIndex], valuesOffset, sparseCount, elementSize, elementSize)
+}
+
 function parseGlb(buffer) {
   if (buffer.length < 20 || buffer.toString('ascii', 0, 4) !== 'glTF') return null
   const version = buffer.readUInt32LE(4)
@@ -818,7 +1088,7 @@ function parseGlb(buffer) {
 
   let offset = 12
   let json = null
-  let binaryBytes = 0
+  const binaryChunks = []
   let chunkIndex = 0
   while (offset + 8 <= buffer.length) {
     const chunkLength = buffer.readUInt32LE(offset)
@@ -837,7 +1107,7 @@ function parseGlb(buffer) {
         return null
       }
     } else if (chunkType === 0x004e4942) {
-      binaryBytes += chunkLength
+      binaryChunks.push({ dataOffset, byteLength: chunkLength })
     }
 
     offset = end
@@ -846,17 +1116,61 @@ function parseGlb(buffer) {
 
   if (offset !== buffer.length || !json || typeof json !== 'object' || json.asset?.version !== '2.0') return null
   const buffers = Array.isArray(json.buffers) ? json.buffers : []
+  const bufferViews = Array.isArray(json.bufferViews) ? json.bufferViews : []
+  const accessors = Array.isArray(json.accessors) ? json.accessors : []
   const images = Array.isArray(json.images) ? json.images : []
-  if (buffers.some(entry => entry && entry.uri !== undefined)) return null
-  if (images.some(entry => entry && entry.uri !== undefined)) return null
-  let requiredBinaryBytes = 0
-  for (const entry of buffers) {
+  if (binaryChunks.length > 1) return null
+
+  const bufferLengths = []
+  let usedBinaryChunk = false
+  for (const [index, entry] of buffers.entries()) {
     const byteLength = Number(entry?.byteLength)
-    if (!Number.isSafeInteger(byteLength) || byteLength < 0) return null
-    requiredBinaryBytes += byteLength
-    if (!Number.isSafeInteger(requiredBinaryBytes)) return null
+    if (!Number.isSafeInteger(byteLength) || byteLength <= 0) return null
+    if (entry?.uri === undefined) {
+      if (usedBinaryChunk || !binaryChunks.length || index !== 0) return null
+      const binaryLength = binaryChunks[0].byteLength
+      if (binaryLength < byteLength || binaryLength - byteLength > 3) return null
+      usedBinaryChunk = true
+    } else {
+      const payload = decodeDataUri(entry.uri)
+      if (!payload || payload.length !== byteLength) return null
+    }
+    bufferLengths.push(byteLength)
   }
-  if (requiredBinaryBytes > binaryBytes) return null
+  if (binaryChunks.length && !usedBinaryChunk) return null
+
+  for (const view of bufferViews) {
+    const bufferIndex = Number(view?.buffer)
+    const byteOffset = view?.byteOffset === undefined ? 0 : Number(view.byteOffset)
+    const byteLength = Number(view?.byteLength)
+    if (!Number.isSafeInteger(bufferIndex) || bufferIndex < 0 || bufferIndex >= bufferLengths.length) return null
+    if (!Number.isSafeInteger(byteOffset) || byteOffset < 0) return null
+    if (!Number.isSafeInteger(byteLength) || byteLength <= 0) return null
+    if (byteOffset + byteLength > bufferLengths[bufferIndex]) return null
+    if (view?.byteStride !== undefined) {
+      const byteStride = Number(view.byteStride)
+      if (!Number.isSafeInteger(byteStride) || byteStride < 4 || byteStride > 252 || byteStride % 4 !== 0) return null
+    }
+  }
+
+  for (const accessor of accessors) {
+    if (!validateGlbAccessor(accessor, bufferViews)) return null
+  }
+
+  for (const image of images) {
+    const hasUri = image?.uri !== undefined
+    const hasBufferView = image?.bufferView !== undefined
+    if (hasUri === hasBufferView) return null
+    if (hasUri) {
+      if (typeof image.uri !== 'string' || !image.uri.startsWith('data:image/')) return null
+      const payload = decodeDataUri(image.uri)
+      if (!payload?.length) return null
+    } else {
+      const bufferView = Number(image.bufferView)
+      if (!Number.isSafeInteger(bufferView) || bufferView < 0 || bufferView >= bufferViews.length) return null
+      if (typeof image.mimeType !== 'string' || !image.mimeType.startsWith('image/')) return null
+    }
+  }
   return { codec: 'glb2' }
 }
 
@@ -899,15 +1213,45 @@ function verifyRasterPayloads(items) {
   ))
   if (!targets.length) return new Set()
 
-  const decoded = runPythonVerifier(
-    RASTER_VERIFY_SCRIPT,
-    targets.map(item => item.path),
-    'raster image payloads with Pillow',
-  )
-  return new Set(targets.filter(item => {
-    const result = decoded[item.path]
-    return !result || result.width !== item.width || result.height !== item.height
-  }).map(item => item.path))
+  const failures = new Set()
+  const pillowTargets = targets.filter(item => PILLOW_RASTER_EXTENSIONS.has(path.extname(item.path).toLowerCase()))
+  if (pillowTargets.length) {
+    const decoded = runPythonVerifier(
+      RASTER_VERIFY_SCRIPT,
+      pillowTargets.map(item => item.path),
+      'raster image payloads with Pillow',
+    )
+    for (const item of pillowTargets) {
+      const result = decoded[item.path]
+      if (!result || result.width !== item.width || result.height !== item.height) failures.add(item.path)
+    }
+  }
+
+  const avifTargets = targets.filter(item => path.extname(item.path).toLowerCase() === '.avif')
+  if (avifTargets.length) {
+    if (!ffmpegPath) throw new Error('Unable to validate AVIF payloads: ffmpeg-static has no binary for this platform')
+    for (const item of avifTargets) {
+      const run = spawnSync(ffmpegPath, [
+        '-nostdin',
+        '-hide_banner',
+        '-loglevel', 'error',
+        '-xerror',
+        '-err_detect', 'explode',
+        '-i', item.path,
+        '-map', '0:v:0',
+        '-f', 'null',
+        '-',
+      ], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 180_000,
+      })
+      if (run.status !== 0) failures.add(item.path)
+    }
+  }
+
+  return failures
 }
 
 function verifyMp3Payloads(items) {
@@ -933,7 +1277,6 @@ function verifyVideoPayloads(items) {
     && PARSED_VIDEO_EXTENSIONS.has(path.extname(item.path).toLowerCase())
     && item.codec
     && item.codec !== 'mp4'
-    && item.durationSeconds
     && item.width
     && item.height
   ))
