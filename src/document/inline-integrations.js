@@ -16,6 +16,7 @@ export class InlineIntegrationController {
     this.opticsFilterId = 'document-crt-native-optics'
     this.syncing = false
     this.syncQueued = false
+    this.topInset = 0
 
     this._ensureOpticsFilter()
 
@@ -31,6 +32,10 @@ export class InlineIntegrationController {
 
   get isPoweredOn() {
     return !this.tube?.classList.contains('is-powered-off')
+  }
+
+  setTopInset(value = 0) {
+    this.topInset = Math.max(0, Number(value) || 0)
   }
 
   _neutralBarrelMap() {
@@ -144,15 +149,16 @@ export class InlineIntegrationController {
     const top = entry.y - this.rasteriser.scroll
     const bottom = top + entry.height
     const contentBottom = this.rasteriser.getDocumentContentBottom?.() ?? (this.rasteriser.readingHeight || SRC_H)
-    return Math.max(0, Math.min(bottom, contentBottom) - Math.max(top, 0))
+    return Math.max(0, Math.min(bottom, contentBottom) - Math.max(top, this.topInset))
   }
 
   _syncClipBoundary() {
     const height = this.rasteriser?.height || SRC_H
     const contentBottom = this.rasteriser?.getDocumentContentBottom?.() ?? (this.rasteriser?.readingHeight || SRC_H)
     const clippedBottom = Math.max(0, Math.min(height, contentBottom))
-    const inset = Math.max(0, height - clippedBottom)
-    this.layer.style.clipPath = `inset(0 0 ${((inset / height) * 100).toFixed(6)}% 0)`
+    const topInset = Math.max(0, Math.min(height, this.topInset))
+    const bottomInset = Math.max(0, height - clippedBottom)
+    this.layer.style.clipPath = `inset(${((topInset / height) * 100).toFixed(6)}% 0 ${((bottomInset / height) * 100).toFixed(6)}% 0)`
   }
 
   _position(host, entry) {
