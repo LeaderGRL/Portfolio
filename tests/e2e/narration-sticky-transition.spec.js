@@ -31,6 +31,22 @@ async function bootNarratableDocument(page) {
   })
 }
 
+async function setRasterScroll(page, target) {
+  await page.evaluate(rasterTarget => {
+    const runtime = window.__JG1500_APP__?.__articleCRTBridge
+    const rasteriser = runtime?.documentRaster
+    const reader = rasteriser?.reader
+    if (!runtime || !rasteriser || !reader) throw new Error('Document raster runtime is unavailable')
+
+    const clamped = Math.max(0, Math.min(rasteriser.maxScroll, rasterTarget))
+    const domMax = Math.max(0, reader.scrollHeight - reader.clientHeight)
+    reader.scrollTop = rasteriser.maxScroll > 0 ? (clamped / rasteriser.maxScroll) * domMax : 0
+    rasteriser._syncScrollFromDOM()
+    runtime.narrationPlayer.sync()
+    runtime.app.dirty = true
+  }, target)
+}
+
 test('sticky narration takes over as soon as primary controls leave the painted clip', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium', 'Sticky transition contract only needs Chromium')
   await bootNarratableDocument(page)
@@ -41,7 +57,7 @@ test('sticky narration takes over as soon as primary controls leave the painted 
   await toggle.click({ force: true })
   await expect(toggle).toHaveAttribute('aria-label', 'Pause narration for ASTRO')
 
-  const thresholds = await page.evaluate(() => {
+  const threshold = await page.evaluate(() => {
     const runtime = window.__JG1500_APP__?.__articleCRTBridge
     const player = runtime?.narrationPlayer
     const entry = player?.entry
@@ -58,18 +74,14 @@ test('sticky narration takes over as soon as primary controls leave the painted 
       metrics.buttonTop + metrics.buttonHeight,
       metrics.progressTop + metrics.progressHeight,
     )
-    return {
-      before: entry.y - (20 - controlBottom + 1),
-      atClip: entry.y - (20 - controlBottom),
-    }
+    return entry.y - (20 - controlBottom)
   })
-  expect(thresholds).not.toBeNull()
+  expect(threshold).not.toBeNull()
 
-  const reader = page.locator('#article-reader')
-  await reader.evaluate((node, scrollTop) => { node.scrollTop = scrollTop }, thresholds.before)
+  await setRasterScroll(page, threshold - 1)
   await expect(host).toHaveAttribute('data-narration-presentation', 'primary')
 
-  await reader.evaluate((node, scrollTop) => { node.scrollTop = scrollTop }, thresholds.atClip)
+  await setRasterScroll(page, threshold + 1)
   await expect(host).toHaveAttribute('data-narration-presentation', 'sticky')
   await expect(toggle).toBeVisible()
   await expect(page.locator('.document-narration-progress')).toBeVisible()
