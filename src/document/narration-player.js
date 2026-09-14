@@ -241,6 +241,22 @@ export class NarrationPlayer {
     const width = this.entry.width
 
     ctx.save()
+    ctx.setTransform(
+      this.rasteriser.canvas.width / this.rasteriser.width,
+      0,
+      0,
+      this.rasteriser.canvas.height / this.rasteriser.height,
+      0,
+      0,
+    )
+    ctx.beginPath()
+    ctx.rect(
+      Math.max(8, this.rasteriser.columnX - 16),
+      20,
+      this.rasteriser.columnWidth + 32,
+      Math.max(0, contentBottom - 20),
+    )
+    ctx.clip()
     ctx.font = '700 9px ui-monospace, "SFMono-Regular", Consolas, monospace'
     ctx.textBaseline = 'alphabetic'
 
