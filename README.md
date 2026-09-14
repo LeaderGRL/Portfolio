@@ -11,7 +11,7 @@ come from the source renders.
 
 ## Development
 
-Requires Node 22+ and Python 3 with `pillow`, `numpy` and `scipy`.
+Requires Node 22+ and Python 3 with `pillow`, `numpy`, `scipy` and `miniaudio`.
 
 ```bash
 npm install
