@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 const isChromiumDesktop = testInfo => testInfo.project.name === 'chromium'
+const isMobileChromium = testInfo => testInfo.project.name === 'mobile-chromium'
 
 async function installNarrationHarness(page) {
   await page.addInitScript(() => {
@@ -62,7 +63,7 @@ test('non-narratable documents expose no active narration control', async ({ pag
   expect(await page.evaluate(() => window.__narrationTestAudio.length)).toBe(0)
 })
 
-test('narration supports native keyboard activation, seek and quiet time updates', async ({ page }, testInfo) => {
+test('narration supports native keyboard activation, seek, end state and quiet time updates', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Narration interaction contract only needs one browser engine')
   await installNarrationHarness(page)
   await boot(page)
@@ -110,6 +111,38 @@ test('narration supports native keyboard activation, seek and quiet time updates
   await toggle.press(' ')
   await expect(toggle).toHaveAttribute('aria-label', 'Play narration for ASTRO')
   await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+  await toggle.press('Enter')
+  await expect(toggle).toHaveAttribute('aria-label', 'Pause narration for ASTRO')
+  await page.evaluate(() => {
+    const audio = window.__narrationTestAudio[0]
+    audio.currentTime = Number.isFinite(audio.duration) ? audio.duration : 180
+    audio.dispatchEvent(new Event('ended'))
+  })
+  await expect(toggle).toHaveAttribute('aria-label', 'Play narration for ASTRO')
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await expect(progress).toBeVisible()
+  await expect(progress).toHaveValue('0')
+  await expect(live).toContainText('Narration for ASTRO finished')
+})
+
+test('narration touch controls can start playback and seek', async ({ page }, testInfo) => {
+  test.skip(!isMobileChromium(testInfo), 'Touch contract runs on the mobile Chromium project')
+  await installNarrationHarness(page)
+  await boot(page)
+  const toggle = await injectNarration(page)
+
+  await toggle.tap()
+  await expect(toggle).toHaveAttribute('aria-label', 'Pause narration for ASTRO')
+  expect(await page.evaluate(() => window.__narrationTestAudio.length)).toBe(1)
+
+  const progress = page.locator('.document-narration-progress')
+  await expect(progress).toBeVisible()
+  await expect(progress).toBeEnabled()
+  const box = await progress.boundingBox()
+  expect(box).not.toBeNull()
+  await page.touchscreen.tap(box.x + box.width * 0.6, box.y + box.height * 0.5)
+  await expect.poll(() => page.evaluate(() => window.__narrationTestAudio[0]?.currentTime || 0)).toBeGreaterThan(0)
 })
 
 test('narration failure exposes a local retry action', async ({ page }, testInfo) => {
