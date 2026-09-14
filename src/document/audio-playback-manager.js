@@ -400,13 +400,14 @@ export class AudioPlaybackManager {
     const requested = finiteNonNegative(seconds)
     const target = duration > 0 ? clamp(requested, 0, duration) : requested
     track.currentTime = target
-    track.restorePending = false
+    track.restorePending = track.policy === 'narration' && !track.audio && target > 0
 
     if (track.audio) {
       try {
         track.audio.currentTime = target
+        track.restorePending = false
       } catch {
-        track.restorePending = track.policy === 'narration'
+        track.restorePending = track.policy === 'narration' && target > 0
       }
     }
 
