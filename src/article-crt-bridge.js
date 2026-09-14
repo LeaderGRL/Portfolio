@@ -192,6 +192,7 @@ class ArticleCRTRuntime {
 
     this.audioPlayback.setPowered(!this.tube.classList.contains('is-powered-off'))
     this.narrationPlayer.sync()
+    this.inlineIntegrations.setTopInset(this.narrationPlayer.overlayTopInset)
     if (!this.isDocument()) return
 
     if (this.mediaViewer.isOpen) {
