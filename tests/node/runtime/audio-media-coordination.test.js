@@ -32,6 +32,10 @@ class FakeDocument {
   removeEventListener(type, listener) {
     this.listeners.get(type)?.delete(listener)
   }
+
+  dispatch(type) {
+    for (const listener of this.listeners.get(type) || []) listener()
+  }
 }
 
 class FakeAudio {
@@ -139,7 +143,7 @@ function createHarness(t) {
     for (const listener of windowListeners.get(type) || []) listener()
   }
 
-  return { manager, beforePlay, audios, dispatchWindow }
+  return { manager, document, beforePlay, audios, dispatchWindow }
 }
 
 test('managed narration and document audio both cross the runtime before-play seam', async t => {
@@ -175,5 +179,31 @@ test('pagehide pauses active narration and does not auto-resume it', async t => 
   dispatchWindow('pagehide')
   assert.equal(audios[0].paused, true)
   assert.equal(manager.snapshotNarration().currentTime, 29)
+  assert.equal(manager.snapshotNarration().playing, false)
+})
+
+test('visibility hide pauses narration and visibility restore stays paused', async t => {
+  const { manager, document, audios } = createHarness(t)
+  manager.setDocument({
+    id: 'astro',
+    label: 'ASTRO',
+    narration: '/media/narration/astro.mp3',
+  })
+
+  await manager.toggleNarration()
+  audios[0].currentTime = 41
+  audios[0].emit('timeupdate')
+  assert.equal(audios[0].paused, false)
+
+  document.hidden = true
+  document.dispatch('visibilitychange')
+  assert.equal(audios[0].paused, true)
+  assert.equal(manager.snapshotNarration().currentTime, 41)
+  assert.equal(manager.snapshotNarration().playing, false)
+
+  document.hidden = false
+  document.dispatch('visibilitychange')
+  assert.equal(audios[0].paused, true)
+  assert.equal(manager.snapshotNarration().currentTime, 41)
   assert.equal(manager.snapshotNarration().playing, false)
 })
