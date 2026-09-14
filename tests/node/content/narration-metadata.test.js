@@ -3,7 +3,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { parseFrontMatter, validateNarrationSource } from '../../../tools/narration-validator.mjs'
+import {
+  collectionDocumentPaths,
+  parseFrontMatter,
+  validateNarrationSource,
+} from '../../../tools/narration-validator.mjs'
 import { toContentEntry } from '../../../src/content-entry.js'
 
 test('front matter preserves narration metadata into runtime content entries', () => {
@@ -31,6 +35,18 @@ test('local narration validation accepts an existing supported asset', () => {
   )
 })
 
+test('local narration validation accepts URL-encoded filenames', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jg1500-narration-'))
+  const narrationDir = path.join(root, 'media', 'narration')
+  fs.mkdirSync(narrationDir, { recursive: true })
+  fs.writeFileSync(path.join(narrationDir, 'Démo Voice.mp3'), 'fixture')
+
+  assert.equal(
+    validateNarrationSource('/media/narration/D%C3%A9mo%20Voice.mp3', 'content/projects/demo/index.md', root),
+    '/media/narration/D%C3%A9mo%20Voice.mp3',
+  )
+})
+
 test('local narration validation rejects missing assets', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jg1500-narration-'))
 
@@ -55,4 +71,47 @@ test('local narration validation rejects unsupported formats and paths', () => {
     () => validateNarrationSource('https://example.com/astro.mp3', 'content/projects/astro/index.md', root),
     /must be a local portfolio asset/i,
   )
+})
+
+test('local narration validation requires a string source', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jg1500-narration-'))
+
+  assert.throws(
+    () => validateNarrationSource(['/media/narration/voice.mp3'], 'content/projects/astro/index.md', root),
+    /narration must be a string url path/i,
+  )
+})
+
+test('local narration validation rejects files resolving outside the narration directory', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jg1500-narration-'))
+  const narrationDir = path.join(root, 'media', 'narration')
+  fs.mkdirSync(narrationDir, { recursive: true })
+  const outside = path.join(root, 'outside.mp3')
+  fs.writeFileSync(outside, 'fixture')
+
+  const link = path.join(narrationDir, 'linked.mp3')
+  try {
+    fs.symlinkSync(outside, link)
+  } catch (error) {
+    if (process.platform === 'win32' && (error?.code === 'EPERM' || error?.code === 'EACCES')) return
+    throw error
+  }
+
+  assert.throws(
+    () => validateNarrationSource('/media/narration/linked.mp3', 'content/projects/astro/index.md', root),
+    /resolves outside \/media\/narration\//i,
+  )
+})
+
+test('narration content traversal mirrors loaded collection documents', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jg1500-content-'))
+  fs.writeFileSync(path.join(root, 'single.md'), '# Single')
+  fs.mkdirSync(path.join(root, 'project', 'assets'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'project', 'index.md'), '# Project')
+  fs.writeFileSync(path.join(root, 'project', 'assets', 'README.md'), '# Auxiliary')
+  fs.mkdirSync(path.join(root, 'without-index'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'without-index', 'notes.md'), '# Auxiliary')
+
+  const result = collectionDocumentPaths(root).map(file => path.relative(root, file).replaceAll('\\', '/'))
+  assert.deepEqual(result, ['project/index.md', 'single.md'])
 })
