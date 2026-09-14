@@ -29,6 +29,7 @@ export class AudioPlaybackManager {
   constructor({ onChange = () => {}, narrationSession = new NarrationSession() } = {}) {
     this.onChange = onChange
     this.narrationSession = narrationSession
+    this.route = ''
     this.documentKey = null
     this.narrationBlock = null
     this.tracks = new Map()
@@ -152,8 +153,12 @@ export class AudioPlaybackManager {
     })
   }
 
-  setDocument(item, route = '') {
-    const nextKey = narrationDocumentKey(route, item)
+  setRoute(route) {
+    this.route = String(route || '')
+  }
+
+  setDocument(item) {
+    const nextKey = narrationDocumentKey(this.route, item)
     const nextNarration = item?.narration && nextKey
       ? {
           src: String(item.narration),
