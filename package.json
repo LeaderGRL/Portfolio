@@ -11,6 +11,7 @@
     "assets": "node tools/assets.mjs",
     "ensure:assets": "node tools/ensure-assets.mjs",
     "audit:assets": "node tools/asset-audit.mjs",
+    "audit:media": "node tools/media-audit.mjs --check",
     "lint": "eslint src tools plugins tests playwright.config.js vite.config.js",
     "check:js": "tsc -p jsconfig.json --noEmit",
     "quality": "npm run lint && npm run check:js",

@@ -38,6 +38,7 @@ npm run test:e2e       # Playwright: Chromium, Firefox, WebKit and mobile
 npm run test:visual    # deterministic Chromium snapshots for critical viewports
 npm run test:all       # npm test + browser E2E + visual regression
 npm run audit:assets   # writes tmp/asset-audit.json
+npm run audit:media    # writes tmp/media-audit.json and validates referenced media metadata
 npm test               # quality + assets + production build + runtime + content suites
 ```
 
@@ -256,6 +257,15 @@ document.
 unreferenced candidates, exact duplicates and the largest files to
 `tmp/asset-audit.json`; a candidate should be verified before deletion because
 some source renders are consumed indirectly by the asset builders.
+
+`npm run audit:media` inventories resolution, duration, codec, bitrate,
+references and SHA-256 hashes for shipped media, then writes the full report to
+`tmp/media-audit.json`. The first measured pass found 89 files using 86.36 MiB.
+Only `public/media/Astro/volcano.mp3` was an obvious bitrate outlier, so it was
+re-encoded from 320 to 192 kbps, reducing it by about 40% while keeping the same
+44.1 kHz stereo format. The measured video bitrates were already reasonable and
+were left untouched to preserve their visual quality; the resulting media total
+is 85.65 MiB.
 
 ## Responsive chassis
 

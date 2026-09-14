@@ -51,11 +51,16 @@ jobs:
       - name: Audit repository assets
         run: npm run audit:assets
 
+      - name: Audit delivered media
+        run: npm run audit:media
+
       - name: Upload asset audit
         uses: actions/upload-artifact@v7
         with:
           name: asset-audit
-          path: tmp/asset-audit.json
+          path: |
+            tmp/asset-audit.json
+            tmp/media-audit.json
           retention-days: 14
 
       - name: Restore generated asset cache
