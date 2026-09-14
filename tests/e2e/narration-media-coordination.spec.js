@@ -102,30 +102,47 @@ test('narration, normal audio and audible local video arbitrate through one docu
   await page.keyboard.press('n')
   await expect.poll(() => narrationAudioState(page)).toMatchObject({ paused: false, state: 'playing' })
 
-  const { video, hotspot } = await scrollToGameplayVideo(page)
-  await hotspot.click({ force: true })
-  await expect.poll(() => video.evaluate(node => node.paused)).toBe(false)
+  // Audible local video starts while narration is active -> narration pauses.
+  const firstVideo = await scrollToGameplayVideo(page)
+  await firstVideo.hotspot.click({ force: true })
+  await expect.poll(() => firstVideo.video.evaluate(node => node.paused)).toBe(false)
   await expect.poll(() => narrationAudioState(page)).toMatchObject({ paused: true, state: 'paused' })
 
+  // Narration starts while local video is active -> video pauses.
   await blurInteractiveFocus(page)
   await page.keyboard.press('n')
   await expect.poll(() => narrationAudioState(page)).toMatchObject({ paused: false, state: 'playing' })
-  await expect.poll(() => video.evaluate(node => node.paused)).toBe(true)
+  await expect.poll(() => firstVideo.video.evaluate(node => node.paused)).toBe(true)
 
-  const menu = await scrollToSoundtrack(page)
+  // Normal document audio starts while narration is active -> narration pauses.
+  let menu = await scrollToSoundtrack(page)
   await menu.click({ force: true })
   await expect.poll(() => documentAudioState(page, '/media/Astro/menu.mp3')).toMatchObject({ paused: false, state: 'playing' })
   await expect.poll(() => narrationAudioState(page)).toMatchObject({ paused: true, state: 'paused' })
 
-  const again = await scrollToGameplayVideo(page)
-  await again.hotspot.click({ force: true })
-  await expect.poll(() => again.video.evaluate(node => node.paused)).toBe(false)
-  await expect.poll(() => documentAudioState(page, '/media/Astro/menu.mp3')).toMatchObject({ paused: true, state: 'paused' })
-
+  // Narration starts while normal document audio is active -> normal audio pauses.
   await blurInteractiveFocus(page)
   await page.keyboard.press('n')
   await expect.poll(() => narrationAudioState(page)).toMatchObject({ paused: false, state: 'playing' })
-  await expect.poll(() => again.video.evaluate(node => node.paused)).toBe(true)
+  await expect.poll(() => documentAudioState(page, '/media/Astro/menu.mp3')).toMatchObject({ paused: true, state: 'paused' })
+
+  // Audible local video starts while narration is active -> narration pauses again.
+  let videoState = await scrollToGameplayVideo(page)
+  await videoState.hotspot.click({ force: true })
+  await expect.poll(() => videoState.video.evaluate(node => node.paused)).toBe(false)
+  await expect.poll(() => narrationAudioState(page)).toMatchObject({ paused: true, state: 'paused' })
+
+  // Normal audio starts while the local video keeps playing offscreen -> video pauses.
+  menu = await scrollToSoundtrack(page)
+  await menu.click({ force: true })
+  await expect.poll(() => documentAudioState(page, '/media/Astro/menu.mp3')).toMatchObject({ paused: false, state: 'playing' })
+  await expect.poll(() => videoState.video.evaluate(node => node.paused)).toBe(true)
+
+  // Local video starts while normal audio is active -> normal audio pauses.
+  videoState = await scrollToGameplayVideo(page)
+  await videoState.hotspot.click({ force: true })
+  await expect.poll(() => videoState.video.evaluate(node => node.paused)).toBe(false)
+  await expect.poll(() => documentAudioState(page, '/media/Astro/menu.mp3')).toMatchObject({ paused: true, state: 'paused' })
 })
 
 test('muted local video may continue while narration plays', async ({ page }, testInfo) => {
