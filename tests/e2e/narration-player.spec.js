@@ -63,6 +63,23 @@ test('non-narratable documents expose no active narration control', async ({ pag
   expect(await page.evaluate(() => window.__narrationTestAudio.length)).toBe(0)
 })
 
+test('wheel over narration controls scrolls the document reader', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Narration wheel relay only needs one desktop browser engine')
+  await installNarrationHarness(page)
+  await boot(page)
+  const toggle = await injectNarration(page)
+  const reader = page.locator('#article-reader')
+
+  await reader.evaluate(node => { node.scrollTop = 0 })
+  await toggle.dispatchEvent('wheel', {
+    deltaY: 72,
+    deltaMode: 0,
+    bubbles: true,
+    cancelable: true,
+  })
+  await expect.poll(() => reader.evaluate(node => node.scrollTop)).toBeGreaterThan(0)
+})
+
 test('narration supports native keyboard activation, seek, end state and quiet time updates', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Narration interaction contract only needs one browser engine')
   await installNarrationHarness(page)
@@ -125,6 +142,68 @@ test('narration supports native keyboard activation, seek, end state and quiet t
   await expect(progress).toBeVisible()
   await expect(progress).toHaveValue('0')
   await expect(live).toContainText('Narration for ASTRO finished')
+
+  await page.evaluate(() => {
+    const app = window.__JG1500_APP__
+    app.state.item = {
+      ...app.state.item,
+      id: 'astro-narration-next',
+      label: 'ASTRO NEXT',
+      narration: '/media/Astro/menu.mp3',
+    }
+    app.dirty = true
+    app.__articleCRTBridge?.syncSource()
+  })
+  await expect(toggle).toHaveAttribute('aria-label', 'Play narration for ASTRO NEXT')
+  await expect(live).toHaveText('')
+})
+
+test('narration native hit targets follow raster geometry in fullscreen', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Narration geometry only needs one desktop browser engine')
+  await page.setViewportSize({ width: 960, height: 540 })
+  await page.addInitScript(() => {
+    Element.prototype.requestFullscreen = () => Promise.reject(new Error('Test: CSS fullscreen'))
+  })
+  await installNarrationHarness(page)
+  await boot(page)
+  const toggle = await injectNarration(page)
+
+  await page.locator('#fullscreen-switch').click()
+  await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
+  await expect(toggle).toBeVisible()
+
+  const idleGeometry = await page.evaluate(() => {
+    const player = window.__JG1500_APP__?.__articleCRTBridge?.narrationPlayer
+    const host = player?.host?.getBoundingClientRect()
+    const button = player?.button?.getBoundingClientRect()
+    const entry = player?.entry
+    if (!host || !button || !entry) return null
+    return {
+      actualButtonRatio: button.width / host.width,
+      expectedButtonRatio: Math.min(126, entry.width) / entry.width,
+    }
+  })
+  expect(idleGeometry).not.toBeNull()
+  expect(Math.abs(idleGeometry.actualButtonRatio - idleGeometry.expectedButtonRatio)).toBeLessThan(0.015)
+
+  await toggle.click({ force: true })
+  await expect(toggle).toHaveAttribute('aria-label', 'Pause narration for ASTRO')
+  const activeGeometry = await page.evaluate(() => {
+    const player = window.__JG1500_APP__?.__articleCRTBridge?.narrationPlayer
+    const host = player?.host?.getBoundingClientRect()
+    const progress = player?.progress?.getBoundingClientRect()
+    const entry = player?.entry
+    if (!host || !progress || !entry) return null
+    return {
+      actualProgressLeftRatio: (progress.left - host.left) / host.width,
+      expectedProgressLeftRatio: Math.min(84, entry.width) / entry.width,
+      actualProgressWidthRatio: progress.width / host.width,
+      expectedProgressWidthRatio: Math.max(0, entry.width - Math.min(84, entry.width)) / entry.width,
+    }
+  })
+  expect(activeGeometry).not.toBeNull()
+  expect(Math.abs(activeGeometry.actualProgressLeftRatio - activeGeometry.expectedProgressLeftRatio)).toBeLessThan(0.015)
+  expect(Math.abs(activeGeometry.actualProgressWidthRatio - activeGeometry.expectedProgressWidthRatio)).toBeLessThan(0.015)
 })
 
 test('narration touch controls can start playback and seek', async ({ page }, testInfo) => {
