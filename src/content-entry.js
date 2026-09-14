@@ -11,7 +11,7 @@ export function toContentEntry(document) {
     link: document.link || '',
     theme: document.theme || 'default',
     order: Number.isFinite(Number(document.order)) ? Number(document.order) : null,
-    narration: document.narration || '',
+    narration: typeof document.narration === 'string' ? document.narration : '',
     blocks: document.blocks || [],
   }
 }
