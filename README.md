@@ -260,12 +260,11 @@ some source renders are consumed indirectly by the asset builders.
 
 `npm run audit:media` inventories resolution, duration, codec, bitrate,
 references and SHA-256 hashes for shipped media, then writes the full report to
-`tmp/media-audit.json`. The first measured pass found 89 files using 86.36 MiB.
-Only `public/media/Astro/volcano.mp3` was an obvious bitrate outlier, so it was
-re-encoded from 320 to 192 kbps, reducing it by about 40% while keeping the same
-44.1 kHz stereo format. The measured video bitrates were already reasonable and
-were left untouched to preserve their visual quality; the resulting media total
-is 85.65 MiB.
+`tmp/media-audit.json`. The current audit reports 128 shipped media files using
+88.31 MiB. `public/media/Astro/volcano.mp3` was re-encoded from 320 to 192 kbps,
+reducing that file by about 40% while keeping the same 44.1 kHz stereo format.
+The measured video bitrates were already reasonable and were left untouched to
+preserve their visual quality.
 
 ## Responsive chassis
 

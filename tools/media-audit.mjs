@@ -3,6 +3,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { JSDOM } from 'jsdom'
+import ffmpegPath from 'ffmpeg-static'
 
 const ROOT = process.cwd()
 const REPORT_PATH = path.join(ROOT, 'tmp', 'media-audit.json')
@@ -926,6 +927,43 @@ function verifyMp3Payloads(items) {
   return new Set(targets.filter(item => decoded[item.path] !== true).map(item => item.path))
 }
 
+function verifyVideoPayloads(items) {
+  const targets = items.filter(item => (
+    item.referenced
+    && PARSED_VIDEO_EXTENSIONS.has(path.extname(item.path).toLowerCase())
+    && item.codec
+    && item.codec !== 'mp4'
+    && item.durationSeconds
+    && item.width
+    && item.height
+  ))
+  if (!targets.length) return new Set()
+  if (!ffmpegPath) throw new Error('Unable to validate video payloads: ffmpeg-static has no binary for this platform')
+
+  const failures = new Set()
+  for (const item of targets) {
+    const run = spawnSync(ffmpegPath, [
+      '-nostdin',
+      '-hide_banner',
+      '-loglevel', 'error',
+      '-xerror',
+      '-err_detect', 'explode',
+      '-i', item.path,
+      '-map', '0:v?',
+      '-map', '0:a?',
+      '-f', 'null',
+      '-',
+    ], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 180_000,
+    })
+    if (run.status !== 0) failures.add(item.path)
+  }
+  return failures
+}
+
 function metadata(buffer, ext) {
   if (ext === '.png') return parsePng(buffer)
   if (ext === '.gif') return parseGif(buffer)
@@ -1005,7 +1043,12 @@ function auditFile(file, texts) {
   }
 }
 
-function validate(items, rasterDecodeFailures = new Set(), mp3DecodeFailures = new Set()) {
+function validate(
+  items,
+  rasterDecodeFailures = new Set(),
+  mp3DecodeFailures = new Set(),
+  videoDecodeFailures = new Set(),
+) {
   const failures = []
   for (const item of items) {
     if (!item.referenced) continue
@@ -1032,6 +1075,7 @@ function validate(items, rasterDecodeFailures = new Set(), mp3DecodeFailures = n
       if (!item.codec || item.codec === 'mp4') failures.push(`${item.path}: missing video codec`)
       if (!item.width || !item.height) failures.push(`${item.path}: missing video dimensions`)
       if (!item.bitrateKbps) failures.push(`${item.path}: missing video bitrate`)
+      if (videoDecodeFailures.has(item.path)) failures.push(`${item.path}: invalid video payload`)
     }
     if (item.kind === 'audio') {
       if (!item.durationSeconds) failures.push(`${item.path}: missing audio duration`)
@@ -1050,9 +1094,14 @@ const files = [...new Set(MEDIA_ROOTS.flatMap(walk))]
   .filter(file => MEDIA_EXTENSIONS.has(path.extname(file).toLowerCase()))
   .sort((a, b) => rel(a).localeCompare(rel(b)))
 const media = files.map(file => auditFile(file, texts))
-  .filter(item => !item.path.startsWith('assets/src/') || item.referenced)
+  .filter(item => (
+    !item.path.startsWith('assets/src/')
+    && !item.path.startsWith('content/media/')
+    && !item.path.startsWith('content/projects/')
+  ) || item.referenced)
 const rasterDecodeFailures = verifyRasterPayloads(media)
 const mp3DecodeFailures = verifyMp3Payloads(media)
+const videoDecodeFailures = verifyVideoPayloads(media)
 
 const byKind = Object.fromEntries(['image', 'video', 'audio', 'model', 'other'].map(kind => {
   const items = media.filter(item => item.kind === kind)
@@ -1066,7 +1115,7 @@ for (const item of media) {
 const duplicateGroups = [...byHash.entries()]
   .filter(([, paths]) => paths.length > 1)
   .map(([hash, paths]) => ({ hash, paths }))
-const failures = validate(media, rasterDecodeFailures, mp3DecodeFailures)
+const failures = validate(media, rasterDecodeFailures, mp3DecodeFailures, videoDecodeFailures)
 const incompleteMetadata = media.filter(item => {
   const ext = path.extname(item.path).toLowerCase()
   if (item.kind === 'image' && PARSED_IMAGE_EXTENSIONS.has(ext)) {
@@ -1081,6 +1130,7 @@ const incompleteMetadata = media.filter(item => {
       || !item.width
       || !item.height
       || !item.bitrateKbps
+      || videoDecodeFailures.has(item.path)
   }
   if (item.kind === 'audio') {
     return !PARSED_AUDIO_EXTENSIONS.has(ext)
