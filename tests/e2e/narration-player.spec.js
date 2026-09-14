@@ -116,6 +116,7 @@ test('narration supports native keyboard activation, seek, end state and quiet t
   await expect(toggle).toHaveAttribute('aria-label', 'Pause narration for ASTRO')
   await page.evaluate(() => {
     const audio = window.__narrationTestAudio[0]
+    audio.pause()
     audio.currentTime = Number.isFinite(audio.duration) ? audio.duration : 180
     audio.dispatchEvent(new Event('ended'))
   })
