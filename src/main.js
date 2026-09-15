@@ -58,3 +58,6 @@ if (performanceProbeBoot) {
   )
 }
 boot.observeFonts(document.fonts)
+
+// Throwaway UI prototype. Keep it out of production even on the prototype branch.
+if (import.meta.env.DEV) void import('./crt-cursor.prototype.js')
