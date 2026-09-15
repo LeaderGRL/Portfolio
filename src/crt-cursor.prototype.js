@@ -1,27 +1,27 @@
 /*
  * PROTOTYPE ONLY — throwaway UI exploration.
  *
- * Question: which desktop cursor language and CRT capture transition should
- * become the production shader-backed cursor?
+ * Question: which CRT-only capture transition best preserves a normal desktop
+ * pointer on the physical chassis while making the pointer feel converted into
+ * an electronic signal once it is fully inside the tube?
  *
- * Three variants live on the real portfolio route and are switchable through
- * ?variant=A, ?variant=B or ?variant=C plus the floating prototype switcher.
- * This prototype deliberately simulates the in-tube cursor with DOM placed
- * below the real glass maps. Production code must render the captured cursor
- * through the CRT persistence/composite pipeline instead.
+ * The operating-system cursor remains untouched outside the CRT. Once the
+ * pointer is fully inside the safe aperture, this prototype hides the native
+ * cursor and substitutes a classic arrow below the real glass layers. The
+ * production implementation should render that arrow through the CRT shader.
  */
 
 import './crt-cursor.prototype.css'
 
 const VARIANTS = ['A', 'B', 'C']
 const NAMES = {
-  A: 'Electron Probe',
-  B: 'Beam Needle',
-  C: 'Phosphor Reticle',
+  A: 'Phosphor Lock',
+  B: 'Signal Split',
+  C: 'Beam Imprint',
 }
-const SAFE_RADIUS = { A: 18, B: 22, C: 28 }
-const TRANSITION_MS = { A: 150, B: 155, C: 175 }
-const TRAIL_COUNT = 5
+const SAFE_MARGIN = 20
+const TRANSITION_MS = { A: 145, B: 170, C: 155 }
+const TRAIL_COUNT = 4
 
 const finePointer = matchMedia('(hover: hover) and (pointer: fine)')
 
@@ -40,23 +40,17 @@ function writeVariant(variant) {
   history.replaceState(null, '', url)
 }
 
-function createCursorElement(className) {
+function createArrow(className) {
   const element = document.createElement('div')
   element.className = className
-  const glyph = document.createElement('span')
-  glyph.className = 'crt-cursor-prototype__glyph'
-  element.append(glyph)
+  element.innerHTML = '<span class="crt-cursor-prototype__arrow" aria-hidden="true"></span>'
   return element
 }
 
-function createTrailNode(parent, index, inside = false) {
+function createTrailNode(parent, index) {
   const node = document.createElement('i')
   node.className = 'crt-cursor-prototype__trail-node'
   node.dataset.trailIndex = String(index)
-  node.style.setProperty('--trail-size', `${Math.max(2, 5 - index * .55)}px`)
-  node.style.setProperty('--trail-opacity', String(Math.max(.04, .30 - index * .045)))
-  node.style.setProperty('--trail-scale', String(Math.max(.42, 1 - index * .1)))
-  if (inside) node.dataset.inside = 'true'
   parent.append(node)
   return node
 }
@@ -74,47 +68,41 @@ function installPrototype() {
   let variant = readVariant()
   root.dataset.cursorVariant = variant
 
-  const outside = createCursorElement('crt-cursor-prototype__outside')
-  const inside = createCursorElement('crt-cursor-prototype__inside')
-  const captureRing = document.createElement('div')
-  captureRing.className = 'crt-cursor-prototype__capture-ring'
-
-  document.body.append(outside, captureRing)
+  const inside = createArrow('crt-cursor-prototype__inside')
+  const capture = document.createElement('div')
+  capture.className = 'crt-cursor-prototype__capture'
+  capture.innerHTML = '<i></i><i></i><i></i>'
   tube.insertBefore(inside, glass)
+  tube.insertBefore(capture, glass)
 
-  const outsideTrail = Array.from({ length: TRAIL_COUNT }, (_, index) =>
-    createTrailNode(document.body, index, false),
-  )
   const insideTrail = Array.from({ length: TRAIL_COUNT }, (_, index) =>
-    createTrailNode(tube, index, true),
+    createTrailNode(tube, index),
   )
 
   const hud = document.createElement('aside')
   hud.className = 'crt-cursor-prototype__hud'
   hud.innerHTML = `
     <strong>CRT CURSOR — THROWAWAY PROTOTYPE</strong><br>
-    Visual simulation only. The production cursor will be shader-backed.
+    Native cursor on chassis · CRT cursor only after full aperture entry.
     <div class="crt-cursor-prototype__hud-status">
       <span>VARIANT</span><b data-proto-variant></b>
       <span>STATE</span><b data-proto-state>OUTSIDE</b>
       <span>SPEED</span><b data-proto-speed>0.00</b>
-      <span>TARGET</span><b data-proto-target>CHASSIS</b>
     </div>`
   document.body.append(hud)
 
   const switcher = document.createElement('nav')
   switcher.className = 'crt-cursor-prototype__switcher'
-  switcher.setAttribute('aria-label', 'Cursor prototype variants')
+  switcher.setAttribute('aria-label', 'CRT cursor prototype variants')
   switcher.innerHTML = `
-    <button type="button" data-proto-prev aria-label="Previous cursor variant">←</button>
+    <button type="button" data-proto-prev aria-label="Previous CRT transition">←</button>
     <span data-proto-label></span>
-    <button type="button" data-proto-next aria-label="Next cursor variant">→</button>`
+    <button type="button" data-proto-next aria-label="Next CRT transition">→</button>`
   document.body.append(switcher)
 
   const hudVariant = hud.querySelector('[data-proto-variant]')
   const hudState = hud.querySelector('[data-proto-state]')
   const hudSpeed = hud.querySelector('[data-proto-speed]')
-  const hudTarget = hud.querySelector('[data-proto-target]')
   const switcherLabel = switcher.querySelector('[data-proto-label]')
 
   const pointer = {
@@ -122,20 +110,18 @@ function installPrototype() {
     y: innerHeight * .5,
     previousX: innerWidth * .5,
     previousY: innerHeight * .5,
-    angle: 0,
     speed: 0,
     active: false,
   }
 
-  const history = Array.from({ length: TRAIL_COUNT + 1 }, () => ({
+  const samples = Array.from({ length: TRAIL_COUNT + 1 }, () => ({
     x: pointer.x,
     y: pointer.y,
   }))
 
   let state = 'OUTSIDE'
   let transitionToken = 0
-  let captureClassTimer = 0
-  let pressed = false
+  let captureTimer = 0
   let lastFrame = performance.now()
 
   function updatePrototypeLabels() {
@@ -153,7 +139,7 @@ function installPrototype() {
     variant = normalizeVariant(next)
     writeVariant(variant)
     updatePrototypeLabels()
-    history.forEach(sample => {
+    samples.forEach(sample => {
       sample.x = pointer.x
       sample.y = pointer.y
     })
@@ -173,11 +159,10 @@ function installPrototype() {
   }
 
   function isFullyInside(rect) {
-    const radius = SAFE_RADIUS[variant]
-    return pointer.x >= rect.left + radius
-      && pointer.x <= rect.right - radius
-      && pointer.y >= rect.top + radius
-      && pointer.y <= rect.bottom - radius
+    return pointer.x >= rect.left + SAFE_MARGIN
+      && pointer.x <= rect.right - SAFE_MARGIN
+      && pointer.y >= rect.top + SAFE_MARGIN
+      && pointer.y <= rect.bottom - SAFE_MARGIN
   }
 
   function toTubeSpace(metrics, x, y) {
@@ -187,56 +172,51 @@ function installPrototype() {
     }
   }
 
-  function triggerTubeFlash(metrics) {
-    const local = toTubeSpace(metrics, pointer.x, pointer.y)
-    const px = tube.clientWidth > 0 ? (local.x / tube.clientWidth) * 100 : 50
-    const py = tube.clientHeight > 0 ? (local.y / tube.clientHeight) * 100 : 50
-    tube.style.setProperty('--capture-x', `${px}%`)
-    tube.style.setProperty('--capture-y', `${py}%`)
-    tube.classList.remove('crt-cursor-prototype--capture')
-    void tube.offsetWidth
-    tube.classList.add('crt-cursor-prototype--capture')
-    clearTimeout(captureClassTimer)
-    captureClassTimer = window.setTimeout(() => {
-      tube.classList.remove('crt-cursor-prototype--capture')
-    }, 230)
+  function setNativeCursorHidden(hidden) {
+    root.classList.toggle('crt-cursor-native-hidden', hidden)
   }
 
-  function triggerCaptureRing() {
-    captureRing.style.setProperty('--ring-x', `${pointer.x}px`)
-    captureRing.style.setProperty('--ring-y', `${pointer.y}px`)
-    captureRing.classList.remove('is-active')
-    void captureRing.offsetWidth
-    captureRing.classList.add('is-active')
+  function triggerCapture(metrics, mode) {
+    const local = toTubeSpace(metrics, pointer.x, pointer.y)
+    capture.style.setProperty('--capture-x', `${local.x}px`)
+    capture.style.setProperty('--capture-y', `${local.y}px`)
+    capture.dataset.mode = mode
+    capture.classList.remove('is-active')
+    void capture.offsetWidth
+    capture.classList.add('is-active')
+    clearTimeout(captureTimer)
+    captureTimer = window.setTimeout(() => capture.classList.remove('is-active'), 260)
   }
 
   function enterTube(metrics) {
     if (state === 'INSIDE' || state === 'CAPTURING') return
+
     const token = ++transitionToken
     setState('CAPTURING')
-    outside.classList.add('is-capturing')
-    inside.classList.add('is-visible', 'is-capturing')
+    setNativeCursorHidden(true)
     inside.classList.remove('is-releasing')
-    triggerTubeFlash(metrics)
-    triggerCaptureRing()
+    inside.classList.add('is-visible', 'is-capturing')
+    triggerCapture(metrics, 'enter')
 
     window.setTimeout(() => {
       if (token !== transitionToken || !isFullyInside(getTubeMetrics().rect)) return
-      outside.classList.add('is-hidden')
-      outside.classList.remove('is-capturing')
       inside.classList.remove('is-capturing')
       setState('INSIDE')
     }, TRANSITION_MS[variant])
   }
 
-  function leaveTube() {
+  function leaveTube(metrics) {
     if (state === 'OUTSIDE' || state === 'RELEASING') return
+
     const token = ++transitionToken
     setState('RELEASING')
-    outside.classList.remove('is-hidden', 'is-capturing')
     inside.classList.remove('is-capturing')
-    inside.classList.add('is-releasing', 'is-visible')
-    triggerCaptureRing()
+    inside.classList.add('is-visible', 'is-releasing')
+    triggerCapture(metrics, 'leave')
+
+    // Restore the native cursor immediately at the threshold so the chassis
+    // always feels like a normal desktop surface.
+    setNativeCursorHidden(false)
 
     window.setTimeout(() => {
       if (token !== transitionToken) return
@@ -246,43 +226,30 @@ function installPrototype() {
     }, TRANSITION_MS[variant])
   }
 
-  function updateInteractionTarget() {
-    const target = document.elementFromPoint(pointer.x, pointer.y)
-    const interactive = target?.closest?.('button, a, [role="button"], [role="switch"], [role="slider"], [data-action]')
-    outside.classList.toggle('is-interactive', Boolean(interactive))
-    hudTarget.textContent = interactive
-      ? (interactive.getAttribute('aria-label') || interactive.textContent || interactive.tagName).trim().slice(0, 28)
-      : (state === 'INSIDE' || state === 'CAPTURING' ? 'CRT SIGNAL' : 'CHASSIS')
-  }
-
   function updateTrail(metrics, dt) {
-    const head = history[0]
-    const follow = 1 - Math.exp(-dt * (variant === 'B' ? 20 : variant === 'C' ? 13 : 17))
-    head.x += (pointer.x - head.x) * follow
-    head.y += (pointer.y - head.y) * follow
+    const head = samples[0]
+    const headFollow = 1 - Math.exp(-dt * 34)
+    head.x += (pointer.x - head.x) * headFollow
+    head.y += (pointer.y - head.y) * headFollow
 
-    for (let index = 1; index < history.length; index += 1) {
-      const previous = history[index - 1]
-      const sample = history[index]
-      const lag = 1 - Math.exp(-dt * (12 - index * .85))
+    for (let index = 1; index < samples.length; index += 1) {
+      const previous = samples[index - 1]
+      const sample = samples[index]
+      const lag = 1 - Math.exp(-dt * (18 - index * 2.2))
       sample.x += (previous.x - sample.x) * lag
       sample.y += (previous.y - sample.y) * lag
     }
 
-    const insideActive = state !== 'OUTSIDE'
-    outsideTrail.forEach((node, index) => {
-      const sample = history[index + 1]
-      node.style.setProperty('--trail-x', `${sample.x}px`)
-      node.style.setProperty('--trail-y', `${sample.y}px`)
-      node.style.opacity = insideActive ? '0' : String(Math.max(.04, .28 - index * .045) * pointer.speed)
-    })
+    const trailStrength = state === 'INSIDE' && variant === 'C'
+      ? Math.min(.34, pointer.speed * .34)
+      : 0
 
     insideTrail.forEach((node, index) => {
-      const sample = history[index + 1]
+      const sample = samples[index + 1]
       const local = toTubeSpace(metrics, sample.x, sample.y)
       node.style.setProperty('--trail-x', `${local.x}px`)
       node.style.setProperty('--trail-y', `${local.y}px`)
-      node.style.opacity = insideActive ? String(Math.max(.06, .38 - index * .055) * Math.max(.3, pointer.speed)) : '0'
+      node.style.opacity = String(trailStrength * (1 - index / (TRAIL_COUNT + 1)))
     })
   }
 
@@ -293,9 +260,8 @@ function installPrototype() {
     const dx = pointer.x - pointer.previousX
     const dy = pointer.y - pointer.previousY
     const distance = Math.hypot(dx, dy)
-    if (distance > .01) pointer.angle = Math.atan2(dy, dx) * 180 / Math.PI
-    const instantSpeed = Math.min(1, distance / 28)
-    pointer.speed += (instantSpeed - pointer.speed) * (1 - Math.exp(-dt * 16))
+    const instantSpeed = Math.min(1, distance / 24)
+    pointer.speed += (instantSpeed - pointer.speed) * (1 - Math.exp(-dt * 18))
     pointer.previousX = pointer.x
     pointer.previousY = pointer.y
 
@@ -303,23 +269,16 @@ function installPrototype() {
     const fullyInside = pointer.active && isFullyInside(metrics.rect)
 
     if (fullyInside) enterTube(metrics)
-    else leaveTube()
-
-    outside.style.setProperty('--cursor-x', `${pointer.x}px`)
-    outside.style.setProperty('--cursor-y', `${pointer.y}px`)
-    outside.style.setProperty('--cursor-angle', `${pointer.angle}deg`)
-    outside.style.setProperty('--cursor-speed', pointer.speed.toFixed(3))
+    else leaveTube(metrics)
 
     const local = toTubeSpace(metrics, pointer.x, pointer.y)
     inside.style.setProperty('--cursor-x', `${local.x}px`)
     inside.style.setProperty('--cursor-y', `${local.y}px`)
-    inside.style.setProperty('--cursor-angle', `${pointer.angle}deg`)
     inside.style.setProperty('--cursor-speed', pointer.speed.toFixed(3))
+    capture.style.setProperty('--cursor-speed', pointer.speed.toFixed(3))
 
     updateTrail(metrics, dt)
-    updateInteractionTarget()
     hudSpeed.textContent = pointer.speed.toFixed(2)
-
     requestAnimationFrame(render)
   }
 
@@ -328,25 +287,17 @@ function installPrototype() {
     pointer.x = event.clientX
     pointer.y = event.clientY
     pointer.active = true
-    outside.style.opacity = ''
   }
 
   function onPointerLeave() {
     pointer.active = false
-    outside.style.opacity = '0'
+    setNativeCursorHidden(false)
   }
 
   function onPointerEnter(event) {
     pointer.active = true
     pointer.x = event.clientX
     pointer.y = event.clientY
-    outside.style.opacity = ''
-  }
-
-  function setPressed(value) {
-    pressed = value
-    outside.classList.toggle('is-pressed', pressed)
-    inside.classList.toggle('is-pressed', pressed)
   }
 
   switcher.querySelector('[data-proto-prev]').addEventListener('click', () => cycleVariant(-1))
@@ -366,9 +317,6 @@ function installPrototype() {
   })
 
   addEventListener('pointermove', onPointerMove, { passive: true })
-  addEventListener('pointerdown', () => setPressed(true), { passive: true })
-  addEventListener('pointerup', () => setPressed(false), { passive: true })
-  addEventListener('pointercancel', () => setPressed(false), { passive: true })
   document.documentElement.addEventListener('mouseleave', onPointerLeave)
   document.documentElement.addEventListener('mouseenter', onPointerEnter)
 
