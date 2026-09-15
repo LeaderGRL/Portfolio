@@ -86,7 +86,7 @@ async function captureNarrationPlayer(page) {
 
   return page.screenshot({
     type: 'jpeg',
-    quality: 90,
+    quality: 30,
     animations: 'disabled',
     caret: 'hide',
     clip: {
