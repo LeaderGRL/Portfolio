@@ -7,6 +7,7 @@ year: 2026
 order: 1
 stack: [Rust, ECS, Criterion, GitHub Actions]
 link: https://github.com/FrogbyteEngine/Frogbyte
+narration: /media/narration/frogbyte.mp3
 ---
 
 Frogbyte is the continuation of work I started in **LeadEngine**, but with a very different objective.
