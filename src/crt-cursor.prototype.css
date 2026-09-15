@@ -1,0 +1,463 @@
+/* PROTOTYPE ONLY — throwaway visual exploration for the desktop CRT cursor. */
+
+html.crt-cursor-prototype,
+html.crt-cursor-prototype * {
+  cursor: none !important;
+}
+
+.crt-cursor-prototype__outside,
+.crt-cursor-prototype__inside,
+.crt-cursor-prototype__trail-node,
+.crt-cursor-prototype__capture-ring {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.crt-cursor-prototype__outside {
+  z-index: 10020;
+  width: 0;
+  height: 0;
+  transform: translate3d(var(--cursor-x, -100px), var(--cursor-y, -100px), 0);
+  will-change: transform, opacity;
+}
+
+.crt-cursor-prototype__inside {
+  position: absolute;
+  z-index: 3;
+  width: 0;
+  height: 0;
+  transform: translate3d(var(--cursor-x, -100px), var(--cursor-y, -100px), 0);
+  opacity: 0;
+  will-change: transform, opacity;
+  mix-blend-mode: screen;
+  filter: saturate(1.16) contrast(1.08);
+}
+
+.crt-cursor-prototype__outside.is-hidden {
+  opacity: 0;
+}
+
+.crt-cursor-prototype__inside.is-visible {
+  opacity: 1;
+}
+
+.crt-cursor-prototype__glyph,
+.crt-cursor-prototype__glyph::before,
+.crt-cursor-prototype__glyph::after {
+  position: absolute;
+  content: "";
+  display: block;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.crt-cursor-prototype__trail-node {
+  z-index: 10019;
+  width: var(--trail-size, 4px);
+  height: var(--trail-size, 4px);
+  margin: calc(var(--trail-size, 4px) * -.5);
+  border-radius: 50%;
+  opacity: var(--trail-opacity, .2);
+  transform: translate3d(var(--trail-x, -100px), var(--trail-y, -100px), 0) scale(var(--trail-scale, 1));
+  transition: opacity 90ms linear;
+  will-change: transform;
+}
+
+.tube > .crt-cursor-prototype__trail-node {
+  position: absolute;
+  z-index: 2;
+  background: rgba(108, 255, 154, .92);
+  box-shadow: 0 0 7px rgba(74, 255, 137, .82), 0 0 18px rgba(74, 255, 137, .34);
+  mix-blend-mode: screen;
+}
+
+.crt-cursor-prototype__capture-ring {
+  z-index: 10018;
+  width: 12px;
+  height: 12px;
+  margin: -6px;
+  border: 1px solid rgba(87, 255, 148, .9);
+  border-radius: 50%;
+  opacity: 0;
+  transform: translate3d(var(--ring-x, -100px), var(--ring-y, -100px), 0) scale(.2);
+}
+
+.crt-cursor-prototype__capture-ring.is-active {
+  animation: crt-cursor-ring 220ms cubic-bezier(.12, .78, .2, 1) both;
+}
+
+@keyframes crt-cursor-ring {
+  0% { opacity: .95; transform: translate3d(var(--ring-x), var(--ring-y), 0) scale(.25); }
+  55% { opacity: .72; }
+  100% { opacity: 0; transform: translate3d(var(--ring-x), var(--ring-y), 0) scale(5.8); }
+}
+
+/* --------------------------------------------------------------------------
+   Variant A — Electron Probe
+   Precise mechanical pointer outside, phosphor orbital probe inside.
+   -------------------------------------------------------------------------- */
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__outside .crt-cursor-prototype__glyph,
+html[data-cursor-variant="A"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph {
+  width: 24px;
+  height: 24px;
+  margin: -12px;
+  border: 1px solid rgba(59, 49, 37, .72);
+  border-radius: 50%;
+  box-shadow: 0 1px 1px rgba(255, 248, 226, .62), 0 2px 7px rgba(53, 42, 26, .24);
+  transition: transform 120ms cubic-bezier(.2, .75, .25, 1), border-color 120ms ease, opacity 100ms linear;
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__outside .crt-cursor-prototype__glyph::before,
+html[data-cursor-variant="A"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::before {
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px;
+  border-radius: 50%;
+  background: #3e3427;
+  box-shadow: 0 0 0 1px rgba(248, 237, 214, .56);
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__outside .crt-cursor-prototype__glyph::after,
+html[data-cursor-variant="A"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::after {
+  left: 50%;
+  top: -4px;
+  width: 1px;
+  height: 7px;
+  background: rgba(62, 52, 39, .78);
+  transform-origin: 50% 16px;
+  transform: rotate(var(--cursor-angle, 0deg));
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph {
+  border-color: rgba(119, 255, 166, .74);
+  box-shadow: 0 0 5px rgba(70, 255, 135, .58), 0 0 16px rgba(70, 255, 135, .24);
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::before {
+  background: #b9ffd0;
+  box-shadow: 0 0 4px #8dffb4, 0 0 11px rgba(87, 255, 145, .95), 0 0 22px rgba(87, 255, 145, .48);
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::after {
+  background: rgba(135, 255, 174, .85);
+  box-shadow: 0 0 4px rgba(87, 255, 145, .76);
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__outside.is-interactive .crt-cursor-prototype__glyph {
+  transform: scale(1.32);
+  border-color: rgba(40, 34, 27, .92);
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__outside.is-pressed .crt-cursor-prototype__glyph,
+html[data-cursor-variant="A"] .crt-cursor-prototype__inside.is-pressed .crt-cursor-prototype__glyph {
+  transform: scale(.72);
+}
+
+html[data-cursor-variant="A"] body > .crt-cursor-prototype__trail-node {
+  background: rgba(72, 60, 43, .66);
+  box-shadow: 0 1px 1px rgba(255, 248, 226, .52);
+}
+
+/* --------------------------------------------------------------------------
+   Variant B — Beam Needle
+   Directional, velocity-led cursor with a raster-collapse capture.
+   -------------------------------------------------------------------------- */
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__glyph {
+  width: 34px;
+  height: 14px;
+  margin: -7px 0 0 -5px;
+  transform-origin: 5px 7px;
+  transform: rotate(var(--cursor-angle, 0deg));
+  transition: scale 90ms ease;
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__glyph::before {
+  left: 0;
+  top: 5px;
+  width: 28px;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #2e271e 0 26%, rgba(46, 39, 30, .38) 67%, transparent 100%);
+  box-shadow: 0 1px 1px rgba(255, 245, 218, .54);
+  transform: scaleX(calc(.68 + min(var(--cursor-speed, 0), 1) * .32));
+  transform-origin: 0 50%;
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__glyph::after {
+  left: -1px;
+  top: 2px;
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgba(47, 39, 29, .94);
+  transform: rotate(45deg);
+  background: rgba(241, 226, 201, .96);
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.7), 1px 1px 3px rgba(45,37,27,.26);
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::before {
+  height: 2px;
+  background: linear-gradient(90deg, #d0ffdc 0 8%, #68ff9c 24%, rgba(64,255,134,.20) 80%, transparent 100%);
+  box-shadow: 0 0 5px #63ff99, 0 0 18px rgba(68, 255, 139, .48);
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::after {
+  border-color: #8dffb4;
+  background: #caffd8;
+  box-shadow: 0 0 4px #79ffa7, 0 0 15px rgba(65,255,135,.86);
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__outside.is-pressed .crt-cursor-prototype__glyph,
+html[data-cursor-variant="B"] .crt-cursor-prototype__inside.is-pressed .crt-cursor-prototype__glyph {
+  scale: .72;
+}
+
+html[data-cursor-variant="B"] body > .crt-cursor-prototype__trail-node {
+  width: 12px;
+  height: 2px;
+  margin: -1px 0 0 -2px;
+  border-radius: 2px;
+  background: rgba(56, 47, 34, .48);
+}
+
+html[data-cursor-variant="B"] .tube > .crt-cursor-prototype__trail-node {
+  width: 16px;
+  height: 1px;
+  margin: -.5px 0 0 -2px;
+  border-radius: 0;
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__outside.is-capturing .crt-cursor-prototype__glyph {
+  animation: crt-cursor-beam-collapse 150ms ease-in both;
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__inside.is-releasing .crt-cursor-prototype__glyph {
+  animation: crt-cursor-beam-collapse 130ms ease-in reverse both;
+}
+
+@keyframes crt-cursor-beam-collapse {
+  0% { transform: rotate(var(--cursor-angle)) scale(1,1); filter: none; }
+  62% { transform: rotate(var(--cursor-angle)) scale(1.8,.15); filter: brightness(2.2); }
+  100% { transform: rotate(var(--cursor-angle)) scale(.08,.04); filter: brightness(4); }
+}
+
+/* --------------------------------------------------------------------------
+   Variant C — Phosphor Reticle
+   Segmented targeting brackets outside; pixel reticle with after-image inside.
+   -------------------------------------------------------------------------- */
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__glyph {
+  width: 34px;
+  height: 34px;
+  margin: -17px;
+  border: 0;
+  background:
+    linear-gradient(#3b3125,#3b3125) 0 0 / 8px 1px no-repeat,
+    linear-gradient(#3b3125,#3b3125) 0 0 / 1px 8px no-repeat,
+    linear-gradient(#3b3125,#3b3125) 100% 0 / 8px 1px no-repeat,
+    linear-gradient(#3b3125,#3b3125) 100% 0 / 1px 8px no-repeat,
+    linear-gradient(#3b3125,#3b3125) 0 100% / 8px 1px no-repeat,
+    linear-gradient(#3b3125,#3b3125) 0 100% / 1px 8px no-repeat,
+    linear-gradient(#3b3125,#3b3125) 100% 100% / 8px 1px no-repeat,
+    linear-gradient(#3b3125,#3b3125) 100% 100% / 1px 8px no-repeat;
+  transition: transform 130ms cubic-bezier(.18,.8,.2,1), opacity 100ms linear;
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__glyph::before {
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px;
+  background: #423628;
+  transform: rotate(45deg);
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__glyph::after {
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 1px;
+  margin: -.5px -23px;
+  background: linear-gradient(90deg, transparent 0 20%, rgba(65,54,40,.26) 20% 44%, transparent 44% 56%, rgba(65,54,40,.26) 56% 80%, transparent 80%);
+  transform: rotate(var(--cursor-angle, 0deg));
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph {
+  background:
+    linear-gradient(#7dffa8,#7dffa8) 0 0 / 9px 1px no-repeat,
+    linear-gradient(#7dffa8,#7dffa8) 0 0 / 1px 9px no-repeat,
+    linear-gradient(#7dffa8,#7dffa8) 100% 0 / 9px 1px no-repeat,
+    linear-gradient(#7dffa8,#7dffa8) 100% 0 / 1px 9px no-repeat,
+    linear-gradient(#7dffa8,#7dffa8) 0 100% / 9px 1px no-repeat,
+    linear-gradient(#7dffa8,#7dffa8) 0 100% / 1px 9px no-repeat,
+    linear-gradient(#7dffa8,#7dffa8) 100% 100% / 9px 1px no-repeat,
+    linear-gradient(#7dffa8,#7dffa8) 100% 100% / 1px 9px no-repeat;
+  filter: drop-shadow(0 0 3px rgba(89,255,147,.92)) drop-shadow(0 0 8px rgba(89,255,147,.42));
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::before {
+  background: #d1ffdc;
+  box-shadow: 0 0 7px #6fff9f;
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::after {
+  background: linear-gradient(90deg, transparent 0 20%, rgba(112,255,160,.27) 20% 44%, transparent 44% 56%, rgba(112,255,160,.27) 56% 80%, transparent 80%);
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__outside.is-interactive .crt-cursor-prototype__glyph {
+  transform: scale(.82) rotate(45deg);
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__outside.is-capturing .crt-cursor-prototype__glyph {
+  animation: crt-cursor-reticle-capture 170ms cubic-bezier(.12,.8,.18,1) both;
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__inside.is-releasing .crt-cursor-prototype__glyph {
+  animation: crt-cursor-reticle-capture 150ms cubic-bezier(.12,.8,.18,1) reverse both;
+}
+
+@keyframes crt-cursor-reticle-capture {
+  0% { transform: scale(1); filter: none; }
+  55% { transform: scale(1.5); filter: blur(.3px) brightness(1.6); }
+  100% { transform: scale(.18) rotate(90deg); filter: blur(1px) brightness(3); opacity: .12; }
+}
+
+html[data-cursor-variant="C"] body > .crt-cursor-prototype__trail-node {
+  width: 2px;
+  height: 2px;
+  margin: -1px;
+  background: rgba(66,54,40,.48);
+  border-radius: 0;
+}
+
+html[data-cursor-variant="C"] .tube > .crt-cursor-prototype__trail-node {
+  width: 4px;
+  height: 4px;
+  margin: -2px;
+  border-radius: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Shared capture accents and prototype controls
+   -------------------------------------------------------------------------- */
+
+.tube.crt-cursor-prototype--capture::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at var(--capture-x, 50%) var(--capture-y, 50%), rgba(157,255,188,.26) 0 1%, rgba(84,255,144,.08) 4%, transparent 11%),
+    repeating-linear-gradient(0deg, transparent 0 2px, rgba(93,255,148,.045) 2px 3px);
+  mix-blend-mode: screen;
+  animation: crt-cursor-tube-flash 190ms ease-out both;
+}
+
+@keyframes crt-cursor-tube-flash {
+  0% { opacity: 0; filter: brightness(1); }
+  28% { opacity: 1; filter: brightness(1.8); }
+  100% { opacity: 0; filter: brightness(1); }
+}
+
+.crt-cursor-prototype__hud,
+.crt-cursor-prototype__switcher {
+  position: fixed;
+  z-index: 10040;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  color: #d8ffe2;
+  background: rgba(4, 12, 8, .92);
+  border: 1px solid rgba(119, 255, 164, .36);
+  box-shadow: 0 12px 36px rgba(0,0,0,.28), inset 0 0 24px rgba(70,255,130,.025);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+  cursor: default !important;
+}
+
+.crt-cursor-prototype__hud,
+.crt-cursor-prototype__hud * {
+  cursor: default !important;
+}
+
+.crt-cursor-prototype__hud {
+  left: 16px;
+  top: 16px;
+  width: min(330px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.55;
+  letter-spacing: .04em;
+}
+
+.crt-cursor-prototype__hud strong {
+  color: #82ffab;
+  font-weight: 700;
+}
+
+.crt-cursor-prototype__hud-status {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 2px 10px;
+  margin-top: 8px;
+  color: rgba(216,255,226,.72);
+}
+
+.crt-cursor-prototype__switcher {
+  left: 50%;
+  bottom: 24px;
+  translate: -50% 0;
+  display: grid;
+  grid-template-columns: 46px minmax(220px, auto) 46px;
+  align-items: center;
+  min-height: 46px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.crt-cursor-prototype__switcher button,
+.crt-cursor-prototype__switcher span {
+  height: 46px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer !important;
+}
+
+.crt-cursor-prototype__switcher button {
+  font-size: 16px;
+  transition: background 120ms ease;
+}
+
+.crt-cursor-prototype__switcher button:hover {
+  background: rgba(116,255,161,.1);
+}
+
+.crt-cursor-prototype__switcher span {
+  display: grid;
+  place-items: center;
+  padding: 0 18px;
+  border-left: 1px solid rgba(119,255,164,.18);
+  border-right: 1px solid rgba(119,255,164,.18);
+  color: #aaffc3;
+  cursor: default !important;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crt-cursor-prototype__capture-ring,
+  .crt-cursor-prototype__glyph,
+  .tube.crt-cursor-prototype--capture::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}
