@@ -85,6 +85,8 @@ async function captureNarrationPlayer(page) {
   expect(controlsBox.y + controlsBox.height).toBeLessThanOrEqual(tubeBottom)
 
   return page.screenshot({
+    type: 'jpeg',
+    quality: 90,
     animations: 'disabled',
     caret: 'hide',
     clip: {
@@ -114,13 +116,13 @@ test.describe('desktop narration visual states', () => {
   })
 
   test('idle NARRATE matches the approved CRT composition', async ({ page }) => {
-    await expectNarrationSnapshot(page, 'narration-desktop-idle.png')
+    await expectNarrationSnapshot(page, 'narration-desktop-idle.jpg')
   })
 
   test('activated main player matches the approved CRT composition', async ({ page }) => {
     await activateAndFreeze(page)
     await expect(page.locator('.document-narration-controls')).toHaveAttribute('data-narration-presentation', 'primary')
-    await expectNarrationSnapshot(page, 'narration-desktop-active.png')
+    await expectNarrationSnapshot(page, 'narration-desktop-active.jpg')
   })
 
   test('sticky player matches the approved CRT composition', async ({ page }) => {
@@ -128,7 +130,7 @@ test.describe('desktop narration visual states', () => {
     await page.locator('#article-reader').evaluate(node => { node.scrollTop = node.scrollHeight })
     await expect(page.locator('.document-narration-controls')).toHaveAttribute('data-narration-presentation', 'sticky')
     await settle(page)
-    await expectNarrationSnapshot(page, 'narration-desktop-sticky.png')
+    await expectNarrationSnapshot(page, 'narration-desktop-sticky.jpg')
   })
 })
 
@@ -148,7 +150,7 @@ test.describe('Pixel 7 narration visual states', () => {
   test('active main player stays inside the portrait CRT', async ({ page }) => {
     await activateAndFreeze(page)
     await expect(page.locator('.document-narration-controls')).toHaveAttribute('data-narration-presentation', 'primary')
-    await expectNarrationSnapshot(page, 'narration-mobile-active.png')
+    await expectNarrationSnapshot(page, 'narration-mobile-active.jpg')
   })
 
   test('sticky player stays inside the portrait CRT', async ({ page }) => {
@@ -156,6 +158,6 @@ test.describe('Pixel 7 narration visual states', () => {
     await page.locator('#article-reader').evaluate(node => { node.scrollTop = node.scrollHeight })
     await expect(page.locator('.document-narration-controls')).toHaveAttribute('data-narration-presentation', 'sticky')
     await settle(page)
-    await expectNarrationSnapshot(page, 'narration-mobile-sticky.png')
+    await expectNarrationSnapshot(page, 'narration-mobile-sticky.jpg')
   })
 })
