@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 const isChromiumDesktop = testInfo => testInfo.project.name === 'chromium'
+const PRODUCTION_SRC = '/media/narration/astro.mp3'
 const FIXTURE_SRC = '/media/Astro/menu.mp3'
 const FIXTURE_ID = 'astro-production-regression'
 const SESSION_KEY = `projects:${FIXTURE_ID}`
@@ -28,11 +29,17 @@ async function installNarrationHarness(page) {
   })
 }
 
-async function bootNarratableAstro(page) {
+async function bootProductionAstro(page) {
   await page.goto('/projects/astro')
   await expect(page.locator('#machine')).toBeVisible()
   await expect(page.locator('#tube')).toHaveAttribute('data-display-mode', 'article')
   await expect(page.locator('#article-reader')).toBeAttached()
+  await expect(page.locator('.document-narration-layer')).toBeVisible()
+  await expect(page.locator('.document-narration-toggle')).toBeVisible()
+}
+
+async function bootNarratableAstro(page) {
+  await bootProductionAstro(page)
   await injectNarration(page)
 }
 
@@ -54,6 +61,27 @@ async function injectNarration(page) {
 
   await expect(page.locator('.document-narration-layer')).toBeVisible()
   await expect(page.locator('.document-narration-toggle')).toBeVisible()
+}
+
+async function productionNarrationState(page) {
+  return page.evaluate(() => {
+    const app = window.__JG1500_APP__
+    const playback = app?.__articleCRTBridge?.audioPlayback
+    const snapshot = playback?.snapshotNarration?.() || null
+    const audios = window.__productionNarrationAudio || []
+    return {
+      documentNarration: app?.state?.item?.narration || null,
+      state: snapshot?.state || null,
+      activated: snapshot?.activated ?? false,
+      created: audios.length,
+      sources: audios.map(audio => {
+        const value = audio.currentSrc || audio.src || ''
+        return value ? new URL(value, window.location.href).pathname : ''
+      }),
+      readyStates: audios.map(audio => audio.readyState),
+      durations: audios.map(audio => Number.isFinite(audio.duration) ? audio.duration : 0),
+    }
+  })
 }
 
 async function narrationState(page) {
@@ -88,6 +116,36 @@ async function setNarrationTime(page, currentTime) {
     audio.dispatchEvent(new Event('timeupdate'))
   }, { sessionKey: SESSION_KEY, currentTime })
 }
+
+test('production ASTRO metadata lazily loads and plays the shipped narration asset', async ({ page }, testInfo) => {
+  test.skip(!isChromiumDesktop(testInfo), 'Production narration delivery only needs one browser engine')
+
+  const narrationRequests = []
+  page.on('request', request => {
+    if (new URL(request.url()).pathname === PRODUCTION_SRC) narrationRequests.push(request.url())
+  })
+
+  await installNarrationHarness(page)
+  await bootProductionAstro(page)
+
+  const beforeActivation = await productionNarrationState(page)
+  expect(beforeActivation.documentNarration).toBe(PRODUCTION_SRC)
+  expect(beforeActivation.created).toBe(0)
+  expect(narrationRequests).toHaveLength(0)
+
+  await page.locator('.document-narration-toggle').click({ force: true })
+
+  await expect.poll(() => productionNarrationState(page)).toMatchObject({
+    documentNarration: PRODUCTION_SRC,
+    state: 'playing',
+    activated: true,
+    created: 1,
+  })
+  await expect.poll(() => productionNarrationState(page).then(state => state.sources)).toContain(PRODUCTION_SRC)
+  await expect.poll(() => productionNarrationState(page).then(state => state.readyStates[0] || 0)).toBeGreaterThan(0)
+  await expect.poll(() => productionNarrationState(page).then(state => state.durations[0] || 0)).toBeGreaterThan(0)
+  expect(narrationRequests.length).toBeGreaterThan(0)
+})
 
 test('mouse activation stays lazy and narration follows physical volume including mute', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Narration delivery contract only needs one browser engine')
