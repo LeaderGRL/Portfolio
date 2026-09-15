@@ -8,6 +8,7 @@ order: 6
 stack: [Unity, C#, Arduino, IoT, Hardware]
 theme: synthwave
 link: /media/penw/D%C3%A9monstration%20Project%20Echo%20_%20Neon%20Wave.mp4
+narration: /media/narration/penw.mp3
 ---
 
 ::facts{columns=2 label="PROJECT SNAPSHOT"}
