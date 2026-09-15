@@ -26,9 +26,14 @@ function trackPolicy(block) {
 }
 
 export class AudioPlaybackManager {
-  constructor({ onChange = () => {}, narrationSession = new NarrationSession() } = {}) {
+  constructor({
+    onChange = () => {},
+    narrationSession = new NarrationSession(),
+    beforePlay = () => {},
+  } = {}) {
     this.onChange = onChange
     this.narrationSession = narrationSession
+    this.beforePlay = typeof beforePlay === 'function' ? beforePlay : () => {}
     this.route = ''
     this.documentKey = null
     this.narrationBlock = null
@@ -46,7 +51,9 @@ export class AudioPlaybackManager {
     this.onVisibilityChange = () => {
       if (document.hidden) this.pauseAll()
     }
+    this.onPageHide = () => this.pauseAll()
     document.addEventListener('visibilitychange', this.onVisibilityChange)
+    globalThis.addEventListener?.('pagehide', this.onPageHide)
   }
 
   keyFor(block) {
@@ -428,6 +435,12 @@ export class AudioPlaybackManager {
     this.pauseOthers(track)
     this.syncVolume()
 
+    try {
+      this.beforePlay(track)
+    } catch (error) {
+      console.warn('Document media coordination failed before audio playback', error)
+    }
+
     if (track.state === 'error') this.releaseTrack(track, 'retry')
     if (track.policy === 'narration') {
       track.activated = true
@@ -448,6 +461,7 @@ export class AudioPlaybackManager {
     this.narrationBlock = null
     this.volumeObserver?.disconnect()
     document.removeEventListener('visibilitychange', this.onVisibilityChange)
+    globalThis.removeEventListener?.('pagehide', this.onPageHide)
   }
 }
 

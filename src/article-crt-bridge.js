@@ -61,6 +61,7 @@ class ArticleCRTRuntime {
         app.dirty = true
         this.documentRaster?.markDirty?.()
       },
+      beforePlay: () => this.pauseAudibleLocalVideos(),
     })
 
     this.blockRegistry = enhanceAudioBlocks(
@@ -72,6 +73,9 @@ class ArticleCRTRuntime {
     this.integrations = registerAudioIntegration(createDefaultIntegrationRegistry({
       local3d: this.local3d,
       mediaViewer: this.mediaViewer,
+      mediaCoordinator: {
+        beforeAudibleVideoPlay: video => this.beforeAudibleLocalVideoPlay(video),
+      },
     }), this.audioPlayback)
 
     this.documentRaster = new ArticleRasteriser(documentCanvas, reader, () => {
@@ -116,6 +120,18 @@ class ArticleCRTRuntime {
       if (bottom > 1 && top < contentBottom - 1) visible.push(entry.block)
     }
     return visible
+  }
+
+  pauseAudibleLocalVideos(exceptVideo = null) {
+    for (const video of this.documentRaster?.videoNodes || []) {
+      if (!video || video === exceptVideo || video.muted || video.paused || video.ended) continue
+      video.pause()
+    }
+  }
+
+  beforeAudibleLocalVideoPlay(video) {
+    if (!video || video.muted) return
+    this.audioPlayback.pauseAll()
   }
 
   syncSource() {

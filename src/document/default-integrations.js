@@ -148,7 +148,7 @@ function mediaCompareAdapter(viewer) {
   }
 }
 
-function localVideoAdapter() {
+function localVideoAdapter(mediaCoordinator) {
   return {
     mount({ host, context }) {
       const entry = context?.entry
@@ -169,6 +169,16 @@ function localVideoAdapter() {
       button.className = 'document-media-hotspot document-video-hotspot'
       button.style.inset = '0'
       button.setAttribute('aria-label', 'Play or pause local document video')
+
+      const onPlay = () => {
+        if (!video.muted) mediaCoordinator?.beforeAudibleVideoPlay?.(video)
+        rasteriser.markDirty()
+      }
+      const onPause = () => rasteriser.markDirty()
+      const onEnded = () => rasteriser.markDirty()
+      video.addEventListener('play', onPlay, { passive: true })
+      video.addEventListener('pause', onPause, { passive: true })
+      video.addEventListener('ended', onEnded, { passive: true })
 
       const toggle = async () => {
         if (video.paused || video.ended) {
@@ -193,6 +203,9 @@ function localVideoAdapter() {
       const removeTouchScroll = installTouchScroll(button, context)
       host.append(button)
       return () => {
+        video.removeEventListener('play', onPlay)
+        video.removeEventListener('pause', onPause)
+        video.removeEventListener('ended', onEnded)
         removeTouchScroll()
         button.remove()
       }
@@ -200,7 +213,7 @@ function localVideoAdapter() {
   }
 }
 
-export function createDefaultIntegrationRegistry({ local3d, mediaViewer }) {
+export function createDefaultIntegrationRegistry({ local3d, mediaViewer, mediaCoordinator }) {
   const registry = new IntegrationRegistry()
 
   registry.register('local-3d', {
@@ -209,7 +222,7 @@ export function createDefaultIntegrationRegistry({ local3d, mediaViewer }) {
     },
   })
 
-  registry.register('video', localVideoAdapter())
+  registry.register('video', localVideoAdapter(mediaCoordinator))
   registry.register('media-single', mediaSingleAdapter(mediaViewer))
   registry.register('media-gallery', mediaGalleryAdapter(mediaViewer))
   registry.register('media-compare', mediaCompareAdapter(mediaViewer))
