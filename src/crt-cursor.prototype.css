@@ -1,463 +1,399 @@
 /* PROTOTYPE ONLY — throwaway visual exploration for the desktop CRT cursor. */
 
-html.crt-cursor-prototype,
-html.crt-cursor-prototype * {
+/* Keep the real operating-system pointer everywhere except while the pointer
+   is fully captured by the CRT aperture. */
+html.crt-cursor-native-hidden,
+html.crt-cursor-native-hidden * {
   cursor: none !important;
 }
 
-.crt-cursor-prototype__outside,
 .crt-cursor-prototype__inside,
 .crt-cursor-prototype__trail-node,
-.crt-cursor-prototype__capture-ring {
-  position: fixed;
-  left: 0;
-  top: 0;
+.crt-cursor-prototype__capture {
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.crt-cursor-prototype__outside {
-  z-index: 10020;
-  width: 0;
-  height: 0;
-  transform: translate3d(var(--cursor-x, -100px), var(--cursor-y, -100px), 0);
-  will-change: transform, opacity;
-}
-
+/* The substituted pointer sits below shade/gloss (z-index 4/5/6) so it reads
+   as electronic picture rather than an overlay pasted on top of the glass. */
 .crt-cursor-prototype__inside {
   position: absolute;
+  left: 0;
+  top: 0;
   z-index: 3;
   width: 0;
   height: 0;
-  transform: translate3d(var(--cursor-x, -100px), var(--cursor-y, -100px), 0);
   opacity: 0;
+  transform: translate3d(var(--cursor-x, -100px), var(--cursor-y, -100px), 0);
   will-change: transform, opacity;
   mix-blend-mode: screen;
-  filter: saturate(1.16) contrast(1.08);
-}
-
-.crt-cursor-prototype__outside.is-hidden {
-  opacity: 0;
 }
 
 .crt-cursor-prototype__inside.is-visible {
   opacity: 1;
 }
 
-.crt-cursor-prototype__glyph,
-.crt-cursor-prototype__glyph::before,
-.crt-cursor-prototype__glyph::after {
+/* A deliberately ordinary desktop arrow. The only visual change after capture
+   is the material: pale phosphor, bloom and CRT persistence. */
+.crt-cursor-prototype__arrow,
+.crt-cursor-prototype__arrow::after {
   position: absolute;
-  content: "";
-  display: block;
-  box-sizing: border-box;
-  pointer-events: none;
-}
-
-.crt-cursor-prototype__trail-node {
-  z-index: 10019;
-  width: var(--trail-size, 4px);
-  height: var(--trail-size, 4px);
-  margin: calc(var(--trail-size, 4px) * -.5);
-  border-radius: 50%;
-  opacity: var(--trail-opacity, .2);
-  transform: translate3d(var(--trail-x, -100px), var(--trail-y, -100px), 0) scale(var(--trail-scale, 1));
-  transition: opacity 90ms linear;
-  will-change: transform;
-}
-
-.tube > .crt-cursor-prototype__trail-node {
-  position: absolute;
-  z-index: 2;
-  background: rgba(108, 255, 154, .92);
-  box-shadow: 0 0 7px rgba(74, 255, 137, .82), 0 0 18px rgba(74, 255, 137, .34);
-  mix-blend-mode: screen;
-}
-
-.crt-cursor-prototype__capture-ring {
-  z-index: 10018;
-  width: 12px;
-  height: 12px;
-  margin: -6px;
-  border: 1px solid rgba(87, 255, 148, .9);
-  border-radius: 50%;
-  opacity: 0;
-  transform: translate3d(var(--ring-x, -100px), var(--ring-y, -100px), 0) scale(.2);
-}
-
-.crt-cursor-prototype__capture-ring.is-active {
-  animation: crt-cursor-ring 220ms cubic-bezier(.12, .78, .2, 1) both;
-}
-
-@keyframes crt-cursor-ring {
-  0% { opacity: .95; transform: translate3d(var(--ring-x), var(--ring-y), 0) scale(.25); }
-  55% { opacity: .72; }
-  100% { opacity: 0; transform: translate3d(var(--ring-x), var(--ring-y), 0) scale(5.8); }
-}
-
-/* --------------------------------------------------------------------------
-   Variant A — Electron Probe
-   Precise mechanical pointer outside, phosphor orbital probe inside.
-   -------------------------------------------------------------------------- */
-
-html[data-cursor-variant="A"] .crt-cursor-prototype__outside .crt-cursor-prototype__glyph,
-html[data-cursor-variant="A"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph {
-  width: 24px;
-  height: 24px;
-  margin: -12px;
-  border: 1px solid rgba(59, 49, 37, .72);
-  border-radius: 50%;
-  box-shadow: 0 1px 1px rgba(255, 248, 226, .62), 0 2px 7px rgba(53, 42, 26, .24);
-  transition: transform 120ms cubic-bezier(.2, .75, .25, 1), border-color 120ms ease, opacity 100ms linear;
-}
-
-html[data-cursor-variant="A"] .crt-cursor-prototype__outside .crt-cursor-prototype__glyph::before,
-html[data-cursor-variant="A"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::before {
-  left: 50%;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  margin: -2.5px;
-  border-radius: 50%;
-  background: #3e3427;
-  box-shadow: 0 0 0 1px rgba(248, 237, 214, .56);
-}
-
-html[data-cursor-variant="A"] .crt-cursor-prototype__outside .crt-cursor-prototype__glyph::after,
-html[data-cursor-variant="A"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::after {
-  left: 50%;
-  top: -4px;
-  width: 1px;
-  height: 7px;
-  background: rgba(62, 52, 39, .78);
-  transform-origin: 50% 16px;
-  transform: rotate(var(--cursor-angle, 0deg));
-}
-
-html[data-cursor-variant="A"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph {
-  border-color: rgba(119, 255, 166, .74);
-  box-shadow: 0 0 5px rgba(70, 255, 135, .58), 0 0 16px rgba(70, 255, 135, .24);
-}
-
-html[data-cursor-variant="A"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::before {
-  background: #b9ffd0;
-  box-shadow: 0 0 4px #8dffb4, 0 0 11px rgba(87, 255, 145, .95), 0 0 22px rgba(87, 255, 145, .48);
-}
-
-html[data-cursor-variant="A"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::after {
-  background: rgba(135, 255, 174, .85);
-  box-shadow: 0 0 4px rgba(87, 255, 145, .76);
-}
-
-html[data-cursor-variant="A"] .crt-cursor-prototype__outside.is-interactive .crt-cursor-prototype__glyph {
-  transform: scale(1.32);
-  border-color: rgba(40, 34, 27, .92);
-}
-
-html[data-cursor-variant="A"] .crt-cursor-prototype__outside.is-pressed .crt-cursor-prototype__glyph,
-html[data-cursor-variant="A"] .crt-cursor-prototype__inside.is-pressed .crt-cursor-prototype__glyph {
-  transform: scale(.72);
-}
-
-html[data-cursor-variant="A"] body > .crt-cursor-prototype__trail-node {
-  background: rgba(72, 60, 43, .66);
-  box-shadow: 0 1px 1px rgba(255, 248, 226, .52);
-}
-
-/* --------------------------------------------------------------------------
-   Variant B — Beam Needle
-   Directional, velocity-led cursor with a raster-collapse capture.
-   -------------------------------------------------------------------------- */
-
-html[data-cursor-variant="B"] .crt-cursor-prototype__glyph {
-  width: 34px;
-  height: 14px;
-  margin: -7px 0 0 -5px;
-  transform-origin: 5px 7px;
-  transform: rotate(var(--cursor-angle, 0deg));
-  transition: scale 90ms ease;
-}
-
-html[data-cursor-variant="B"] .crt-cursor-prototype__glyph::before {
   left: 0;
-  top: 5px;
-  width: 28px;
-  height: 3px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, #2e271e 0 26%, rgba(46, 39, 30, .38) 67%, transparent 100%);
-  box-shadow: 0 1px 1px rgba(255, 245, 218, .54);
-  transform: scaleX(calc(.68 + min(var(--cursor-speed, 0), 1) * .32));
-  transform-origin: 0 50%;
-}
-
-html[data-cursor-variant="B"] .crt-cursor-prototype__glyph::after {
-  left: -1px;
-  top: 2px;
-  width: 9px;
-  height: 9px;
-  border: 1px solid rgba(47, 39, 29, .94);
-  transform: rotate(45deg);
-  background: rgba(241, 226, 201, .96);
-  box-shadow: inset 1px 1px 0 rgba(255,255,255,.7), 1px 1px 3px rgba(45,37,27,.26);
-}
-
-html[data-cursor-variant="B"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::before {
-  height: 2px;
-  background: linear-gradient(90deg, #d0ffdc 0 8%, #68ff9c 24%, rgba(64,255,134,.20) 80%, transparent 100%);
-  box-shadow: 0 0 5px #63ff99, 0 0 18px rgba(68, 255, 139, .48);
-}
-
-html[data-cursor-variant="B"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::after {
-  border-color: #8dffb4;
-  background: #caffd8;
-  box-shadow: 0 0 4px #79ffa7, 0 0 15px rgba(65,255,135,.86);
-}
-
-html[data-cursor-variant="B"] .crt-cursor-prototype__outside.is-pressed .crt-cursor-prototype__glyph,
-html[data-cursor-variant="B"] .crt-cursor-prototype__inside.is-pressed .crt-cursor-prototype__glyph {
-  scale: .72;
-}
-
-html[data-cursor-variant="B"] body > .crt-cursor-prototype__trail-node {
-  width: 12px;
-  height: 2px;
-  margin: -1px 0 0 -2px;
-  border-radius: 2px;
-  background: rgba(56, 47, 34, .48);
-}
-
-html[data-cursor-variant="B"] .tube > .crt-cursor-prototype__trail-node {
-  width: 16px;
-  height: 1px;
-  margin: -.5px 0 0 -2px;
-  border-radius: 0;
-}
-
-html[data-cursor-variant="B"] .crt-cursor-prototype__outside.is-capturing .crt-cursor-prototype__glyph {
-  animation: crt-cursor-beam-collapse 150ms ease-in both;
-}
-
-html[data-cursor-variant="B"] .crt-cursor-prototype__inside.is-releasing .crt-cursor-prototype__glyph {
-  animation: crt-cursor-beam-collapse 130ms ease-in reverse both;
-}
-
-@keyframes crt-cursor-beam-collapse {
-  0% { transform: rotate(var(--cursor-angle)) scale(1,1); filter: none; }
-  62% { transform: rotate(var(--cursor-angle)) scale(1.8,.15); filter: brightness(2.2); }
-  100% { transform: rotate(var(--cursor-angle)) scale(.08,.04); filter: brightness(4); }
-}
-
-/* --------------------------------------------------------------------------
-   Variant C — Phosphor Reticle
-   Segmented targeting brackets outside; pixel reticle with after-image inside.
-   -------------------------------------------------------------------------- */
-
-html[data-cursor-variant="C"] .crt-cursor-prototype__glyph {
-  width: 34px;
-  height: 34px;
-  margin: -17px;
-  border: 0;
-  background:
-    linear-gradient(#3b3125,#3b3125) 0 0 / 8px 1px no-repeat,
-    linear-gradient(#3b3125,#3b3125) 0 0 / 1px 8px no-repeat,
-    linear-gradient(#3b3125,#3b3125) 100% 0 / 8px 1px no-repeat,
-    linear-gradient(#3b3125,#3b3125) 100% 0 / 1px 8px no-repeat,
-    linear-gradient(#3b3125,#3b3125) 0 100% / 8px 1px no-repeat,
-    linear-gradient(#3b3125,#3b3125) 0 100% / 1px 8px no-repeat,
-    linear-gradient(#3b3125,#3b3125) 100% 100% / 8px 1px no-repeat,
-    linear-gradient(#3b3125,#3b3125) 100% 100% / 1px 8px no-repeat;
-  transition: transform 130ms cubic-bezier(.18,.8,.2,1), opacity 100ms linear;
-}
-
-html[data-cursor-variant="C"] .crt-cursor-prototype__glyph::before {
-  left: 50%;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  margin: -2px;
-  background: #423628;
-  transform: rotate(45deg);
-}
-
-html[data-cursor-variant="C"] .crt-cursor-prototype__glyph::after {
-  left: 50%;
-  top: 50%;
-  width: 46px;
-  height: 1px;
-  margin: -.5px -23px;
-  background: linear-gradient(90deg, transparent 0 20%, rgba(65,54,40,.26) 20% 44%, transparent 44% 56%, rgba(65,54,40,.26) 56% 80%, transparent 80%);
-  transform: rotate(var(--cursor-angle, 0deg));
-}
-
-html[data-cursor-variant="C"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph {
-  background:
-    linear-gradient(#7dffa8,#7dffa8) 0 0 / 9px 1px no-repeat,
-    linear-gradient(#7dffa8,#7dffa8) 0 0 / 1px 9px no-repeat,
-    linear-gradient(#7dffa8,#7dffa8) 100% 0 / 9px 1px no-repeat,
-    linear-gradient(#7dffa8,#7dffa8) 100% 0 / 1px 9px no-repeat,
-    linear-gradient(#7dffa8,#7dffa8) 0 100% / 9px 1px no-repeat,
-    linear-gradient(#7dffa8,#7dffa8) 0 100% / 1px 9px no-repeat,
-    linear-gradient(#7dffa8,#7dffa8) 100% 100% / 9px 1px no-repeat,
-    linear-gradient(#7dffa8,#7dffa8) 100% 100% / 1px 9px no-repeat;
-  filter: drop-shadow(0 0 3px rgba(89,255,147,.92)) drop-shadow(0 0 8px rgba(89,255,147,.42));
-}
-
-html[data-cursor-variant="C"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::before {
-  background: #d1ffdc;
-  box-shadow: 0 0 7px #6fff9f;
-}
-
-html[data-cursor-variant="C"] .crt-cursor-prototype__inside .crt-cursor-prototype__glyph::after {
-  background: linear-gradient(90deg, transparent 0 20%, rgba(112,255,160,.27) 20% 44%, transparent 44% 56%, rgba(112,255,160,.27) 56% 80%, transparent 80%);
-}
-
-html[data-cursor-variant="C"] .crt-cursor-prototype__outside.is-interactive .crt-cursor-prototype__glyph {
-  transform: scale(.82) rotate(45deg);
-}
-
-html[data-cursor-variant="C"] .crt-cursor-prototype__outside.is-capturing .crt-cursor-prototype__glyph {
-  animation: crt-cursor-reticle-capture 170ms cubic-bezier(.12,.8,.18,1) both;
-}
-
-html[data-cursor-variant="C"] .crt-cursor-prototype__inside.is-releasing .crt-cursor-prototype__glyph {
-  animation: crt-cursor-reticle-capture 150ms cubic-bezier(.12,.8,.18,1) reverse both;
-}
-
-@keyframes crt-cursor-reticle-capture {
-  0% { transform: scale(1); filter: none; }
-  55% { transform: scale(1.5); filter: blur(.3px) brightness(1.6); }
-  100% { transform: scale(.18) rotate(90deg); filter: blur(1px) brightness(3); opacity: .12; }
-}
-
-html[data-cursor-variant="C"] body > .crt-cursor-prototype__trail-node {
-  width: 2px;
-  height: 2px;
-  margin: -1px;
-  background: rgba(66,54,40,.48);
-  border-radius: 0;
-}
-
-html[data-cursor-variant="C"] .tube > .crt-cursor-prototype__trail-node {
-  width: 4px;
-  height: 4px;
-  margin: -2px;
-  border-radius: 0;
-}
-
-/* --------------------------------------------------------------------------
-   Shared capture accents and prototype controls
-   -------------------------------------------------------------------------- */
-
-.tube.crt-cursor-prototype--capture::before {
+  top: 0;
+  display: block;
   content: "";
+  clip-path: polygon(
+    0 0,
+    0 22px,
+    5.3px 17px,
+    9.8px 26px,
+    13.8px 24px,
+    9.2px 15.2px,
+    16.5px 15.2px
+  );
+}
+
+.crt-cursor-prototype__arrow {
+  width: 17px;
+  height: 27px;
+  transform: translate(-1px, -1px);
+  background: rgba(8, 42, 23, .95);
+  filter:
+    drop-shadow(0 0 1px rgba(6, 18, 11, .95))
+    drop-shadow(0 0 5px rgba(78, 255, 139, .46))
+    drop-shadow(0 0 12px rgba(57, 255, 127, .16));
+}
+
+.crt-cursor-prototype__arrow::after {
+  width: 15px;
+  height: 25px;
+  transform: translate(1px, 1px);
+  background: rgba(174, 255, 201, .95);
+}
+
+/* --------------------------------------------------------------------------
+   CRT-only persistence trail. Variant C exposes it intentionally; the other
+   variants leave it at zero so there is never a chassis trail.
+   -------------------------------------------------------------------------- */
+.crt-cursor-prototype__trail-node {
   position: absolute;
-  z-index: 3;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at var(--capture-x, 50%) var(--capture-y, 50%), rgba(157,255,188,.26) 0 1%, rgba(84,255,144,.08) 4%, transparent 11%),
-    repeating-linear-gradient(0deg, transparent 0 2px, rgba(93,255,148,.045) 2px 3px);
+  left: 0;
+  top: 0;
+  z-index: 2;
+  width: 7px;
+  height: 9px;
+  margin: -1px 0 0 -1px;
+  opacity: 0;
+  transform: translate3d(var(--trail-x, -100px), var(--trail-y, -100px), 0);
+  background: rgba(104, 255, 154, .58);
+  clip-path: polygon(0 0, 0 100%, 35% 70%, 58% 100%, 78% 88%, 57% 62%, 100% 62%);
+  filter: blur(.35px) drop-shadow(0 0 4px rgba(70, 255, 132, .34));
   mix-blend-mode: screen;
-  animation: crt-cursor-tube-flash 190ms ease-out both;
+  will-change: transform, opacity;
 }
 
-@keyframes crt-cursor-tube-flash {
-  0% { opacity: 0; filter: brightness(1); }
-  28% { opacity: 1; filter: brightness(1.8); }
-  100% { opacity: 0; filter: brightness(1); }
+/* --------------------------------------------------------------------------
+   Capture FX base
+   -------------------------------------------------------------------------- */
+.crt-cursor-prototype__capture {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  transform: translate3d(var(--capture-x, -100px), var(--capture-y, -100px), 0);
+  mix-blend-mode: screen;
 }
 
+.crt-cursor-prototype__capture > i {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+}
+
+.crt-cursor-prototype__capture.is-active {
+  opacity: 1;
+}
+
+/* --------------------------------------------------------------------------
+   A — Phosphor Lock
+   A tiny analogue lock-on: a restrained ring collapses into the pointer and
+   a single scan pulse crosses it. This is the quietest / most premium option.
+   -------------------------------------------------------------------------- */
+html[data-cursor-variant="A"] .crt-cursor-prototype__inside.is-capturing .crt-cursor-prototype__arrow {
+  animation: proto-a-arrow 145ms cubic-bezier(.18, .78, .2, 1) both;
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__capture > i:nth-child(1),
+html[data-cursor-variant="A"] .crt-cursor-prototype__capture > i:nth-child(2) {
+  width: 30px;
+  height: 30px;
+  margin: -15px;
+  border: 1px solid rgba(126, 255, 169, .72);
+  border-radius: 50%;
+  box-shadow: 0 0 9px rgba(76, 255, 140, .22);
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__capture > i:nth-child(2) {
+  width: 18px;
+  height: 18px;
+  margin: -9px;
+  border-color: rgba(185, 255, 207, .42);
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__capture > i:nth-child(3) {
+  width: 38px;
+  height: 1px;
+  margin: 0 0 0 -19px;
+  background: linear-gradient(90deg, transparent, rgba(182, 255, 205, .9), transparent);
+  box-shadow: 0 0 7px rgba(93, 255, 151, .48);
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__capture.is-active > i:nth-child(1) {
+  animation: proto-a-ring 190ms ease-out both;
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__capture.is-active > i:nth-child(2) {
+  animation: proto-a-ring 150ms 18ms ease-out both;
+}
+
+html[data-cursor-variant="A"] .crt-cursor-prototype__capture.is-active > i:nth-child(3) {
+  animation: proto-a-scan 165ms ease-out both;
+}
+
+@keyframes proto-a-arrow {
+  0% { opacity: .15; transform: translate(-1px, -1px) scale(.72); filter: brightness(2.4) drop-shadow(0 0 9px rgba(96,255,155,.9)); }
+  58% { opacity: 1; transform: translate(-1px, -1px) scale(1.04); }
+  100% { opacity: 1; transform: translate(-1px, -1px) scale(1); }
+}
+
+@keyframes proto-a-ring {
+  0% { opacity: .8; transform: scale(1.35); }
+  70% { opacity: .38; }
+  100% { opacity: 0; transform: scale(.28); }
+}
+
+@keyframes proto-a-scan {
+  0% { opacity: 0; transform: translateY(-11px) scaleX(.35); }
+  35% { opacity: .9; }
+  100% { opacity: 0; transform: translateY(12px) scaleX(1); }
+}
+
+/* --------------------------------------------------------------------------
+   B — Signal Split
+   The normal pointer momentarily resolves as separated analogue colour
+   channels, which snap together as the CRT accepts the signal.
+   -------------------------------------------------------------------------- */
+html[data-cursor-variant="B"] .crt-cursor-prototype__inside.is-capturing .crt-cursor-prototype__arrow {
+  animation: proto-b-arrow 170ms cubic-bezier(.2, .72, .2, 1) both;
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__capture > i {
+  width: 15px;
+  height: 25px;
+  clip-path: polygon(0 0, 0 22px, 5px 17px, 9px 25px, 13px 23px, 9px 15px, 16px 15px);
+  opacity: .58;
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__capture > i:nth-child(1) {
+  background: rgba(255, 87, 87, .76);
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__capture > i:nth-child(2) {
+  background: rgba(105, 255, 154, .94);
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__capture > i:nth-child(3) {
+  background: rgba(92, 135, 255, .74);
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__capture.is-active > i:nth-child(1) {
+  animation: proto-b-red 180ms ease-out both;
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__capture.is-active > i:nth-child(2) {
+  animation: proto-b-green 180ms ease-out both;
+}
+
+html[data-cursor-variant="B"] .crt-cursor-prototype__capture.is-active > i:nth-child(3) {
+  animation: proto-b-blue 180ms ease-out both;
+}
+
+@keyframes proto-b-arrow {
+  0% { opacity: .18; filter: drop-shadow(-5px 0 0 rgba(255,74,74,.55)) drop-shadow(5px 0 0 rgba(70,120,255,.55)) brightness(1.7); }
+  68% { opacity: 1; filter: drop-shadow(-1px 0 0 rgba(255,74,74,.18)) drop-shadow(1px 0 0 rgba(70,120,255,.18)) brightness(1.12); }
+  100% { opacity: 1; filter: none; }
+}
+
+@keyframes proto-b-red {
+  0% { opacity: .72; transform: translate(-8px, 1px); }
+  100% { opacity: 0; transform: translate(0, 0); }
+}
+
+@keyframes proto-b-green {
+  0% { opacity: .65; transform: translate(0, -2px); }
+  100% { opacity: 0; transform: translate(0, 0); }
+}
+
+@keyframes proto-b-blue {
+  0% { opacity: .72; transform: translate(8px, 1px); }
+  100% { opacity: 0; transform: translate(0, 0); }
+}
+
+/* --------------------------------------------------------------------------
+   C — Beam Imprint
+   The pointer appears through a very short horizontal beam flash, then leaves
+   a restrained phosphor after-image only while moving inside the CRT.
+   -------------------------------------------------------------------------- */
+html[data-cursor-variant="C"] .crt-cursor-prototype__inside.is-capturing .crt-cursor-prototype__arrow {
+  animation: proto-c-arrow 155ms cubic-bezier(.16, .82, .2, 1) both;
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__capture > i:nth-child(1) {
+  width: 70px;
+  height: 1px;
+  margin-left: -35px;
+  background: linear-gradient(90deg, transparent, rgba(130,255,171,.88), transparent);
+  box-shadow: 0 0 8px rgba(70,255,133,.48);
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__capture > i:nth-child(2) {
+  width: 24px;
+  height: 3px;
+  margin: -1px 0 0 -12px;
+  background: rgba(182,255,205,.86);
+  filter: blur(1.3px);
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__capture > i:nth-child(3) {
+  width: 4px;
+  height: 4px;
+  margin: -2px;
+  border-radius: 50%;
+  background: #d5ffe0;
+  box-shadow: 0 0 8px #72ffa3, 0 0 18px rgba(77,255,140,.55);
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__capture.is-active > i:nth-child(1) {
+  animation: proto-c-line 175ms ease-out both;
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__capture.is-active > i:nth-child(2) {
+  animation: proto-c-core 150ms ease-out both;
+}
+
+html[data-cursor-variant="C"] .crt-cursor-prototype__capture.is-active > i:nth-child(3) {
+  animation: proto-c-dot 180ms ease-out both;
+}
+
+@keyframes proto-c-arrow {
+  0% { opacity: 0; transform: translate(-1px, -1px) scale(.12, .72); filter: brightness(2.8); }
+  52% { opacity: 1; transform: translate(-1px, -1px) scale(1.06, .96); }
+  100% { opacity: 1; transform: translate(-1px, -1px) scale(1); }
+}
+
+@keyframes proto-c-line {
+  0% { opacity: .9; transform: scaleX(.18); }
+  55% { opacity: .55; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(.3); }
+}
+
+@keyframes proto-c-core {
+  0% { opacity: .95; transform: scaleX(.2); }
+  100% { opacity: 0; transform: scaleX(1.4); }
+}
+
+@keyframes proto-c-dot {
+  0% { opacity: 1; transform: scale(1.4); }
+  100% { opacity: 0; transform: scale(.3); }
+}
+
+/* --------------------------------------------------------------------------
+   Prototype chrome. Deliberately neutral and visually separate from the JG-1500.
+   -------------------------------------------------------------------------- */
 .crt-cursor-prototype__hud,
 .crt-cursor-prototype__switcher {
   position: fixed;
-  z-index: 10040;
-  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
-  color: #d8ffe2;
-  background: rgba(4, 12, 8, .92);
-  border: 1px solid rgba(119, 255, 164, .36);
-  box-shadow: 0 12px 36px rgba(0,0,0,.28), inset 0 0 24px rgba(70,255,130,.025);
-  backdrop-filter: blur(12px);
-  pointer-events: auto;
-  cursor: default !important;
-}
-
-.crt-cursor-prototype__hud,
-.crt-cursor-prototype__hud * {
-  cursor: default !important;
+  z-index: 20000;
+  font: 11px/1.45 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  color: #eef2ee;
+  background: rgba(14, 16, 15, .92);
+  border: 1px solid rgba(255, 255, 255, .14);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .22);
+  backdrop-filter: blur(10px);
 }
 
 .crt-cursor-prototype__hud {
-  left: 16px;
-  top: 16px;
-  width: min(330px, calc(100vw - 32px));
-  padding: 12px 14px;
-  border-radius: 8px;
-  font-size: 10px;
-  line-height: 1.55;
-  letter-spacing: .04em;
+  left: 14px;
+  bottom: 14px;
+  min-width: 300px;
+  padding: 10px 12px;
+  opacity: .82;
+  pointer-events: none;
 }
 
 .crt-cursor-prototype__hud strong {
-  color: #82ffab;
-  font-weight: 700;
+  color: #b9ffd0;
+  font-size: 10px;
+  letter-spacing: .08em;
 }
 
 .crt-cursor-prototype__hud-status {
   display: grid;
-  grid-template-columns: 72px 1fr;
+  grid-template-columns: 58px 1fr;
   gap: 2px 10px;
-  margin-top: 8px;
-  color: rgba(216,255,226,.72);
+  margin-top: 7px;
+}
+
+.crt-cursor-prototype__hud-status span {
+  color: rgba(255, 255, 255, .48);
 }
 
 .crt-cursor-prototype__switcher {
   left: 50%;
-  bottom: 24px;
-  translate: -50% 0;
-  display: grid;
-  grid-template-columns: 46px minmax(220px, auto) 46px;
+  bottom: 14px;
+  display: flex;
   align-items: center;
-  min-height: 46px;
+  gap: 12px;
+  min-width: 280px;
+  padding: 5px;
   border-radius: 999px;
-  overflow: hidden;
-}
-
-.crt-cursor-prototype__switcher button,
-.crt-cursor-prototype__switcher span {
-  height: 46px;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  cursor: pointer !important;
-}
-
-.crt-cursor-prototype__switcher button {
-  font-size: 16px;
-  transition: background 120ms ease;
-}
-
-.crt-cursor-prototype__switcher button:hover {
-  background: rgba(116,255,161,.1);
+  transform: translateX(-50%);
 }
 
 .crt-cursor-prototype__switcher span {
-  display: grid;
-  place-items: center;
-  padding: 0 18px;
-  border-left: 1px solid rgba(119,255,164,.18);
-  border-right: 1px solid rgba(119,255,164,.18);
-  color: #aaffc3;
-  cursor: default !important;
+  flex: 1;
+  text-align: center;
   white-space: nowrap;
 }
 
+.crt-cursor-prototype__switcher button {
+  width: 34px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  color: #effff4;
+  background: rgba(255, 255, 255, .08);
+  cursor: pointer;
+}
+
+.crt-cursor-prototype__switcher button:hover {
+  background: rgba(185, 255, 208, .16);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .crt-cursor-prototype__capture-ring,
-  .crt-cursor-prototype__glyph,
-  .tube.crt-cursor-prototype--capture::before {
+  .crt-cursor-prototype__capture {
+    display: none;
+  }
+
+  .crt-cursor-prototype__inside.is-capturing .crt-cursor-prototype__arrow {
     animation: none !important;
-    transition: none !important;
+  }
+
+  .crt-cursor-prototype__trail-node {
+    opacity: 0 !important;
   }
 }
