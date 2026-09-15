@@ -7,6 +7,7 @@ year: 2025–2026
 order: 2
 stack: [Unity, C#, Procedural Generation, Event-Driven Systems, Game Design]
 link: https://github.com/LeaderGRL/Crossatro
+narration: /media/narration/crossatro.mp3
 ---
 
 Crossatro started as a small game-jam prototype around language and eventually became a much more interesting systems problem: **how do you make a crossword support the same kind of build decisions as a roguelite?**

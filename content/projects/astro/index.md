@@ -8,6 +8,7 @@ order: 3
 stack: [Unreal Engine, C++, Blueprints, Game Design, Programming, Local Multiplayer]
 theme: synthwave
 link: https://awelyaa.itch.io/astro
+narration: /media/narration/astro.mp3
 ---
 
 ::facts{columns=2 label="PROJECT SNAPSHOT"}

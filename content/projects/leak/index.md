@@ -8,6 +8,7 @@ order: 5
 stack: [Unreal Engine, AI, Game Design, Horror]
 theme: horror
 link: /media/Leak/Leak.mp4
+narration: /media/narration/leak.mp3
 ---
 
 ::facts{columns=2 label="PROJECT SNAPSHOT"}
