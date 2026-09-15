@@ -187,7 +187,8 @@ test('BACK restores progress paused in-session while refresh resets narration st
   expect(retained.currentTime).toBeGreaterThanOrEqual(31)
   expect(await page.evaluate(() => window.__productionNarrationAudio.every(audio => audio.paused))).toBe(true)
 
-  await page.goBack()
+  // Re-open through the portfolio itself so the same JS runtime/session remains alive.
+  await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/\/projects\/astro$/)
   await expect(page.locator('#tube')).toHaveAttribute('data-display-mode', 'article')
   await injectNarration(page)
