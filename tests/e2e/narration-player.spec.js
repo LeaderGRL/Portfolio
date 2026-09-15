@@ -56,7 +56,14 @@ async function injectNarration(page, src = '/media/Astro/menu.mp3') {
 test('non-narratable documents expose no active narration control or N shortcut hint', async ({ page }, testInfo) => {
   test.skip(!isChromiumDesktop(testInfo), 'Narration interaction contract only needs one browser engine')
   await installNarrationHarness(page)
-  await boot(page)
+  await page.goto('/articles')
+  await expect(page.locator('#machine')).toBeVisible()
+  await expect(page.locator('#tube')).toHaveAttribute('data-display-mode', 'terminal')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/articles\/.+/)
+  await expect(page.locator('#tube')).toHaveAttribute('data-display-mode', 'article')
+  await expect(page.locator('#article-reader')).toBeAttached()
 
   await expect(page.locator('.document-narration-layer')).toBeHidden()
   await expect(page.locator('.document-narration-toggle')).not.toBeVisible()
