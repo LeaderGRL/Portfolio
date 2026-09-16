@@ -229,6 +229,21 @@ test('pointer motion accumulates speed distance across equal timestamps', () => 
   near(accumulated.speedPxPerMs, direct.speedPxPerMs, 1e-12)
   assert.equal(accumulated.speedReferenceX, 20)
   assert.equal(accumulated.speedReferenceTimeMs, 10)
+  assert.equal(accumulated.speedPendingDistancePx, 0)
+})
+
+test('pointer motion preserves out-and-back path length across equal timestamps', () => {
+  const options = { speedResponseHz: 1000, maxSpeedPxPerMs: 10 }
+
+  let motion = createPointerMotion({ x: 0, y: 0, timeMs: 0 })
+  motion = updatePointerMotion(motion, { x: 10, y: 0, timeMs: 0 }, options)
+  motion = updatePointerMotion(motion, { x: 0, y: 0, timeMs: 0 }, options)
+  assert.equal(motion.speedPendingDistancePx, 20)
+
+  motion = updatePointerMotion(motion, { x: 0, y: 0, timeMs: 10 }, options)
+  assert.ok(motion.speedPxPerMs > 1.9)
+  assert.equal(motion.speedPendingDistancePx, 0)
+  assert.equal(motion.speedReferenceTimeMs, 10)
 })
 
 test('pointer motion filters speed, clamps spikes and preserves the last stable angle at rest', () => {
