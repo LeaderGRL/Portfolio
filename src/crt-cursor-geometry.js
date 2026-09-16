@@ -1,7 +1,8 @@
 const HALF_PI = Math.PI * 0.5
 const GOLDEN_RATIO_CONJUGATE = (Math.sqrt(5) - 1) * 0.5
 const DISTANCE_SCAN_SEGMENTS = 128
-const DISTANCE_REFINE_ITERATIONS = 24
+const DISTANCE_REFINE_MAX_ITERATIONS = 64
+const DISTANCE_REFINE_SPATIAL_TOLERANCE_PX = 0.001
 
 export const DEFAULT_TUBE_EXPONENT = 3.1
 export const MAX_TUBE_EXPONENT = 8
@@ -25,34 +26,37 @@ function pointOnSuperellipse(theta, halfWidth, halfHeight, exponent) {
   }
 }
 
+function superellipseX(theta, halfWidth, power) {
+  if (theta <= 0) return halfWidth
+  if (theta >= HALF_PI) return 0
+  return halfWidth * Math.pow(Math.max(0, Math.cos(theta)), power)
+}
+
+function superellipseY(theta, halfHeight, power) {
+  if (theta <= 0) return 0
+  if (theta >= HALF_PI) return halfHeight
+  return halfHeight * Math.pow(Math.max(0, Math.sin(theta)), power)
+}
+
 function squaredDistanceToPoint(theta, pointX, pointY, halfWidth, halfHeight, exponent) {
-  let edgeX
-  let edgeY
-
-  if (theta <= 0) {
-    edgeX = halfWidth
-    edgeY = 0
-  } else if (theta >= HALF_PI) {
-    edgeX = 0
-    edgeY = halfHeight
-  } else {
-    const power = 2 / exponent
-    edgeX = halfWidth * Math.pow(Math.max(0, Math.cos(theta)), power)
-    edgeY = halfHeight * Math.pow(Math.max(0, Math.sin(theta)), power)
-  }
-
+  const power = 2 / exponent
+  const edgeX = superellipseX(theta, halfWidth, power)
+  const edgeY = superellipseY(theta, halfHeight, power)
   const dx = edgeX - pointX
   const dy = edgeY - pointY
   return dx * dx + dy * dy
 }
 
 function refineDistanceMinimum(left, right, pointX, pointY, halfWidth, halfHeight, exponent) {
+  const power = 2 / exponent
+  const spatialToleranceSquared = DISTANCE_REFINE_SPATIAL_TOLERANCE_PX
+    * DISTANCE_REFINE_SPATIAL_TOLERANCE_PX
   let c = right - (right - left) * GOLDEN_RATIO_CONJUGATE
   let d = left + (right - left) * GOLDEN_RATIO_CONJUGATE
   let fc = squaredDistanceToPoint(c, pointX, pointY, halfWidth, halfHeight, exponent)
   let fd = squaredDistanceToPoint(d, pointX, pointY, halfWidth, halfHeight, exponent)
 
-  for (let index = 0; index < DISTANCE_REFINE_ITERATIONS; index += 1) {
+  for (let index = 0; index < DISTANCE_REFINE_MAX_ITERATIONS; index += 1) {
     if (fc <= fd) {
       right = d
       d = c
@@ -66,6 +70,14 @@ function refineDistanceMinimum(left, right, pointX, pointY, halfWidth, halfHeigh
       d = left + (right - left) * GOLDEN_RATIO_CONJUGATE
       fd = squaredDistanceToPoint(d, pointX, pointY, halfWidth, halfHeight, exponent)
     }
+
+    const leftX = superellipseX(left, halfWidth, power)
+    const leftY = superellipseY(left, halfHeight, power)
+    const rightX = superellipseX(right, halfWidth, power)
+    const rightY = superellipseY(right, halfHeight, power)
+    const spanX = rightX - leftX
+    const spanY = rightY - leftY
+    if (spanX * spanX + spanY * spanY <= spatialToleranceSquared) break
   }
 
   return (left + right) * 0.5
@@ -130,7 +142,9 @@ function closestPointInQuadrant(pointX, pointY, halfWidth, halfHeight, exponent)
   }
 
   // A true minimum can sit between an axis and the first/last scan sample
-  // without either sampled endpoint looking like a local minimum.
+  // without either sampled endpoint looking like a local minimum. Refine those
+  // intervals to a spatial tolerance rather than a fixed angular iteration
+  // count so sharp but supported squircles retain sub-pixel edge accuracy.
   let candidateTheta = refineDistanceMinimum(0, step, pointX, pointY, halfWidth, halfHeight, exponent)
   let candidateDistance = squaredDistanceToPoint(
     candidateTheta,
