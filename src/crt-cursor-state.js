@@ -29,6 +29,7 @@ const LEGAL_TRANSITIONS = Object.freeze({
   [CRT_CURSOR_STATE.NATIVE_OUTSIDE]: Object.freeze({
     [CRT_CURSOR_EVENT.CAPTURE_START]: CRT_CURSOR_STATE.ABSORBING,
     [CRT_CURSOR_EVENT.DIRECT_ENTER]: CRT_CURSOR_STATE.CRT_ACTIVE,
+    [CRT_CURSOR_EVENT.EXTERNAL_TAKEOVER]: CRT_CURSOR_STATE.NATIVE_EXTERNAL,
   }),
   [CRT_CURSOR_STATE.ABSORBING]: Object.freeze({
     [CRT_CURSOR_EVENT.CAPTURE_CANCEL]: CRT_CURSOR_STATE.NATIVE_OUTSIDE,
@@ -90,10 +91,25 @@ export function updatePointerMotion(previous, sample, {
     throw new TypeError('Pointer motion update requires finite x, y and timeMs values')
   }
 
+  // A model without a timestamp has not observed real movement yet. Seed the
+  // first browser sample without inventing a direction from the default origin.
+  if (previous.timeMs == null) {
+    return {
+      x: sample.x,
+      y: sample.y,
+      previousX: sample.x,
+      previousY: sample.y,
+      timeMs: sample.timeMs,
+      speedPxPerMs: 0,
+      angle: previous.angle,
+      hasStableAngle: previous.hasStableAngle,
+    }
+  }
+
   const dx = sample.x - previous.x
   const dy = sample.y - previous.y
   const distance = Math.hypot(dx, dy)
-  const rawDtMs = previous.timeMs == null ? 0 : sample.timeMs - previous.timeMs
+  const rawDtMs = sample.timeMs - previous.timeMs
   const dtMs = rawDtMs > 0 ? rawDtMs : 0
   const instantSpeed = dtMs > 0 ? clamp(distance / dtMs, 0, maxSpeedPxPerMs) : 0
   const response = dtMs > 0 ? 1 - Math.exp(-(dtMs / 1000) * speedResponseHz) : 0
