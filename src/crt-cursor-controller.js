@@ -88,7 +88,7 @@ function homographyForQuad(points) {
     h = (dx1 * dy3 - dx3 * dy1) / denominator
   }
 
-  return invert3x3([
+  const forward = [
     p1.x - p0.x + g * p1.x,
     p3.x - p0.x + h * p3.x,
     p0.x,
@@ -98,19 +98,22 @@ function homographyForQuad(points) {
     g,
     h,
     1,
-  ])
+  ]
+  const inverse = invert3x3(forward)
+  return inverse ? { forward, inverse } : null
 }
 
 export function createTubeProjection({ rect, quad = null, localWidth = null, localHeight = null }) {
   if (!rect || rect.width <= 0 || rect.height <= 0) return null
   const width = Number.isFinite(localWidth) && localWidth > 0 ? localWidth : rect.width
   const height = Number.isFinite(localHeight) && localHeight > 0 ? localHeight : rect.height
-  const inverseHomography = homographyForQuad(quad)
+  const homography = homographyForQuad(quad)
   return {
     rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
     localWidth: width,
     localHeight: height,
-    inverseHomography,
+    forwardHomography: homography?.forward || null,
+    inverseHomography: homography?.inverse || null,
   }
 }
 
@@ -134,6 +137,71 @@ export function localTubeUvFromClient(projection, x, y) {
   return {
     x: (matrix[0] * x + matrix[1] * y + matrix[2]) / denominator,
     y: (matrix[3] * x + matrix[4] * y + matrix[5]) / denominator,
+  }
+}
+
+export function clientPointFromLocalTubeUv(projection, x, y) {
+  if (!projection) throw new TypeError('Tube projection is required')
+  const matrix = projection.forwardHomography
+  if (!matrix) {
+    return {
+      x: projection.rect.left + x * projection.rect.width,
+      y: projection.rect.top + y * projection.rect.height,
+    }
+  }
+
+  const denominator = matrix[6] * x + matrix[7] * y + matrix[8]
+  if (!Number.isFinite(denominator) || Math.abs(denominator) < 1e-9) {
+    return {
+      x: projection.rect.left + x * projection.rect.width,
+      y: projection.rect.top + y * projection.rect.height,
+    }
+  }
+  return {
+    x: (matrix[0] * x + matrix[1] * y + matrix[2]) / denominator,
+    y: (matrix[3] * x + matrix[4] * y + matrix[5]) / denominator,
+  }
+}
+
+export function evaluateProjectedTubeAperture(projection, aperture, clientX, clientY) {
+  if (!projection || !aperture || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+    throw new TypeError('Projected tube aperture evaluation requires projection, aperture and finite point')
+  }
+
+  const localUv = localTubeUvFromClient(projection, clientX, clientY)
+  const localX = localUv.x * projection.localWidth
+  const localY = localUv.y * projection.localHeight
+  const localEdge = evaluateTubeAperture(aperture, localX, localY)
+
+  const boundaryUv = {
+    x: localEdge.nearestBoundaryPoint.x / projection.localWidth,
+    y: localEdge.nearestBoundaryPoint.y / projection.localHeight,
+  }
+  const nearestBoundaryPoint = clientPointFromLocalTubeUv(
+    projection,
+    boundaryUv.x,
+    boundaryUv.y,
+  )
+  const inwardSample = clientPointFromLocalTubeUv(
+    projection,
+    (localEdge.nearestBoundaryPoint.x + localEdge.inwardNormal.x) / projection.localWidth,
+    (localEdge.nearestBoundaryPoint.y + localEdge.inwardNormal.y) / projection.localHeight,
+  )
+  const normalX = inwardSample.x - nearestBoundaryPoint.x
+  const normalY = inwardSample.y - nearestBoundaryPoint.y
+  const normalLength = Math.hypot(normalX, normalY)
+  const distancePx = Math.hypot(
+    clientX - nearestBoundaryPoint.x,
+    clientY - nearestBoundaryPoint.y,
+  )
+
+  return {
+    ...localEdge,
+    signedDistancePx: localEdge.inside ? -distancePx : distancePx,
+    nearestBoundaryPoint,
+    inwardNormal: normalLength > 1e-6
+      ? { x: normalX / normalLength, y: normalY / normalLength }
+      : localEdge.inwardNormal,
   }
 }
 
@@ -264,12 +332,10 @@ export class CrtCursorController {
 
     const localWidth = this.tube.offsetWidth || rect.width
     const localHeight = this.tube.offsetHeight || rect.height
-    const scaleX = rect.width / localWidth
-    const scaleY = rect.height / localHeight
-    let bleedX = fullscreen ? 0 : this.bleedCssX * scaleX
-    let bleedY = fullscreen ? 0 : this.bleedCssY * scaleY
-    bleedX = Math.min(Math.max(0, bleedX), rect.width * 0.2)
-    bleedY = Math.min(Math.max(0, bleedY), rect.height * 0.2)
+    let bleedX = fullscreen ? 0 : this.bleedCssX
+    let bleedY = fullscreen ? 0 : this.bleedCssY
+    bleedX = Math.min(Math.max(0, bleedX), localWidth * 0.2)
+    bleedY = Math.min(Math.max(0, bleedY), localHeight * 0.2)
 
     this.tubeRect = { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
     this.tubeProjection = createTubeProjection({
@@ -279,10 +345,10 @@ export class CrtCursorController {
       localHeight,
     })
     this.aperture = createTubeAperture({
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height,
+      left: 0,
+      top: 0,
+      width: localWidth,
+      height: localHeight,
       bleedX,
       bleedY,
     })
@@ -303,9 +369,14 @@ export class CrtCursorController {
       return
     }
 
-    if (!this.aperture) this.refreshGeometry()
-    if (!this.aperture) return
-    this.edge = evaluateTubeAperture(this.aperture, this.motion.x, this.motion.y)
+    if (!this.aperture || !this.tubeProjection) this.refreshGeometry()
+    if (!this.aperture || !this.tubeProjection) return
+    this.edge = evaluateProjectedTubeAperture(
+      this.tubeProjection,
+      this.aperture,
+      this.motion.x,
+      this.motion.y,
+    )
 
     if (this.reducedMotionQuery.matches) {
       this._handleReducedMotion()
@@ -319,7 +390,6 @@ export class CrtCursorController {
         break
       case CRT_CURSOR_STATE.ABSORBING:
         this.zoneLatched = updateMagneticZoneLatch(this.aperture, true, this.edge.signedDistancePx)
-        if (this.absorption) this.absorption.reversing = !this.zoneLatched
         break
       case CRT_CURSOR_STATE.CRT_ACTIVE:
         this.zoneLatched = updateMagneticZoneLatch(this.aperture, true, this.edge.signedDistancePx)
@@ -348,11 +418,15 @@ export class CrtCursorController {
       // The chassis can tilt every application frame. Read transformed geometry
       // once here, never on the high-rate pointermove path.
       this.refreshGeometry()
-      if (this.aperture) {
-        this.edge = evaluateTubeAperture(this.aperture, this.motion.x, this.motion.y)
+      if (this.aperture && this.tubeProjection) {
+        this.edge = evaluateProjectedTubeAperture(
+          this.tubeProjection,
+          this.aperture,
+          this.motion.x,
+          this.motion.y,
+        )
         if (this.state === CRT_CURSOR_STATE.ABSORBING) {
           this.zoneLatched = updateMagneticZoneLatch(this.aperture, true, this.edge.signedDistancePx)
-          if (this.absorption) this.absorption.reversing = !this.zoneLatched
         } else if (this.state === CRT_CURSOR_STATE.CRT_ACTIVE) {
           this.zoneLatched = updateMagneticZoneLatch(this.aperture, true, this.edge.signedDistancePx)
           this.pendingRelease = !this.zoneLatched
@@ -421,7 +495,14 @@ export class CrtCursorController {
   _frameAbsorption(ms, dtMs) {
     if (!this.absorption || !this.edge || !this.aperture) return
     const model = this.absorption
-    model.reversing = !this.zoneLatched
+    const nextReversing = !this.zoneLatched
+    if (model.reversing && !nextReversing) {
+      // Rebase the successful-entry clock to the current unwound progress.
+      // Re-entering deeply must continue from the visible state rather than
+      // catching up to elapsed wall time in a single frame.
+      model.startedAtMs = ms - model.progress * model.durationMs
+    }
+    model.reversing = nextReversing
 
     if (model.reversing) {
       model.progress = Math.max(0, model.progress - (dtMs || 16.67) / 105)
@@ -429,8 +510,12 @@ export class CrtCursorController {
       const geometryProgress = easeMagneticProgress(magneticZoneProgress(this.aperture, this.edge.signedDistancePx))
       const timeProgress = clamp01((ms - model.startedAtMs) / model.durationMs)
       const desired = Math.min(geometryProgress, timeProgress)
-      if (desired >= model.progress) model.progress = desired
-      else model.progress = Math.max(desired, model.progress - (dtMs || 16.67) / 90)
+      if (desired >= model.progress) {
+        const maxForwardStep = (dtMs || 16.67) / model.durationMs
+        model.progress = Math.min(desired, model.progress + maxForwardStep)
+      } else {
+        model.progress = Math.max(desired, model.progress - (dtMs || 16.67) / 90)
+      }
     }
 
     this._updateDomCursor(model.progress, 'absorb')
