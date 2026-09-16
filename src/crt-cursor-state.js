@@ -69,6 +69,8 @@ export function createPointerMotion({ x = 0, y = 0, timeMs = null, angle = 0 } =
     y,
     previousX: x,
     previousY: y,
+    angleReferenceX: x,
+    angleReferenceY: y,
     timeMs,
     speedPxPerMs: 0,
     angle,
@@ -99,6 +101,8 @@ export function updatePointerMotion(previous, sample, {
       y: sample.y,
       previousX: sample.x,
       previousY: sample.y,
+      angleReferenceX: sample.x,
+      angleReferenceY: sample.y,
       timeMs: sample.timeMs,
       speedPxPerMs: 0,
       angle: previous.angle,
@@ -115,11 +119,21 @@ export function updatePointerMotion(previous, sample, {
   const response = dtMs > 0 ? 1 - Math.exp(-(dtMs / 1000) * speedResponseHz) : 0
   const speedPxPerMs = previous.speedPxPerMs + (instantSpeed - previous.speedPxPerMs) * response
 
+  const referenceX = Number.isFinite(previous.angleReferenceX) ? previous.angleReferenceX : previous.x
+  const referenceY = Number.isFinite(previous.angleReferenceY) ? previous.angleReferenceY : previous.y
+  const angleDx = sample.x - referenceX
+  const angleDy = sample.y - referenceY
+  const angleDistance = Math.hypot(angleDx, angleDy)
+
   let angle = previous.angle
   let hasStableAngle = previous.hasStableAngle
-  if (distance >= angleThresholdPx) {
-    angle = Math.atan2(dy, dx)
+  let angleReferenceX = referenceX
+  let angleReferenceY = referenceY
+  if (angleDistance > 0 && angleDistance >= angleThresholdPx) {
+    angle = Math.atan2(angleDy, angleDx)
     hasStableAngle = true
+    angleReferenceX = sample.x
+    angleReferenceY = sample.y
   }
 
   return {
@@ -127,6 +141,8 @@ export function updatePointerMotion(previous, sample, {
     y: sample.y,
     previousX: previous.x,
     previousY: previous.y,
+    angleReferenceX,
+    angleReferenceY,
     timeMs: sample.timeMs,
     speedPxPerMs,
     angle,
