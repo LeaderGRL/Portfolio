@@ -91,6 +91,11 @@ let code = inlineModule?.[1]
 if (!code && externalModule) {
   const scriptPath = new URL(externalModule[1], 'http://localhost/').pathname.replace(/^\//, '')
   code = fs.readFileSync(`dist/${scriptPath}`, 'utf8')
+  // Vite's preload wrapper uses import.meta.url once an entry owns a dynamic
+  // chunk. jsdom executes this smoke bundle through window.eval rather than as
+  // a real ESM script, so provide the entry's real URL while leaving the
+  // production bundle and its browser semantics untouched.
+  code = code.replace(/\bimport\.meta\.url\b/g, JSON.stringify(new URL(externalModule[1], 'http://localhost/').href))
 }
 if (!code) throw new Error('dist/index.html does not contain a runnable module script')
 try { w.eval(code) } catch (e) { errors.push(e.message) }
