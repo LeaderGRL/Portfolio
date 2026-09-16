@@ -1,0 +1,44 @@
+/* DOM/SVG ownership phase for the physical CRT cursor. The node never takes
+   pointer input: browser hit testing remains anchored to the real pointer. */
+.crt-cursor-dom{
+  position:fixed;
+  left:0;
+  top:0;
+  width:0;
+  height:0;
+  z-index:2147483000;
+  pointer-events:none !important;
+  transform-origin:0 0;
+  contain:layout style;
+  will-change:left,top,transform,filter,opacity;
+}
+.crt-cursor-dom[hidden]{ display:none !important; }
+.crt-cursor-dom__svg{
+  position:absolute;
+  display:block;
+  overflow:visible;
+  pointer-events:none !important;
+}
+.crt-cursor-dom__body,
+.crt-cursor-dom__outer,
+.crt-cursor-dom__inner{
+  pointer-events:none !important;
+  transform-origin:0 0;
+}
+.crt-cursor-dom__outer{
+  stroke-width:.048;
+  stroke-linejoin:round;
+  stroke-linecap:round;
+}
+
+/* Ownership is temporary and only enabled while the fine-pointer controller is
+   rendering the exact browser hotspot as SVG/GPU. Outside that state the
+   chassis keeps every native cursor semantic unchanged. */
+html.crt-cursor-owned,
+html.crt-cursor-owned *{
+  cursor:none !important;
+}
+
+@media (hover:none), (pointer:coarse){
+  .crt-cursor-dom{ display:none !important; }
+}
