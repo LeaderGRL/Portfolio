@@ -72,6 +72,30 @@ test('tube aperture searches all local distance minima for interior points', () 
   assert.ok(Math.abs(nudged.nearestBoundaryPoint.y - point.nearestBoundaryPoint.y) < 0.2)
 })
 
+test('tube aperture refines minima adjacent to both quadrant endpoints', () => {
+  const nearHorizontalAxis = evaluateTubeAperture(
+    aperture,
+    aperture.centerX + aperture.halfWidth - 1,
+    aperture.centerY + 3,
+  )
+  assert.equal(nearHorizontalAxis.inside, true)
+  near(nearHorizontalAxis.nearestBoundaryPoint.x, aperture.centerX + 307.99986, 0.02)
+  near(nearHorizontalAxis.nearestBoundaryPoint.y, aperture.centerY + 3.00015, 0.02)
+  near(nearHorizontalAxis.signedDistancePx, -0.99986, 0.02)
+  assert.ok(nearHorizontalAxis.signedDistancePx > -aperture.snapDepthPx)
+
+  const nearVerticalAxis = evaluateTubeAperture(
+    aperture,
+    aperture.centerX + 3,
+    aperture.centerY + aperture.halfHeight - 1,
+  )
+  assert.equal(nearVerticalAxis.inside, true)
+  assert.ok(nearVerticalAxis.nearestBoundaryPoint.x > aperture.centerX)
+  assert.ok(nearVerticalAxis.nearestBoundaryPoint.y > aperture.centerY + aperture.halfHeight - 0.05)
+  near(nearVerticalAxis.signedDistancePx, -1, 0.03)
+  assert.ok(nearVerticalAxis.signedDistancePx > -aperture.snapDepthPx)
+})
+
 test('normalized tube UV remains geometric outside the aperture instead of clamping', () => {
   const point = evaluateTubeAperture(aperture, aperture.visible.left - 10, aperture.centerY)
   assert.ok(point.normalizedTubeUv.x < 0)
@@ -119,10 +143,33 @@ test('first real pointer sample seeds motion without inventing an angle from the
   near(motion.angle, 0, 1e-9)
   assert.equal(motion.previousX, 300)
   assert.equal(motion.previousY, 200)
+  assert.equal(motion.angleReferenceX, 300)
+  assert.equal(motion.angleReferenceY, 200)
 
   motion = updatePointerMotion(motion, { x: 310, y: 200, timeMs: 116 })
   assert.equal(motion.hasStableAngle, true)
   near(motion.angle, 0, 1e-9)
+})
+
+test('pointer motion accumulates sub-threshold samples before updating direction', () => {
+  let motion = createPointerMotion({ x: 0, y: 0, timeMs: 0 })
+
+  motion = updatePointerMotion(motion, { x: 0, y: 0.5, timeMs: 1 })
+  assert.equal(motion.hasStableAngle, false)
+  assert.equal(motion.angleReferenceY, 0)
+
+  motion = updatePointerMotion(motion, { x: 0, y: 1, timeMs: 2 })
+  assert.equal(motion.hasStableAngle, true)
+  near(motion.angle, Math.PI * 0.5, 1e-9)
+  assert.equal(motion.angleReferenceY, 1)
+
+  for (let index = 3; index <= 100; index += 1) {
+    motion = updatePointerMotion(motion, { x: 0, y: index * 0.5, timeMs: index })
+  }
+
+  assert.equal(motion.hasStableAngle, true)
+  near(motion.angle, Math.PI * 0.5, 1e-9)
+  near(motion.y, 50, 1e-9)
 })
 
 test('pointer motion filters speed, clamps spikes and preserves the last stable angle at rest', () => {
