@@ -57,6 +57,16 @@ let code = inlineModule?.[1] || ''
 if (!code && externalModule?.[1]) {
   const scriptPath = externalModule[1].replace(/^\//, '')
   code = fs.readFileSync(`dist/${scriptPath}`, 'utf8')
+  code = code.replace(/\bimport\.meta\.url\b/g, JSON.stringify(new URL(externalModule[1], 'http://localhost/').href))
+  code = code.replace(
+    /import\((['"])\.\/crt-cursor-controller-[^'"]+\.js\1\)/g,
+    'Promise.reject(new Error("interaction cursor chunk unavailable"))',
+  )
+  // Rollup can expose entry helpers for the split cursor chunk. This harness
+  // evaluates the entry as a classic script, so remove only the terminal ESM
+  // export list after deliberately disabling that child chunk above. Real
+  // browser ESM loading remains covered by Playwright.
+  code = code.replace(/\bexport\s*\{[^}]*\}\s*;?\s*$/s, '')
 }
 if (!code) errors.push('dist/index.html does not contain a runnable module script')
 else {
