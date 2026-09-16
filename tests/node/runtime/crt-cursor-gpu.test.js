@@ -8,7 +8,7 @@ import {
 } from '../../../src/crt-cursor-shape.js'
 
 globalThis.matchMedia = () => ({ matches: false })
-const { CRT, FRAG_CRT, FRAG_PERSIST } = await import('../../../src/crt.js')
+const { CRT, FRAG_CRT, FRAG_CRT_BASE, FRAG_PERSIST } = await import('../../../src/crt.js')
 
 const state = {
   crt: 1,
@@ -22,7 +22,9 @@ const state = {
 function createFakeGl() {
   const uniforms = {}
   const uploads = { source: 0, cursor: 0, target: 0 }
+  const programUses = []
   let textureId = 0
+  let programId = 0
 
   const gl = new Proxy({
     NO_ERROR: 0,
@@ -32,6 +34,8 @@ function createFakeGl() {
     getShaderParameter: () => true,
     getProgramParameter: () => true,
     getUniformLocation: (_program, name) => name,
+    createProgram: () => ({ id: ++programId }),
+    useProgram: program => { programUses.push(program?.id ?? null) },
     createTexture: () => ({ id: ++textureId }),
     texImage2D: (...args) => {
       if (args.length === 6) uploads.source += 1
@@ -49,7 +53,7 @@ function createFakeGl() {
         : () => ({}),
   })
 
-  return { gl, uniforms, uploads }
+  return { gl, uniforms, uploads, programUses }
 }
 
 test('canonical cursor shape is immutable, tip-anchored and rasterized once-ready', () => {
@@ -98,7 +102,7 @@ test('cursor runtime state normalizes partial updates without moving the hotspot
   assert.equal(second.recompositionStrength, 0.25)
 })
 
-test('cursor emission is excluded from persistence and adds into the shared tube signal', () => {
+test('cursor emission is excluded from persistence and the invisible CRT program has no reachable cursor sampling', () => {
   assert.equal(FRAG_PERSIST.includes('uCursor'), false)
   assert.equal(FRAG_PERSIST.includes('cursorEmission'), false)
   assert.ok(FRAG_CRT.includes('vec2 suv = signalUv(vUv);'))
@@ -106,10 +110,15 @@ test('cursor emission is excluded from persistence and adds into the shared tube
   assert.ok(FRAG_CRT.includes('if (uCursorVisible < 0.5) return base;'))
   assert.ok(FRAG_CRT.includes('return base + cursorEmission(suv);'))
   assert.equal(FRAG_CRT.includes('return max(base, cursorEmission(suv));'), false)
+
+  assert.ok(FRAG_CRT_BASE.includes('vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }'))
+  assert.equal(FRAG_CRT_BASE.includes('gCursorSignalHotspot = signalUv(uCursorHotspot);'), false)
+  assert.equal(FRAG_CRT_BASE.includes('return base + cursorEmission(suv);'), false)
+  assert.equal(FRAG_CRT_BASE.includes('if (uCursorVisible < 0.5) return base;'), false)
 })
 
-test('GPU cursor resource initializes once and cursor-only updates do not upload the raster source', () => {
-  const { gl, uniforms, uploads } = createFakeGl()
+test('GPU cursor resource initializes once, switches programs by visibility and never uploads the raster source for cursor updates', () => {
+  const { gl, uniforms, uploads, programUses } = createFakeGl()
   const source = { width: 480, height: 360 }
   const canvas = { getContext: () => gl, width: 480, height: 360 }
   const crt = new CRT(canvas, source)
@@ -117,9 +126,11 @@ test('GPU cursor resource initializes once and cursor-only updates do not upload
   assert.equal(crt.ok, true)
   assert.equal(crt.cursorResourceInitCount, 1)
   assert.equal(uploads.cursor, 1)
+  assert.notEqual(crt.progCrtBase, crt.progCrt)
 
   assert.equal(crt.render(state, false), true)
   assert.equal(uploads.source, 1)
+  assert.equal(programUses.at(-1), crt.progCrtBase.id)
 
   crt.setCursorState({
     visible: true,
@@ -133,6 +144,7 @@ test('GPU cursor resource initializes once and cursor-only updates do not upload
   })
   assert.equal(crt.render(state, false), true)
 
+  assert.equal(programUses.at(-1), crt.progCrt.id)
   assert.equal(uploads.cursor, 1)
   assert.equal(uploads.source, 1)
   assert.equal(crt.cursorResourceInitCount, 1)
@@ -179,6 +191,12 @@ test('GPU cursor resource initializes once and cursor-only updates do not upload
   assert.equal(uniforms.uCrt, 0)
   assert.equal(uniforms.uCursorVisible, 1)
   assert.equal(uploads.source, 1)
+
+  crt.setCursorState({ visible: false })
+  assert.equal(crt.render(state, false), true)
+  assert.equal(programUses.at(-1), crt.progCrtBase.id)
+  assert.equal(uploads.source, 1)
+  assert.equal(uploads.cursor, 1)
 
   assert.equal(crt.render(state, true), true)
   assert.equal(uploads.source, 2)
