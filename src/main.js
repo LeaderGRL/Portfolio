@@ -45,9 +45,9 @@ const install = app => {
   // frame. Load it immediately as a small non-blocking feature chunk so the
   // established boot bundle budget remains intact; native cursor behavior is
   // the fail-safe until installation succeeds.
-  void import('./crt-cursor-controller.js').then(
-    ({ CrtCursorController }) => {
-      app.cursorController = new CrtCursorController(app).install()
+  void import('./crt-cursor-runtime-controller.js').then(
+    ({ CrtCursorRuntimeController }) => {
+      app.cursorController = new CrtCursorRuntimeController(app).install()
     },
     error => {
       console.warn('CRT cursor unavailable; using the native cursor', error)
