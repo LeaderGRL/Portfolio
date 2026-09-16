@@ -203,6 +203,30 @@ test('stationary fullscreen capture recomputes softkey overlay ownership without
   assert.equal(crt.state.visible, false)
 })
 
+test('fullscreen exit Release preserves the treatment rendered over a softkey', () => {
+  const { app, controller, tube, view, move, setRect, setSoftkeyHit } = runtimeHarness()
+
+  move(280, 160, 0)
+  controller.frame(260)
+  assert.equal(controller.state, CRT_CURSOR_STATE.CRT_ACTIVE)
+
+  app.state.fullscreen = true
+  setSoftkeyHit(true)
+  move(280, 160, 280)
+  controller.frame(280)
+  assert.equal(tube.dataset.crtCursorOwner, 'svg-overlay')
+  assert.equal(view.last.phosphor, 0.72)
+
+  app.state.fullscreen = false
+  setSoftkeyHit(false)
+  setRect({ left: 20 })
+  controller.frame(300)
+
+  assert.equal(controller.state, CRT_CURSOR_STATE.RELEASING)
+  assert.ok(view.last.phosphor <= 0.72)
+  assert.ok(view.last.phosphor > 0.71)
+})
+
 test('CRT bypass Release starts from the displayed reduced treatment instead of flashing full phosphor', () => {
   const { app, controller, view, move } = runtimeHarness()
 
@@ -225,7 +249,34 @@ test('CRT bypass Release starts from the displayed reduced treatment instead of 
   assert.ok(view.last.phosphor < 0.58)
 })
 
-test('pointer sample buffer preserves the latest observable pointer while the cursor chunk loads', () => {
+test('active ownership uses an above-bezel DOM cursor outside the visible aperture', () => {
+  const { controller, crt, tube, view, move } = runtimeHarness()
+
+  move(280, 160, 0)
+  controller.frame(260)
+  assert.equal(controller.state, CRT_CURSOR_STATE.CRT_ACTIVE)
+  assert.equal(crt.state.visible, true)
+
+  // The authored aperture ends at x=288 after the 12 px horizontal bleed.
+  // Seven pixels outside the glass is still inside the ownership hysteresis.
+  move(295, 160, 300)
+  controller.frame(300)
+
+  assert.equal(controller.state, CRT_CURSOR_STATE.CRT_ACTIVE)
+  assert.equal(tube.dataset.crtCursorOwner, 'svg-edge')
+  assert.equal(view.visible, true)
+  assert.equal(view.last.phosphor, 1)
+  assert.equal(crt.state.visible, false)
+
+  move(285, 160, 320)
+  controller.frame(320)
+  assert.equal(controller.state, CRT_CURSOR_STATE.CRT_ACTIVE)
+  assert.equal(tube.dataset.crtCursorOwner, 'gpu')
+  assert.equal(view.visible, false)
+  assert.equal(crt.state.visible, true)
+})
+
+test('pointer sample buffer preserves the latest observable pointer while rebasing its animation clock', () => {
   const listeners = new Map()
   const windowRef = {
     addEventListener(type, listener) {
@@ -261,14 +312,43 @@ test('pointer sample buffer preserves the latest observable pointer while the cu
     target,
   })
 
-  const sample = buffer.stop().consume()
+  const sample = buffer.stop().consume(500)
   assert.deepEqual(sample, {
     clientX: 222,
     clientY: 151,
-    timeStamp: 18,
+    timeStamp: 500,
     pointerType: 'mouse',
     target,
   })
   assert.equal(listeners.size, 0)
   assert.equal(buffer.consume(), null)
+})
+
+test('rebased buffered pointer sample starts a fresh Absorption clock', () => {
+  const listeners = new Map()
+  const windowRef = {
+    addEventListener(type, listener) {
+      listeners.set(type, listener)
+    },
+    removeEventListener(type, listener) {
+      if (listeners.get(type) === listener) listeners.delete(type)
+    },
+  }
+  const buffer = createPointerSampleBuffer(windowRef).start()
+  listeners.get('pointermove')?.({
+    clientX: 285,
+    clientY: 160,
+    timeStamp: 18,
+    pointerType: 'mouse',
+    target: null,
+  })
+  const sample = buffer.stop().consume(500)
+  const { controller } = runtimeHarness()
+
+  controller.handlePointerMove(sample)
+  controller.frame(516)
+
+  assert.equal(controller.state, CRT_CURSOR_STATE.ABSORBING)
+  assert.ok(controller.absorption.progress > 0)
+  assert.ok(controller.absorption.progress < 0.2)
 })
