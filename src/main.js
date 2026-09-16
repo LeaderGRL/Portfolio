@@ -52,7 +52,7 @@ const install = app => {
   void import('./crt-cursor-runtime-controller.js').then(
     ({ CrtCursorRuntimeController }) => {
       const cursorController = new CrtCursorRuntimeController(app).install()
-      const bufferedPointerSample = cursorPointerBuffer.stop().consume()
+      const bufferedPointerSample = cursorPointerBuffer.stop().consume(cursorController.now())
       app.cursorController = cursorController
       if (bufferedPointerSample) cursorController.handlePointerMove(bufferedPointerSample)
     },
