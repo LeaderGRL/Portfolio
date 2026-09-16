@@ -10,6 +10,7 @@ const PROBE_CORNERS = [
 
 const CRT_BYPASS_PHOSPHOR = 0.58
 const SOFTKEY_OVERLAY_PHOSPHOR = 0.72
+const EDGE_OVERLAY_PHOSPHOR = 1
 
 function pointFromProbe(probe) {
   const rect = probe?.getBoundingClientRect?.()
@@ -71,6 +72,7 @@ export class CrtCursorRuntimeController extends CrtCursorController {
     this.softkeyOverlayActive = false
     this.softkeyHitTestDirty = true
     this.lastSoftkeyFullscreen = Boolean(app?.state?.fullscreen)
+    this.activeDomPhosphorScale = 1
     this.releasePhosphorScale = 1
     this.removeTubeQuadFallback = installTubeQuadFallback(this.tube, this.document)
   }
@@ -110,28 +112,43 @@ export class CrtCursorRuntimeController extends CrtCursorController {
     super.frame(ms)
   }
 
+  _showDomActiveRepresentation(phosphor, owner) {
+    this.activeDomPhosphorScale = phosphor
+    this.app.crt.setCursorState({
+      visible: false,
+      compression: 0,
+      recompositionStrength: 0,
+    })
+    this.view.show?.()
+    this._updateDomCursor(phosphor, 'bypass')
+    this._syncDomState(owner)
+  }
+
   _renderActiveRepresentation(compression, recompositionStrength) {
     if (this.softkeyOverlayActive && this.state === CRT_CURSOR_STATE.CRT_ACTIVE) {
-      this.app.crt.setCursorState({
-        visible: false,
-        compression: 0,
-        recompositionStrength: 0,
-      })
-      this.view.show?.()
-      this._updateDomCursor(SOFTKEY_OVERLAY_PHOSPHOR, 'bypass')
-      this._syncDomState('svg-overlay')
+      this._showDomActiveRepresentation(SOFTKEY_OVERLAY_PHOSPHOR, 'svg-overlay')
       return
     }
 
+    if (this.state === CRT_CURSOR_STATE.CRT_ACTIVE && this.edge?.signedDistancePx > 0) {
+      const phosphor = this._crtOpticsEnabled()
+        ? EDGE_OVERLAY_PHOSPHOR
+        : CRT_BYPASS_PHOSPHOR
+      this._showDomActiveRepresentation(phosphor, 'svg-edge')
+      return
+    }
+
+    this.activeDomPhosphorScale = this._crtOpticsEnabled()
+      ? 1
+      : CRT_BYPASS_PHOSPHOR
     super._renderActiveRepresentation(compression, recompositionStrength)
   }
 
   _startRelease(ms) {
-    this.releasePhosphorScale = !this._crtOpticsEnabled()
-      ? CRT_BYPASS_PHOSPHOR
-      : this.softkeyOverlayActive
-        ? SOFTKEY_OVERLAY_PHOSPHOR
-        : 1
+    // Capture what was actually visible on the preceding active frame. Runtime
+    // flags such as fullscreen/softkey ownership may already have changed by
+    // the time the base state machine notices that Release should begin.
+    this.releasePhosphorScale = this.activeDomPhosphorScale
     super._startRelease(ms)
   }
 
