@@ -82,31 +82,7 @@ function closestPointInQuadrant(pointX, pointY, halfWidth, halfHeight, exponent)
   let bestTheta = 0
   let bestDistance = squaredDistanceToPoint(0, pointX, pointY, halfWidth, halfHeight, exponent)
 
-  const considerInterval = (left, right) => {
-    const candidateTheta = refineDistanceMinimum(
-      left,
-      right,
-      pointX,
-      pointY,
-      halfWidth,
-      halfHeight,
-      exponent,
-    )
-    const candidateDistance = squaredDistanceToPoint(
-      candidateTheta,
-      pointX,
-      pointY,
-      halfWidth,
-      halfHeight,
-      exponent,
-    )
-    if (candidateDistance < bestDistance) {
-      bestDistance = candidateDistance
-      bestTheta = candidateTheta
-    }
-  }
-
-  // Stream the scan instead of allocating a sample array in the pointer hot
+  // Stream the scan instead of allocating sample storage in the pointer hot
   // path. Keeping the previous two scalar distances is enough to identify each
   // sampled local minimum while still considering the full quadrant.
   let previousPreviousDistance = bestDistance
@@ -126,7 +102,27 @@ function closestPointInQuadrant(pointX, pointY, halfWidth, halfHeight, exponent)
 
     const previousIndex = index - 1
     if (previousDistance <= previousPreviousDistance && previousDistance <= distance) {
-      considerInterval((previousIndex - 1) * step, (previousIndex + 1) * step)
+      const candidateTheta = refineDistanceMinimum(
+        (previousIndex - 1) * step,
+        (previousIndex + 1) * step,
+        pointX,
+        pointY,
+        halfWidth,
+        halfHeight,
+        exponent,
+      )
+      const candidateDistance = squaredDistanceToPoint(
+        candidateTheta,
+        pointX,
+        pointY,
+        halfWidth,
+        halfHeight,
+        exponent,
+      )
+      if (candidateDistance < bestDistance) {
+        bestDistance = candidateDistance
+        bestTheta = candidateTheta
+      }
     }
 
     previousPreviousDistance = previousDistance
@@ -135,8 +131,40 @@ function closestPointInQuadrant(pointX, pointY, halfWidth, halfHeight, exponent)
 
   // A true minimum can sit between an axis and the first/last scan sample
   // without either sampled endpoint looking like a local minimum.
-  considerInterval(0, step)
-  considerInterval(HALF_PI - step, HALF_PI)
+  let candidateTheta = refineDistanceMinimum(0, step, pointX, pointY, halfWidth, halfHeight, exponent)
+  let candidateDistance = squaredDistanceToPoint(
+    candidateTheta,
+    pointX,
+    pointY,
+    halfWidth,
+    halfHeight,
+    exponent,
+  )
+  if (candidateDistance < bestDistance) {
+    bestDistance = candidateDistance
+    bestTheta = candidateTheta
+  }
+
+  candidateTheta = refineDistanceMinimum(
+    HALF_PI - step,
+    HALF_PI,
+    pointX,
+    pointY,
+    halfWidth,
+    halfHeight,
+    exponent,
+  )
+  candidateDistance = squaredDistanceToPoint(
+    candidateTheta,
+    pointX,
+    pointY,
+    halfWidth,
+    halfHeight,
+    exponent,
+  )
+  if (candidateDistance < bestDistance) {
+    bestTheta = candidateTheta
+  }
 
   return pointOnSuperellipse(bestTheta, halfWidth, halfHeight, exponent)
 }
