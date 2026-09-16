@@ -71,6 +71,9 @@ export function createPointerMotion({ x = 0, y = 0, timeMs = null, angle = 0 } =
     previousY: y,
     angleReferenceX: x,
     angleReferenceY: y,
+    speedReferenceX: x,
+    speedReferenceY: y,
+    speedReferenceTimeMs: timeMs,
     timeMs,
     speedPxPerMs: 0,
     angle,
@@ -114,6 +117,9 @@ export function updatePointerMotion(previous, sample, {
     || !Number.isFinite(sample.timeMs)) {
     throw new TypeError('Pointer motion update requires finite x, y and timeMs values')
   }
+  if (angleThresholdPx < 0 || speedResponseHz < 0 || maxSpeedPxPerMs < 0) {
+    throw new RangeError('Pointer motion thresholds and speed values must be non-negative')
+  }
 
   // A model without a timestamp has not observed real movement yet. Seed the
   // first browser sample without inventing a direction from the default origin.
@@ -125,21 +131,15 @@ export function updatePointerMotion(previous, sample, {
       previousY: sample.y,
       angleReferenceX: sample.x,
       angleReferenceY: sample.y,
+      speedReferenceX: sample.x,
+      speedReferenceY: sample.y,
+      speedReferenceTimeMs: sample.timeMs,
       timeMs: sample.timeMs,
       speedPxPerMs: 0,
       angle: previous.angle,
       hasStableAngle: previous.hasStableAngle,
     }
   }
-
-  const dx = sample.x - previous.x
-  const dy = sample.y - previous.y
-  const distance = Math.hypot(dx, dy)
-  const rawDtMs = sample.timeMs - previous.timeMs
-  const dtMs = rawDtMs > 0 ? rawDtMs : 0
-  const instantSpeed = dtMs > 0 ? clamp(distance / dtMs, 0, maxSpeedPxPerMs) : 0
-  const response = dtMs > 0 ? 1 - Math.exp(-(dtMs / 1000) * speedResponseHz) : 0
-  const speedPxPerMs = previous.speedPxPerMs + (instantSpeed - previous.speedPxPerMs) * response
 
   const referenceX = Number.isFinite(previous.angleReferenceX) ? previous.angleReferenceX : previous.x
   const referenceY = Number.isFinite(previous.angleReferenceY) ? previous.angleReferenceY : previous.y
@@ -158,6 +158,27 @@ export function updatePointerMotion(previous, sample, {
     angleReferenceY = sample.y
   }
 
+  // Timer precision can produce several pointer samples with the same
+  // timestamp. Keep a separate speed baseline so movement from those samples
+  // is accumulated instead of disappearing when the visible position advances.
+  let speedReferenceX = Number.isFinite(previous.speedReferenceX) ? previous.speedReferenceX : previous.x
+  let speedReferenceY = Number.isFinite(previous.speedReferenceY) ? previous.speedReferenceY : previous.y
+  let speedReferenceTimeMs = Number.isFinite(previous.speedReferenceTimeMs)
+    ? previous.speedReferenceTimeMs
+    : previous.timeMs
+  let speedPxPerMs = previous.speedPxPerMs
+
+  const speedDtMs = sample.timeMs - speedReferenceTimeMs
+  if (speedDtMs > 0) {
+    const speedDistance = Math.hypot(sample.x - speedReferenceX, sample.y - speedReferenceY)
+    const instantSpeed = clamp(speedDistance / speedDtMs, 0, maxSpeedPxPerMs)
+    const response = 1 - Math.exp(-(speedDtMs / 1000) * speedResponseHz)
+    speedPxPerMs += (instantSpeed - speedPxPerMs) * response
+    speedReferenceX = sample.x
+    speedReferenceY = sample.y
+    speedReferenceTimeMs = sample.timeMs
+  }
+
   return {
     x: sample.x,
     y: sample.y,
@@ -165,6 +186,9 @@ export function updatePointerMotion(previous, sample, {
     previousY: previous.y,
     angleReferenceX,
     angleReferenceY,
+    speedReferenceX,
+    speedReferenceY,
+    speedReferenceTimeMs,
     timeMs: sample.timeMs,
     speedPxPerMs,
     angle,
