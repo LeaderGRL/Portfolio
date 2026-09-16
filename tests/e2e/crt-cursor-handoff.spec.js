@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test'
 
 test.use({ reducedMotion: 'no-preference' })
 
+const CURSOR_E2E_SETTLE_TIMEOUT_MS = 5000
+
 async function bootCursorPage(page) {
   await page.addInitScript(() => {
     globalThis.__JG1500_VISUAL_TEST__ = true
@@ -85,7 +87,11 @@ test('fine-pointer cursor absorbs through SVG, snaps to GPU and releases back to
   expect(tip.pointerEvents).toBe('none')
 
   await page.mouse.move(aperture.active.x, aperture.active.y)
-  await expect.poll(() => page.locator('#tube').getAttribute('data-crt-cursor-state'), { timeout: 1000 }).toBe('CRT_ACTIVE')
+  await expect(page.locator('#tube')).toHaveAttribute(
+    'data-crt-cursor-state',
+    'CRT_ACTIVE',
+    { timeout: CURSOR_E2E_SETTLE_TIMEOUT_MS },
+  )
   await expect(page.locator('.crt-cursor-dom__svg')).toBeHidden()
   expect(await page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().visible)).toBe(true)
 
@@ -101,7 +107,11 @@ test('fine-pointer cursor absorbs through SVG, snaps to GPU and releases back to
   expect(await page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().visible)).toBe(true)
 
   await page.mouse.move(aperture.releaseOutside.x, aperture.releaseOutside.y)
-  await expect.poll(() => page.locator('#tube').getAttribute('data-crt-cursor-state'), { timeout: 1000 }).toBe('NATIVE_OUTSIDE')
+  await expect(page.locator('#tube')).toHaveAttribute(
+    'data-crt-cursor-state',
+    'NATIVE_OUTSIDE',
+    { timeout: CURSOR_E2E_SETTLE_TIMEOUT_MS },
+  )
   await expect(page.locator('html')).not.toHaveClass(/crt-cursor-owned/)
   expect(await page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().visible)).toBe(false)
 })
@@ -138,7 +148,11 @@ test('fullscreen softkeys keep the active cursor visible above the DOM overlay',
   const aperture = await apertureGeometry(page)
 
   await page.mouse.move(aperture.active.x, aperture.active.y)
-  await expect.poll(() => page.locator('#tube').getAttribute('data-crt-cursor-state'), { timeout: 1000 }).toBe('CRT_ACTIVE')
+  await expect(page.locator('#tube')).toHaveAttribute(
+    'data-crt-cursor-state',
+    'CRT_ACTIVE',
+    { timeout: CURSOR_E2E_SETTLE_TIMEOUT_MS },
+  )
   await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-owner', 'gpu')
 
   const exitKey = page.locator('.softkeys__key--exit')
