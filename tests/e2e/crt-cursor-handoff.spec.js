@@ -56,6 +56,7 @@ async function apertureGeometry(page) {
       outside: offset(-(aperture.magneticZonePx + aperture.hysteresisPx + 12)),
       absorb: offset(-8),
       active: offset(8),
+      edgeBand: offset(-6),
       releaseOutside: offset(-(aperture.magneticZonePx + aperture.hysteresisPx + 8)),
     }
   })
@@ -85,6 +86,17 @@ test('fine-pointer cursor absorbs through SVG, snaps to GPU and releases back to
 
   await page.mouse.move(aperture.active.x, aperture.active.y)
   await expect.poll(() => page.locator('#tube').getAttribute('data-crt-cursor-state'), { timeout: 1000 }).toBe('CRT_ACTIVE')
+  await expect(page.locator('.crt-cursor-dom__svg')).toBeHidden()
+  expect(await page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().visible)).toBe(true)
+
+  await page.mouse.move(aperture.edgeBand.x, aperture.edgeBand.y)
+  await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'CRT_ACTIVE')
+  await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-owner', 'svg-edge')
+  await expect(page.locator('.crt-cursor-dom__svg')).toBeVisible()
+  expect(await page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().visible)).toBe(false)
+
+  await page.mouse.move(aperture.active.x, aperture.active.y)
+  await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-owner', 'gpu')
   await expect(page.locator('.crt-cursor-dom__svg')).toBeHidden()
   expect(await page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().visible)).toBe(true)
 
