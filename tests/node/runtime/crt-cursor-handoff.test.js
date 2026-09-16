@@ -186,7 +186,7 @@ test('absorption resumes continuously when the pointer re-enters before unwind c
   assert.ok(duringRetreat > 0)
   assert.equal(controller.state, CRT_CURSOR_STATE.ABSORBING)
 
-  move(300, 160, 100)
+  move(280, 160, 100)
   controller.frame(120)
   assert.equal(controller.state, CRT_CURSOR_STATE.ABSORBING)
   assert.equal(controller.absorption.reversing, false)
