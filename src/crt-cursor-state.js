@@ -74,6 +74,7 @@ export function createPointerMotion({ x = 0, y = 0, timeMs = null, angle = 0 } =
     speedReferenceX: x,
     speedReferenceY: y,
     speedReferenceTimeMs: timeMs,
+    speedPendingDistancePx: 0,
     timeMs,
     speedPxPerMs: 0,
     angle,
@@ -134,6 +135,7 @@ export function updatePointerMotion(previous, sample, {
       speedReferenceX: sample.x,
       speedReferenceY: sample.y,
       speedReferenceTimeMs: sample.timeMs,
+      speedPendingDistancePx: 0,
       timeMs: sample.timeMs,
       speedPxPerMs: 0,
       angle: previous.angle,
@@ -159,24 +161,31 @@ export function updatePointerMotion(previous, sample, {
   }
 
   // Timer precision can produce several pointer samples with the same
-  // timestamp. Keep a separate speed baseline so movement from those samples
-  // is accumulated instead of disappearing when the visible position advances.
+  // timestamp. Accumulate segment length, not only net displacement, so an
+  // out-and-back gesture cannot disappear from the speed estimate.
   let speedReferenceX = Number.isFinite(previous.speedReferenceX) ? previous.speedReferenceX : previous.x
   let speedReferenceY = Number.isFinite(previous.speedReferenceY) ? previous.speedReferenceY : previous.y
   let speedReferenceTimeMs = Number.isFinite(previous.speedReferenceTimeMs)
     ? previous.speedReferenceTimeMs
     : previous.timeMs
+  let speedPendingDistancePx = Number.isFinite(previous.speedPendingDistancePx)
+    ? previous.speedPendingDistancePx
+    : 0
   let speedPxPerMs = previous.speedPxPerMs
 
+  const segmentDistance = Math.hypot(sample.x - previous.x, sample.y - previous.y)
   const speedDtMs = sample.timeMs - speedReferenceTimeMs
   if (speedDtMs > 0) {
-    const speedDistance = Math.hypot(sample.x - speedReferenceX, sample.y - speedReferenceY)
+    const speedDistance = speedPendingDistancePx + segmentDistance
     const instantSpeed = clamp(speedDistance / speedDtMs, 0, maxSpeedPxPerMs)
     const response = 1 - Math.exp(-(speedDtMs / 1000) * speedResponseHz)
     speedPxPerMs += (instantSpeed - speedPxPerMs) * response
     speedReferenceX = sample.x
     speedReferenceY = sample.y
     speedReferenceTimeMs = sample.timeMs
+    speedPendingDistancePx = 0
+  } else {
+    speedPendingDistancePx += segmentDistance
   }
 
   return {
@@ -189,6 +198,7 @@ export function updatePointerMotion(previous, sample, {
     speedReferenceX,
     speedReferenceY,
     speedReferenceTimeMs,
+    speedPendingDistancePx,
     timeMs: sample.timeMs,
     speedPxPerMs,
     angle,
