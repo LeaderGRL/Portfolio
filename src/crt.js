@@ -292,6 +292,15 @@ export class CRT {
     return this.cursorState;
   }
 
+  _syncOutputDensity(fallbackDensity = 1) {
+    const cssW = Number(this.canvas.offsetWidth);
+    const cssH = Number(this.canvas.offsetHeight);
+    const xDensity = cssW > 0 ? this.canvas.width / cssW : Number.NaN;
+    const yDensity = cssH > 0 ? this.canvas.height / cssH : Number.NaN;
+    const measured = [xDensity, yDensity].filter(value => Number.isFinite(value) && value > 0);
+    this.outputDensity = measured.length ? Math.min(...measured) : fallbackDensity;
+  }
+
   _fail(error) {
     this.ok = false;
     const gl = this.gl;
@@ -455,9 +464,10 @@ export class CRT {
     const density = Math.min(dpr, this.maxDimension / Math.max(cssW, cssH));
     const w = Math.max(1, Math.floor(cssW * density));
     const h = Math.max(1, Math.floor(cssH * density));
-    this.outputDensity = density;
-    if (this.canvas.width === w && this.canvas.height === h) return;
-    this.canvas.width = w; this.canvas.height = h;
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w; this.canvas.height = h;
+    }
+    this._syncOutputDensity(density);
   }
 
   render(state, sourceDirty) {
