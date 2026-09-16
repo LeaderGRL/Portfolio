@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test'
 
+test.use({ reducedMotion: 'no-preference' })
+
 async function bootCursorPage(page) {
   await page.addInitScript(() => {
     globalThis.__JG1500_VISUAL_TEST__ = true
@@ -15,7 +17,9 @@ async function apertureGeometry(page) {
     controller.refreshGeometry()
     const aperture = controller.aperture
     return {
+      left: aperture.visible.left,
       right: aperture.visible.left + aperture.visible.width,
+      centerX: aperture.centerX,
       centerY: aperture.centerY,
       zone: aperture.magneticZonePx,
       hysteresis: aperture.hysteresisPx,
@@ -33,7 +37,7 @@ test('fine-pointer cursor absorbs through SVG, snaps to GPU and releases back to
 
   await page.mouse.move(aperture.right + 8, aperture.centerY)
   await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'ABSORBING')
-  await expect(page.locator('.crt-cursor-dom')).toBeVisible()
+  await expect(page.locator('.crt-cursor-dom__svg')).toBeVisible()
   await expect(page.locator('html')).toHaveClass(/crt-cursor-owned/)
 
   const tip = await page.locator('.crt-cursor-dom').evaluate(node => ({
@@ -47,7 +51,7 @@ test('fine-pointer cursor absorbs through SVG, snaps to GPU and releases back to
 
   await page.mouse.move(aperture.right - 8, aperture.centerY)
   await expect.poll(() => page.locator('#tube').getAttribute('data-crt-cursor-state'), { timeout: 1000 }).toBe('CRT_ACTIVE')
-  await expect(page.locator('.crt-cursor-dom')).toBeHidden()
+  await expect(page.locator('.crt-cursor-dom__svg')).toBeHidden()
   expect(await page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().visible)).toBe(true)
 
   await page.mouse.move(aperture.right + aperture.zone + aperture.hysteresis + 8, aperture.centerY)
@@ -78,4 +82,32 @@ test('SVG absorption never intercepts the real click target', async ({ page }, t
   await page.mouse.down()
   await page.mouse.up()
   await expect(page.locator('#cursor-click-probe')).toHaveAttribute('data-clicked', 'true')
+})
+
+test('fullscreen softkeys keep the active cursor visible above the DOM overlay', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'Fullscreen cursor overlay ownership is exercised once on desktop Chromium')
+  await bootCursorPage(page)
+
+  await page.keyboard.press('f')
+  await expect(page.locator('body')).toHaveClass(/is-crt-fullscreen/)
+  const aperture = await apertureGeometry(page)
+
+  await page.mouse.move(aperture.right - 8, aperture.centerY)
+  await expect.poll(() => page.locator('#tube').getAttribute('data-crt-cursor-state'), { timeout: 1000 }).toBe('CRT_ACTIVE')
+  await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-owner', 'gpu')
+
+  const exitKey = page.locator('.softkeys__key--exit')
+  await expect(exitKey).toBeVisible()
+  const box = await exitKey.boundingBox()
+  expect(box).not.toBeNull()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+
+  await expect.poll(() => page.locator('#tube').getAttribute('data-crt-cursor-owner')).toBe('svg-overlay')
+  await expect(page.locator('.crt-cursor-dom__svg')).toBeVisible()
+  expect(await page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().visible)).toBe(false)
+
+  await page.mouse.move(aperture.centerX, aperture.centerY)
+  await expect.poll(() => page.locator('#tube').getAttribute('data-crt-cursor-owner')).toBe('gpu')
+  await expect(page.locator('.crt-cursor-dom__svg')).toBeHidden()
+  expect(await page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().visible)).toBe(true)
 })
