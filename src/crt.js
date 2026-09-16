@@ -152,7 +152,7 @@ vec3 cursorEmission(vec2 suv){
 // at the very edge of the curvature, without a second picture border. The
 // cursor is injected here, after persistence but before all analogue sampling,
 // so bloom/defocus/overshoot/etc affect it without ever entering phosphor
-// history. With visibility off this returns the exact pre-cursor source path.
+// history. With visibility off the renderer selects FRAG_CRT_BASE instead.
 vec3 src(vec2 suv){
   vec3 base = texture(uTex, suv).rgb;
   if (uCursorVisible < 0.5) return base;
@@ -256,6 +256,20 @@ void main(){
   outColor = vec4(max(col, 0.0), 1.0);
 }`;
 
+const CURSOR_SRC_BLOCK = `vec3 src(vec2 suv){
+  vec3 base = texture(uTex, suv).rgb;
+  if (uCursorVisible < 0.5) return base;
+  return base + cursorEmission(suv);
+}`;
+const CURSOR_HOTSPOT_LINE = '  gCursorSignalHotspot = signalUv(uCursorHotspot);\n';
+
+// Keep the ordinary CRT on a program that contains no reachable cursor work.
+// Chromium software WebGL pays a measurable cost for the cursor branch when it
+// sits inside every bloom/defocus source sample, even while the cursor is off.
+export const FRAG_CRT_BASE = FRAG_CRT
+  .replace(CURSOR_SRC_BLOCK, 'vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }')
+  .replace(CURSOR_HOTSPOT_LINE, '');
+
 export class CRT {
   constructor(canvas, source) {
     this.canvas = canvas;
@@ -312,6 +326,7 @@ export class CRT {
     if (this.buf) gl.deleteBuffer(this.buf);
     if (this.vao) gl.deleteVertexArray(this.vao);
     if (this.progPersist) gl.deleteProgram(this.progPersist);
+    if (this.progCrtBase) gl.deleteProgram(this.progCrtBase);
     if (this.progCrt) gl.deleteProgram(this.progCrt);
     console.warn('CRT unavailable; using the live 2D source', error);
   }
@@ -413,10 +428,17 @@ export class CRT {
     }
   }
 
+  _uniforms(program, names) {
+    const uniforms = {};
+    for (const name of names) uniforms[name] = this.gl.getUniformLocation(program, name);
+    return uniforms;
+  }
+
   _init() {
     const gl = this.gl;
 
     this.progPersist = this._program(VERT, FRAG_PERSIST);
+    this.progCrtBase = this._program(VERT, FRAG_CRT_BASE);
     this.progCrt = this._program(VERT, FRAG_CRT);
 
     const vao = gl.createVertexArray();
@@ -451,13 +473,14 @@ export class CRT {
       prev: gl.getUniformLocation(this.progPersist, "uPrev"),
       decay: gl.getUniformLocation(this.progPersist, "uDecay"),
     };
-    this.u = {};
-    for (const n of [
-      "uTex","uCursorTex","uOut","uSrc","uTime","uPower","uCrt","uDegauss","uStatic","uWarm","uScanlines",
-      "uCursorVisible","uCursorHotspot","uCursorAngle","uCursorSizePx","uCursorCompression","uCursorHover","uCursorClick","uCursorRecompose",
-    ]) {
-      this.u[n] = gl.getUniformLocation(this.progCrt, n);
-    }
+    const commonUniforms = [
+      "uTex","uOut","uSrc","uTime","uPower","uCrt","uDegauss","uStatic","uWarm","uScanlines",
+    ];
+    this.uBase = this._uniforms(this.progCrtBase, commonUniforms);
+    this.u = this._uniforms(this.progCrt, [
+      ...commonUniforms,
+      "uCursorTex","uCursorVisible","uCursorHotspot","uCursorAngle","uCursorSizePx","uCursorCompression","uCursorHover","uCursorClick","uCursorRecompose",
+    ]);
   }
 
   resize(cssW, cssH, dpr) {
@@ -521,30 +544,37 @@ export class CRT {
 
     // --- composite pass ---
     const cursor = this.cursorState;
+    const cursorVisible = Boolean(cursor.visible);
+    const program = cursorVisible ? this.progCrt : this.progCrtBase;
+    const u = cursorVisible ? this.u : this.uBase;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.useProgram(this.progCrt);
+    gl.useProgram(program);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.a.tex);
-    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.cursorTex);
-    gl.uniform1i(this.u.uTex, 0);
-    gl.uniform1i(this.u.uCursorTex, 2);
-    gl.uniform2f(this.u.uOut, this.canvas.width, this.canvas.height);
-    gl.uniform2f(this.u.uSrc, sw, sh);
-    gl.uniform1f(this.u.uScanlines, SRC_H);
-    gl.uniform1f(this.u.uTime, state.time);
-    gl.uniform1f(this.u.uPower, state.power);
-    gl.uniform1f(this.u.uCrt, state.crt);
-    gl.uniform1f(this.u.uDegauss, state.degauss);
-    gl.uniform1f(this.u.uStatic, state.static);
-    gl.uniform1f(this.u.uWarm, state.warm);
-    gl.uniform1f(this.u.uCursorVisible, cursor.visible ? 1 : 0);
-    gl.uniform2f(this.u.uCursorHotspot, cursor.hotspotUv.x, cursor.hotspotUv.y);
-    gl.uniform1f(this.u.uCursorAngle, cursor.angle);
-    gl.uniform1f(this.u.uCursorSizePx, cursor.sizePx * this.outputDensity);
-    gl.uniform1f(this.u.uCursorCompression, cursor.compression);
-    gl.uniform1f(this.u.uCursorHover, cursor.hoverIntensity);
-    gl.uniform1f(this.u.uCursorClick, cursor.clickImpulse);
-    gl.uniform1f(this.u.uCursorRecompose, cursor.recompositionStrength);
+    gl.uniform1i(u.uTex, 0);
+    gl.uniform2f(u.uOut, this.canvas.width, this.canvas.height);
+    gl.uniform2f(u.uSrc, sw, sh);
+    gl.uniform1f(u.uScanlines, SRC_H);
+    gl.uniform1f(u.uTime, state.time);
+    gl.uniform1f(u.uPower, state.power);
+    gl.uniform1f(u.uCrt, state.crt);
+    gl.uniform1f(u.uDegauss, state.degauss);
+    gl.uniform1f(u.uStatic, state.static);
+    gl.uniform1f(u.uWarm, state.warm);
+
+    if (cursorVisible) {
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.cursorTex);
+      gl.uniform1i(u.uCursorTex, 2);
+      gl.uniform1f(u.uCursorVisible, 1);
+      gl.uniform2f(u.uCursorHotspot, cursor.hotspotUv.x, cursor.hotspotUv.y);
+      gl.uniform1f(u.uCursorAngle, cursor.angle);
+      gl.uniform1f(u.uCursorSizePx, cursor.sizePx * this.outputDensity);
+      gl.uniform1f(u.uCursorCompression, cursor.compression);
+      gl.uniform1f(u.uCursorHover, cursor.hoverIntensity);
+      gl.uniform1f(u.uCursorClick, cursor.clickImpulse);
+      gl.uniform1f(u.uCursorRecompose, cursor.recompositionStrength);
+    }
+
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     return true;
   }
