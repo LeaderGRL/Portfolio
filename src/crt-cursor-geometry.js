@@ -1,5 +1,7 @@
 const HALF_PI = Math.PI * 0.5
 const GOLDEN_RATIO_CONJUGATE = (Math.sqrt(5) - 1) * 0.5
+const DISTANCE_SCAN_SEGMENTS = 128
+const DISTANCE_REFINE_ITERATIONS = 24
 
 export const DEFAULT_TUBE_EXPONENT = 3.1
 export const DEFAULT_MAGNETIC_ZONE_PX = 16
@@ -26,23 +28,13 @@ function squaredDistanceToPoint(theta, point, halfWidth, halfHeight, exponent) {
   return dx * dx + dy * dy
 }
 
-function closestPointInQuadrant(point, halfWidth, halfHeight, exponent) {
-  if (point.x === 0 && point.y === 0) {
-    return halfWidth <= halfHeight
-      ? { x: halfWidth, y: 0 }
-      : { x: 0, y: halfHeight }
-  }
-
-  let left = 0
-  let right = HALF_PI
+function refineDistanceMinimum(left, right, point, halfWidth, halfHeight, exponent) {
   let c = right - (right - left) * GOLDEN_RATIO_CONJUGATE
   let d = left + (right - left) * GOLDEN_RATIO_CONJUGATE
   let fc = squaredDistanceToPoint(c, point, halfWidth, halfHeight, exponent)
   let fd = squaredDistanceToPoint(d, point, halfWidth, halfHeight, exponent)
 
-  // Fixed iterations keep runtime cost deterministic while converging well below
-  // a sub-pixel error for the tube sizes used by the portfolio.
-  for (let index = 0; index < 22; index += 1) {
+  for (let index = 0; index < DISTANCE_REFINE_ITERATIONS; index += 1) {
     if (fc <= fd) {
       right = d
       d = c
@@ -59,21 +51,54 @@ function closestPointInQuadrant(point, halfWidth, halfHeight, exponent) {
   }
 
   const theta = (left + right) * 0.5
-  const candidate = pointOnSuperellipse(theta, halfWidth, halfHeight, exponent)
-  const xAxis = { x: halfWidth, y: 0 }
-  const yAxis = { x: 0, y: halfHeight }
-  const candidates = [candidate, xAxis, yAxis]
-  let closest = candidates[0]
-  let closestDistance = (closest.x - point.x) ** 2 + (closest.y - point.y) ** 2
-  for (let index = 1; index < candidates.length; index += 1) {
-    const next = candidates[index]
-    const nextDistance = (next.x - point.x) ** 2 + (next.y - point.y) ** 2
-    if (nextDistance < closestDistance) {
-      closest = next
-      closestDistance = nextDistance
+  return {
+    theta,
+    distance: squaredDistanceToPoint(theta, point, halfWidth, halfHeight, exponent),
+  }
+}
+
+function closestPointInQuadrant(point, halfWidth, halfHeight, exponent) {
+  if (point.x === 0 && point.y === 0) {
+    return halfWidth <= halfHeight
+      ? { x: halfWidth, y: 0 }
+      : { x: 0, y: halfHeight }
+  }
+
+  const step = HALF_PI / DISTANCE_SCAN_SEGMENTS
+  const samples = new Array(DISTANCE_SCAN_SEGMENTS + 1)
+  let bestTheta = 0
+  let bestDistance = Infinity
+
+  for (let index = 0; index <= DISTANCE_SCAN_SEGMENTS; index += 1) {
+    const theta = index * step
+    const distance = squaredDistanceToPoint(theta, point, halfWidth, halfHeight, exponent)
+    samples[index] = distance
+    if (distance < bestDistance) {
+      bestDistance = distance
+      bestTheta = theta
     }
   }
-  return closest
+
+  // Distance to a superellipse is not guaranteed to be unimodal for points
+  // inside the curve. Scan the full quadrant, then refine every sampled local
+  // minimum instead of applying one golden-section search to the whole arc.
+  for (let index = 1; index < DISTANCE_SCAN_SEGMENTS; index += 1) {
+    if (samples[index] > samples[index - 1] || samples[index] > samples[index + 1]) continue
+    const candidate = refineDistanceMinimum(
+      (index - 1) * step,
+      (index + 1) * step,
+      point,
+      halfWidth,
+      halfHeight,
+      exponent,
+    )
+    if (candidate.distance < bestDistance) {
+      bestDistance = candidate.distance
+      bestTheta = candidate.theta
+    }
+  }
+
+  return pointOnSuperellipse(bestTheta, halfWidth, halfHeight, exponent)
 }
 
 function inwardNormalAt(edgeX, edgeY, halfWidth, halfHeight, exponent) {
@@ -141,7 +166,7 @@ export function createTubeAperture({
   })
 }
 
-/** Return exact-enough Euclidean edge data for pointer hit testing. */
+/** Return Euclidean edge data for pointer hit testing. */
 export function evaluateTubeAperture(aperture, clientX, clientY) {
   if (!aperture || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
     throw new TypeError('Tube aperture evaluation requires an aperture and finite point')
