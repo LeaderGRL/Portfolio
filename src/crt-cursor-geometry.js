@@ -4,6 +4,7 @@ const DISTANCE_SCAN_SEGMENTS = 128
 const DISTANCE_REFINE_ITERATIONS = 24
 
 export const DEFAULT_TUBE_EXPONENT = 3.1
+export const MAX_TUBE_EXPONENT = 8
 export const DEFAULT_MAGNETIC_ZONE_PX = 16
 export const DEFAULT_HYSTERESIS_PX = 4
 export const DEFAULT_SNAP_DEPTH_PX = 2
@@ -24,18 +25,32 @@ function pointOnSuperellipse(theta, halfWidth, halfHeight, exponent) {
   }
 }
 
-function squaredDistanceToPoint(theta, point, halfWidth, halfHeight, exponent) {
-  const edge = pointOnSuperellipse(theta, halfWidth, halfHeight, exponent)
-  const dx = edge.x - point.x
-  const dy = edge.y - point.y
+function squaredDistanceToPoint(theta, pointX, pointY, halfWidth, halfHeight, exponent) {
+  let edgeX
+  let edgeY
+
+  if (theta <= 0) {
+    edgeX = halfWidth
+    edgeY = 0
+  } else if (theta >= HALF_PI) {
+    edgeX = 0
+    edgeY = halfHeight
+  } else {
+    const power = 2 / exponent
+    edgeX = halfWidth * Math.pow(Math.max(0, Math.cos(theta)), power)
+    edgeY = halfHeight * Math.pow(Math.max(0, Math.sin(theta)), power)
+  }
+
+  const dx = edgeX - pointX
+  const dy = edgeY - pointY
   return dx * dx + dy * dy
 }
 
-function refineDistanceMinimum(left, right, point, halfWidth, halfHeight, exponent) {
+function refineDistanceMinimum(left, right, pointX, pointY, halfWidth, halfHeight, exponent) {
   let c = right - (right - left) * GOLDEN_RATIO_CONJUGATE
   let d = left + (right - left) * GOLDEN_RATIO_CONJUGATE
-  let fc = squaredDistanceToPoint(c, point, halfWidth, halfHeight, exponent)
-  let fd = squaredDistanceToPoint(d, point, halfWidth, halfHeight, exponent)
+  let fc = squaredDistanceToPoint(c, pointX, pointY, halfWidth, halfHeight, exponent)
+  let fd = squaredDistanceToPoint(d, pointX, pointY, halfWidth, halfHeight, exponent)
 
   for (let index = 0; index < DISTANCE_REFINE_ITERATIONS; index += 1) {
     if (fc <= fd) {
@@ -43,73 +58,85 @@ function refineDistanceMinimum(left, right, point, halfWidth, halfHeight, expone
       d = c
       fd = fc
       c = right - (right - left) * GOLDEN_RATIO_CONJUGATE
-      fc = squaredDistanceToPoint(c, point, halfWidth, halfHeight, exponent)
+      fc = squaredDistanceToPoint(c, pointX, pointY, halfWidth, halfHeight, exponent)
     } else {
       left = c
       c = d
       fc = fd
       d = left + (right - left) * GOLDEN_RATIO_CONJUGATE
-      fd = squaredDistanceToPoint(d, point, halfWidth, halfHeight, exponent)
+      fd = squaredDistanceToPoint(d, pointX, pointY, halfWidth, halfHeight, exponent)
     }
   }
 
-  const theta = (left + right) * 0.5
-  return {
-    theta,
-    distance: squaredDistanceToPoint(theta, point, halfWidth, halfHeight, exponent),
-  }
+  return (left + right) * 0.5
 }
 
-function closestPointInQuadrant(point, halfWidth, halfHeight, exponent) {
-  if (point.x === 0 && point.y === 0) {
+function closestPointInQuadrant(pointX, pointY, halfWidth, halfHeight, exponent) {
+  if (pointX === 0 && pointY === 0) {
     return halfWidth <= halfHeight
       ? { x: halfWidth, y: 0 }
       : { x: 0, y: halfHeight }
   }
 
   const step = HALF_PI / DISTANCE_SCAN_SEGMENTS
-  const samples = new Array(DISTANCE_SCAN_SEGMENTS + 1)
   let bestTheta = 0
-  let bestDistance = Infinity
+  let bestDistance = squaredDistanceToPoint(0, pointX, pointY, halfWidth, halfHeight, exponent)
 
-  for (let index = 0; index <= DISTANCE_SCAN_SEGMENTS; index += 1) {
-    const theta = index * step
-    const distance = squaredDistanceToPoint(theta, point, halfWidth, halfHeight, exponent)
-    samples[index] = distance
-    if (distance < bestDistance) {
-      bestDistance = distance
-      bestTheta = theta
-    }
-  }
-
-  const considerRefinedInterval = (left, right) => {
-    const candidate = refineDistanceMinimum(
+  const considerInterval = (left, right) => {
+    const candidateTheta = refineDistanceMinimum(
       left,
       right,
-      point,
+      pointX,
+      pointY,
       halfWidth,
       halfHeight,
       exponent,
     )
-    if (candidate.distance < bestDistance) {
-      bestDistance = candidate.distance
-      bestTheta = candidate.theta
+    const candidateDistance = squaredDistanceToPoint(
+      candidateTheta,
+      pointX,
+      pointY,
+      halfWidth,
+      halfHeight,
+      exponent,
+    )
+    if (candidateDistance < bestDistance) {
+      bestDistance = candidateDistance
+      bestTheta = candidateTheta
     }
   }
 
-  // Distance to a superellipse is not guaranteed to be unimodal for points
-  // inside the curve. Scan the full quadrant, then refine every sampled local
-  // minimum instead of applying one golden-section search to the whole arc.
-  // The two endpoint intervals need explicit refinement because a true minimum
-  // can sit between the axis and the first/last sample without making either
-  // sampled endpoint a discrete local minimum.
-  considerRefinedInterval(0, step)
-  considerRefinedInterval(HALF_PI - step, HALF_PI)
-
-  for (let index = 1; index < DISTANCE_SCAN_SEGMENTS; index += 1) {
-    if (samples[index] > samples[index - 1] || samples[index] > samples[index + 1]) continue
-    considerRefinedInterval((index - 1) * step, (index + 1) * step)
+  // Stream the scan instead of allocating a sample array in the pointer hot
+  // path. Keeping the previous two scalar distances is enough to identify each
+  // sampled local minimum while still considering the full quadrant.
+  let previousPreviousDistance = bestDistance
+  let previousDistance = squaredDistanceToPoint(step, pointX, pointY, halfWidth, halfHeight, exponent)
+  if (previousDistance < bestDistance) {
+    bestDistance = previousDistance
+    bestTheta = step
   }
+
+  for (let index = 2; index <= DISTANCE_SCAN_SEGMENTS; index += 1) {
+    const theta = index * step
+    const distance = squaredDistanceToPoint(theta, pointX, pointY, halfWidth, halfHeight, exponent)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      bestTheta = theta
+    }
+
+    const previousIndex = index - 1
+    if (previousDistance <= previousPreviousDistance && previousDistance <= distance) {
+      considerInterval((previousIndex - 1) * step, (previousIndex + 1) * step)
+    }
+
+    previousPreviousDistance = previousDistance
+    previousDistance = distance
+  }
+
+  // A true minimum can sit between an axis and the first/last scan sample
+  // without either sampled endpoint looking like a local minimum.
+  considerInterval(0, step)
+  considerInterval(HALF_PI - step, HALF_PI)
 
   return pointOnSuperellipse(bestTheta, halfWidth, halfHeight, exponent)
 }
@@ -149,9 +176,12 @@ export function createTubeAperture({
   if (bleedX < 0 || bleedY < 0 || bleedX * 2 >= width || bleedY * 2 >= height) {
     throw new RangeError('Tube aperture bleed must leave a positive visible aperture')
   }
-  // The authored CRT uses a convex squircle. Exponents below 2 describe a
-  // different, diamond-like family and make the centre shortcut invalid.
-  if (exponent < 2) throw new RangeError('Tube aperture exponent must be at least 2')
+  // The authored CRT uses a convex squircle (3.1 today), not an arbitrary
+  // superellipse library. Values above 8 are effectively near-rectangular for
+  // this interaction and exceed the stable/tunable domain needed by the asset.
+  if (exponent < 2 || exponent > MAX_TUBE_EXPONENT) {
+    throw new RangeError(`Tube aperture exponent must be between 2 and ${MAX_TUBE_EXPONENT}`)
+  }
   if (magneticZonePx <= 0 || hysteresisPx < 0 || snapDepthPx < 0) {
     throw new RangeError('Magnetic-zone values must be non-negative and zone width must be positive')
   }
@@ -189,9 +219,9 @@ export function evaluateTubeAperture(aperture, clientX, clientY) {
 
   const localX = clientX - aperture.centerX
   const localY = clientY - aperture.centerY
-  const quadrantPoint = { x: Math.abs(localX), y: Math.abs(localY) }
   const closest = closestPointInQuadrant(
-    quadrantPoint,
+    Math.abs(localX),
+    Math.abs(localY),
     aperture.halfWidth,
     aperture.halfHeight,
     aperture.exponent,
