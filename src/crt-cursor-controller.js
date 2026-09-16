@@ -425,7 +425,9 @@ export class CrtCursorController {
           this.motion.x,
           this.motion.y,
         )
-        if (this.state === CRT_CURSOR_STATE.ABSORBING) {
+        if (this.state === CRT_CURSOR_STATE.NATIVE_OUTSIDE) {
+          this.zoneLatched = updateMagneticZoneLatch(this.aperture, false, this.edge.signedDistancePx)
+        } else if (this.state === CRT_CURSOR_STATE.ABSORBING) {
           this.zoneLatched = updateMagneticZoneLatch(this.aperture, true, this.edge.signedDistancePx)
         } else if (this.state === CRT_CURSOR_STATE.CRT_ACTIVE) {
           this.zoneLatched = updateMagneticZoneLatch(this.aperture, true, this.edge.signedDistancePx)
@@ -441,6 +443,10 @@ export class CrtCursorController {
       this._handleReducedMotion()
       if (this.state === CRT_CURSOR_STATE.CRT_ACTIVE) this._renderActiveRepresentation(0, 0)
       return
+    }
+
+    if (this.state === CRT_CURSOR_STATE.NATIVE_OUTSIDE && this.zoneLatched) {
+      this._startAbsorption(ms)
     }
 
     if (this.pendingRelease && this.state === CRT_CURSOR_STATE.CRT_ACTIVE) {
@@ -664,19 +670,57 @@ export class CrtCursorController {
 
   _handleReducedMotion() {
     if (!this.edge) return
-    if (this.edge.inside && this.state === CRT_CURSOR_STATE.NATIVE_OUTSIDE) {
-      this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.DIRECT_ENTER)
+    const inside = this.edge.inside
+
+    if (inside) {
+      if (this.state === CRT_CURSOR_STATE.NATIVE_OUTSIDE) {
+        this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.DIRECT_ENTER)
+      } else if (this.state === CRT_CURSOR_STATE.ABSORBING) {
+        // Collapse the in-flight cinematic without invoking _snap(), so reduced
+        // motion does not introduce squash/recomposition or future Snap audio.
+        this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.SNAP)
+      } else if (this.state === CRT_CURSOR_STATE.RELEASING) {
+        this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.RELEASE_CANCEL)
+      } else if (this.state !== CRT_CURSOR_STATE.CRT_ACTIVE) {
+        return
+      }
+
       this.zoneLatched = true
+      this.absorption = null
+      this.release = null
+      this.recompose = null
+      this.pendingRelease = false
+      this.pendingReleaseCancel = false
       this._setOwnership(true)
       this._renderActiveRepresentation(0, 0)
-    } else if (!this.edge.inside && this.state === CRT_CURSOR_STATE.CRT_ACTIVE) {
-      this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.DIRECT_EXIT)
-      this.zoneLatched = false
-      this.app.crt.setCursorState({ visible: false })
-      this.view.hide?.()
-      this._setOwnership(false)
-      this._syncDomState('native')
+      return
     }
+
+    if (this.state === CRT_CURSOR_STATE.NATIVE_OUTSIDE) {
+      this.zoneLatched = false
+      return
+    }
+
+    if (this.state === CRT_CURSOR_STATE.ABSORBING) {
+      this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.CAPTURE_CANCEL)
+    } else if (this.state === CRT_CURSOR_STATE.CRT_ACTIVE) {
+      this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.DIRECT_EXIT)
+    } else if (this.state === CRT_CURSOR_STATE.RELEASING) {
+      this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.RELEASE_COMPLETE)
+    } else {
+      return
+    }
+
+    this.zoneLatched = false
+    this.absorption = null
+    this.release = null
+    this.recompose = null
+    this.pendingRelease = false
+    this.pendingReleaseCancel = false
+    this.app.crt.setCursorState({ visible: false, compression: 0, recompositionStrength: 0 })
+    this.view.hide?.()
+    this._setOwnership(false)
+    this._syncDomState('native')
   }
 
   _setOwnership(owned) {
