@@ -60,6 +60,18 @@ test('tube aperture signed distance changes sign across straight and curved edge
   assert.ok(cornerOutside.inwardNormal.y > 0)
 })
 
+test('tube aperture searches all local distance minima for interior points', () => {
+  const point = evaluateTubeAperture(aperture, aperture.centerX + 140, aperture.centerY + 45)
+  assert.equal(point.inside, true)
+  near(point.nearestBoundaryPoint.x, aperture.centerX + 306.67455, 0.03)
+  near(point.nearestBoundaryPoint.y, aperture.centerY + 57.05736, 0.03)
+  near(point.signedDistancePx, -167.1101, 0.03)
+
+  const nudged = evaluateTubeAperture(aperture, aperture.centerX + 140.1, aperture.centerY + 45)
+  assert.ok(Math.abs(nudged.nearestBoundaryPoint.x - point.nearestBoundaryPoint.x) < 0.2)
+  assert.ok(Math.abs(nudged.nearestBoundaryPoint.y - point.nearestBoundaryPoint.y) < 0.2)
+})
+
 test('normalized tube UV remains geometric outside the aperture instead of clamping', () => {
   const point = evaluateTubeAperture(aperture, aperture.visible.left - 10, aperture.centerY)
   assert.ok(point.normalizedTubeUv.x < 0)
@@ -97,6 +109,20 @@ test('fine-pointer eligibility excludes coarse/touch interaction', () => {
   assert.equal(cursorCapabilityEligible({ canHover: false, finePointer: true, pointerType: 'mouse' }), false)
   assert.equal(cursorCapabilityEligible({ canHover: true, finePointer: false, pointerType: 'mouse' }), false)
   assert.equal(cursorCapabilityEligible({ canHover: true, finePointer: true, pointerType: 'touch' }), false)
+})
+
+test('first real pointer sample seeds motion without inventing an angle from the origin', () => {
+  let motion = createPointerMotion()
+  motion = updatePointerMotion(motion, { x: 300, y: 200, timeMs: 100 })
+  assert.equal(motion.hasStableAngle, false)
+  assert.equal(motion.speedPxPerMs, 0)
+  near(motion.angle, 0, 1e-9)
+  assert.equal(motion.previousX, 300)
+  assert.equal(motion.previousY, 200)
+
+  motion = updatePointerMotion(motion, { x: 310, y: 200, timeMs: 116 })
+  assert.equal(motion.hasStableAngle, true)
+  near(motion.angle, 0, 1e-9)
 })
 
 test('pointer motion filters speed, clamps spikes and preserves the last stable angle at rest', () => {
@@ -151,12 +177,13 @@ test('reduced-motion direct events skip cinematic states', () => {
 })
 
 test('external ownership falls back to native and resumes without physical boundary replay', () => {
-  let state = transitionCursorState(CRT_CURSOR_STATE.CRT_ACTIVE, CRT_CURSOR_EVENT.EXTERNAL_TAKEOVER)
+  let state = transitionCursorState(CRT_CURSOR_STATE.NATIVE_OUTSIDE, CRT_CURSOR_EVENT.EXTERNAL_TAKEOVER)
   assert.equal(state, CRT_CURSOR_STATE.NATIVE_EXTERNAL)
   state = transitionCursorState(state, CRT_CURSOR_EVENT.EXTERNAL_RETURN_INSIDE)
   assert.equal(state, CRT_CURSOR_STATE.CRT_ACTIVE)
 
   state = transitionCursorState(state, CRT_CURSOR_EVENT.EXTERNAL_TAKEOVER)
+  assert.equal(state, CRT_CURSOR_STATE.NATIVE_EXTERNAL)
   state = transitionCursorState(state, CRT_CURSOR_EVENT.EXTERNAL_RETURN_OUTSIDE)
   assert.equal(state, CRT_CURSOR_STATE.NATIVE_OUTSIDE)
 })
