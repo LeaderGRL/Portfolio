@@ -1,4 +1,10 @@
 import { SRC_H, SRC_W } from './core.js'
+import {
+  CRT_CURSOR_SHAPE,
+  DEFAULT_CRT_CURSOR_GPU_STATE,
+  normalizeCrtCursorGpuState,
+  rasterizeCrtCursorShape,
+} from './crt-cursor-shape.js'
 
 /* ==========================================================================
  * 6. CRT — WebGL2 phosphor persistence + composite
@@ -29,6 +35,7 @@ in vec2 vUv;
 out vec4 outColor;
 
 uniform sampler2D uTex;
+uniform sampler2D uCursorTex;
 uniform vec2  uOut;
 uniform vec2  uSrc;
 uniform float uTime;
@@ -38,6 +45,23 @@ uniform float uDegauss;
 uniform float uStatic;
 uniform float uWarm;
 uniform float uScanlines;
+uniform float uCursorVisible;
+uniform vec2  uCursorHotspot;
+uniform float uCursorAngle;
+uniform float uCursorSizePx;
+uniform float uCursorCompression;
+uniform float uCursorHover;
+uniform float uCursorClick;
+uniform float uCursorRecompose;
+
+const vec4 CURSOR_BOUNDS = vec4(
+  ${CRT_CURSOR_SHAPE.bounds.minX},
+  ${CRT_CURSOR_SHAPE.bounds.maxX},
+  ${CRT_CURSOR_SHAPE.bounds.minY},
+  ${CRT_CURSOR_SHAPE.bounds.maxY}
+);
+
+vec2 gCursorSignalHotspot;
 
 // ===========================================================================
 // This shader got considerably smaller in this revision, and that is the
@@ -62,10 +86,6 @@ float noise(vec2 p){
              mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
 }
 
-// Every provider paints the whole glass. Clamping continues its background
-// at the very edge of the curvature, without a second picture border.
-vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }
-
 // Barrel distortion. Real tubes are spherical sections, not planes, and this
 // still has to happen here: the glass maps are static, so only the sampling
 // can make the picture follow the bulge.
@@ -74,6 +94,69 @@ vec2 curve(vec2 uv){
   vec2 o = abs(uv.yx) / vec2(5.4, 4.2);
   uv += uv * o * o * uCrt;
   return uv * 0.5 + 0.5;
+}
+
+// One mapping function owns the live tube transform for both display sampling
+// and the cursor hotspot. That keeps Optical Coupling exact instead of adding
+// a second approximation for the pointer near the curved rim.
+vec2 signalUv(vec2 uv){
+  float vS = smoothstep(0.22, 1.0, uPower);
+  float hS = smoothstep(0.0, 0.22, uPower);
+  vec2 c = uv - 0.5;
+  c.y /= max(vS, 1e-4);
+  c.x /= max(hS, 1e-4);
+  uv = c + 0.5;
+
+  if (uDegauss > 0.001){
+    float d = uDegauss;
+    uv.x += sin(uv.y * 46.0 + uTime * 34.0) * 0.016 * d * d;
+    uv.y += cos(uv.x * 31.0 + uTime * 26.0) * 0.010 * d * d;
+  }
+  uv.y += sin(uTime * 0.35) * 0.0006 * uCrt;
+  return curve(uv);
+}
+
+vec2 cursorLocalPx(vec2 suv){
+  vec2 p = (suv - gCursorSignalHotspot) * uOut;
+  float c = cos(uCursorAngle);
+  float s = sin(uCursorAngle);
+  vec2 local = vec2(c * p.x + s * p.y, -s * p.x + c * p.y);
+
+  float recomposeScale = 1.0 + uCursorRecompose * 0.08;
+  vec2 squash = vec2(
+    max(0.68, 1.0 - uCursorCompression * 0.18 - uCursorClick * 0.08),
+    max(0.76, 1.0 - uCursorCompression * 0.08 - uCursorClick * 0.10)
+  );
+  return local / (max(uCursorSizePx, 1.0) * recomposeScale * squash);
+}
+
+vec3 cursorEmission(vec2 suv){
+  vec2 local = cursorLocalPx(suv);
+  vec2 shapeUv = vec2(
+    (local.x - CURSOR_BOUNDS.x) / (CURSOR_BOUNDS.y - CURSOR_BOUNDS.x),
+    (local.y - CURSOR_BOUNDS.z) / (CURSOR_BOUNDS.w - CURSOR_BOUNDS.z)
+  );
+  if (shapeUv.x <= 0.0 || shapeUv.x >= 1.0 || shapeUv.y <= 0.0 || shapeUv.y >= 1.0) {
+    return vec3(0.0);
+  }
+
+  vec4 shape = texture(uCursorTex, shapeUv);
+  float energy = 1.0
+    + uCursorHover * 0.22
+    + uCursorClick * 0.46
+    + uCursorRecompose * 0.24;
+  return shape.rgb * shape.a * energy;
+}
+
+// Every provider paints the whole glass. Clamping continues its background
+// at the very edge of the curvature, without a second picture border. The
+// cursor is injected here, after persistence but before all analogue sampling,
+// so bloom/defocus/overshoot/etc affect it without ever entering phosphor
+// history. With visibility off the renderer selects FRAG_CRT_BASE instead.
+vec3 src(vec2 suv){
+  vec3 base = texture(uTex, suv).rgb;
+  if (uCursorVisible < 0.5) return base;
+  return base + cursorEmission(suv);
 }
 
 vec3 bloom(vec2 suv, float r){
@@ -89,28 +172,12 @@ vec3 bloom(vec2 suv, float r){
 }
 
 void main(){
-  vec2 uv = vUv;
-
-  // ---- power collapse: vertical squeeze first, then horizontal to a dot ---
   float vS = smoothstep(0.22, 1.0, uPower);
   float hS = smoothstep(0.0, 0.22, uPower);
-  vec2 c = uv - 0.5;
-  c.y /= max(vS, 1e-4);
-  c.x /= max(hS, 1e-4);
-  uv = c + 0.5;
 
-  if (uDegauss > 0.001){
-    float d = uDegauss;
-    uv.x += sin(uv.y * 46.0 + uTime * 34.0) * 0.016 * d * d;
-    uv.y += cos(uv.x * 31.0 + uTime * 26.0) * 0.010 * d * d;
-  }
-  uv.y += sin(uTime * 0.35) * 0.0006 * uCrt;
-
-  vec2 cuv = curve(uv);
-
-  // The source fills the viewport in fullscreen, but the physical tube keeps
-  // its original optics. No underscan mapping or separate picture border.
-  vec2 suv = cuv;
+  // Display pixels and cursor hotspot use the same signal-space mapping.
+  vec2 suv = signalUv(vUv);
+  gCursorSignalHotspot = signalUv(uCursorHotspot);
 
   // ---- chromatic aberration, stronger toward the edges -------------------
   vec2 off = suv - 0.5;
@@ -189,11 +256,28 @@ void main(){
   outColor = vec4(max(col, 0.0), 1.0);
 }`;
 
+const CURSOR_SRC_BLOCK = `vec3 src(vec2 suv){
+  vec3 base = texture(uTex, suv).rgb;
+  if (uCursorVisible < 0.5) return base;
+  return base + cursorEmission(suv);
+}`;
+const CURSOR_HOTSPOT_LINE = '  gCursorSignalHotspot = signalUv(uCursorHotspot);\n';
+
+// Keep the ordinary CRT on a program that contains no reachable cursor work.
+// Chromium software WebGL pays a measurable cost for the cursor branch when it
+// sits inside every bloom/defocus source sample, even while the cursor is off.
+export const FRAG_CRT_BASE = FRAG_CRT
+  .replace(CURSOR_SRC_BLOCK, 'vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }')
+  .replace(CURSOR_HOTSPOT_LINE, '');
+
 export class CRT {
   constructor(canvas, source) {
     this.canvas = canvas;
     this.source = source;
     this.ok = false;
+    this.cursorState = DEFAULT_CRT_CURSOR_GPU_STATE;
+    this.cursorResourceInitCount = 0;
+    this.outputDensity = 1;
     this.maxDimension = 4096; // Canvas-only fallback keeps the application cap.
     const gl = canvas.getContext("webgl2", {
       alpha: false, antialias: false, premultipliedAlpha: false,
@@ -213,15 +297,36 @@ export class CRT {
     } catch (e) { this._fail(e); }
   }
 
+  setCursorState(value = {}) {
+    this.cursorState = normalizeCrtCursorGpuState(value, this.cursorState);
+    return this.cursorState;
+  }
+
+  getCursorState() {
+    return this.cursorState;
+  }
+
+  _syncOutputDensity(fallbackDensity = 1) {
+    const cssW = Number(this.canvas.offsetWidth);
+    const cssH = Number(this.canvas.offsetHeight);
+    const xDensity = cssW > 0 ? this.canvas.width / cssW : Number.NaN;
+    const yDensity = cssH > 0 ? this.canvas.height / cssH : Number.NaN;
+    const measured = [xDensity, yDensity].filter(value => Number.isFinite(value) && value > 0);
+    this.outputDensity = measured.length ? Math.min(...measured) : fallbackDensity;
+  }
+
   _fail(error) {
     this.ok = false;
     const gl = this.gl;
     for (const target of [this.a, this.b]) this._deleteTarget(target);
     this.a = this.b = null;
     if (this.srcTex) gl.deleteTexture(this.srcTex);
+    if (this.cursorTex) gl.deleteTexture(this.cursorTex);
+    this.srcTex = this.cursorTex = null;
     if (this.buf) gl.deleteBuffer(this.buf);
     if (this.vao) gl.deleteVertexArray(this.vao);
     if (this.progPersist) gl.deleteProgram(this.progPersist);
+    if (this.progCrtBase) gl.deleteProgram(this.progCrtBase);
     if (this.progCrt) gl.deleteProgram(this.progCrt);
     console.warn('CRT unavailable; using the live 2D source', error);
   }
@@ -292,10 +397,48 @@ export class CRT {
     }
   }
 
+  _initCursorTexture() {
+    const gl = this.gl;
+    const tex = gl.createTexture();
+    if (!tex) throw new Error('CRT cursor texture allocation failed');
+    try {
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        CRT_CURSOR_SHAPE.textureSize,
+        CRT_CURSOR_SHAPE.textureSize,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        rasterizeCrtCursorShape(),
+      );
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      if (gl.getError() !== gl.NO_ERROR) throw new Error('CRT cursor texture allocation failed');
+      this.cursorResourceInitCount += 1;
+      return tex;
+    } catch (error) {
+      gl.deleteTexture(tex);
+      throw error;
+    }
+  }
+
+  _uniforms(program, names) {
+    const uniforms = {};
+    for (const name of names) uniforms[name] = this.gl.getUniformLocation(program, name);
+    return uniforms;
+  }
+
   _init() {
     const gl = this.gl;
 
     this.progPersist = this._program(VERT, FRAG_PERSIST);
+    this.progCrtBase = this._program(VERT, FRAG_CRT_BASE);
     this.progCrt = this._program(VERT, FRAG_CRT);
 
     const vao = gl.createVertexArray();
@@ -307,6 +450,8 @@ export class CRT {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     this.vao = vao;
+
+    this.cursorTex = this._initCursorTexture();
 
     // source texture: NEAREST magnification is what makes the pixels square
     this.srcTex = gl.createTexture();
@@ -328,18 +473,24 @@ export class CRT {
       prev: gl.getUniformLocation(this.progPersist, "uPrev"),
       decay: gl.getUniformLocation(this.progPersist, "uDecay"),
     };
-    this.u = {};
-    for (const n of ["uTex","uOut","uSrc","uTime","uPower","uCrt","uDegauss","uStatic","uWarm","uScanlines"]) {
-      this.u[n] = gl.getUniformLocation(this.progCrt, n);
-    }
+    const commonUniforms = [
+      "uTex","uOut","uSrc","uTime","uPower","uCrt","uDegauss","uStatic","uWarm","uScanlines",
+    ];
+    this.uBase = this._uniforms(this.progCrtBase, commonUniforms);
+    this.u = this._uniforms(this.progCrt, [
+      ...commonUniforms,
+      "uCursorTex","uCursorVisible","uCursorHotspot","uCursorAngle","uCursorSizePx","uCursorCompression","uCursorHover","uCursorClick","uCursorRecompose",
+    ]);
   }
 
   resize(cssW, cssH, dpr) {
     const density = Math.min(dpr, this.maxDimension / Math.max(cssW, cssH));
     const w = Math.max(1, Math.floor(cssW * density));
     const h = Math.max(1, Math.floor(cssH * density));
-    if (this.canvas.width === w && this.canvas.height === h) return;
-    this.canvas.width = w; this.canvas.height = h;
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w; this.canvas.height = h;
+    }
+    this._syncOutputDensity(density);
   }
 
   render(state, sourceDirty) {
@@ -392,20 +543,38 @@ export class CRT {
     const tmp = this.a; this.a = this.b; this.b = tmp;   // ping-pong
 
     // --- composite pass ---
+    const cursor = this.cursorState;
+    const cursorVisible = Boolean(cursor.visible);
+    const program = cursorVisible ? this.progCrt : this.progCrtBase;
+    const u = cursorVisible ? this.u : this.uBase;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.useProgram(this.progCrt);
+    gl.useProgram(program);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.a.tex);
-    gl.uniform1i(this.u.uTex, 0);
-    gl.uniform2f(this.u.uOut, this.canvas.width, this.canvas.height);
-    gl.uniform2f(this.u.uSrc, sw, sh);
-    gl.uniform1f(this.u.uScanlines, SRC_H);
-    gl.uniform1f(this.u.uTime, state.time);
-    gl.uniform1f(this.u.uPower, state.power);
-    gl.uniform1f(this.u.uCrt, state.crt);
-    gl.uniform1f(this.u.uDegauss, state.degauss);
-    gl.uniform1f(this.u.uStatic, state.static);
-    gl.uniform1f(this.u.uWarm, state.warm);
+    gl.uniform1i(u.uTex, 0);
+    gl.uniform2f(u.uOut, this.canvas.width, this.canvas.height);
+    gl.uniform2f(u.uSrc, sw, sh);
+    gl.uniform1f(u.uScanlines, SRC_H);
+    gl.uniform1f(u.uTime, state.time);
+    gl.uniform1f(u.uPower, state.power);
+    gl.uniform1f(u.uCrt, state.crt);
+    gl.uniform1f(u.uDegauss, state.degauss);
+    gl.uniform1f(u.uStatic, state.static);
+    gl.uniform1f(u.uWarm, state.warm);
+
+    if (cursorVisible) {
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.cursorTex);
+      gl.uniform1i(u.uCursorTex, 2);
+      gl.uniform1f(u.uCursorVisible, 1);
+      gl.uniform2f(u.uCursorHotspot, cursor.hotspotUv.x, cursor.hotspotUv.y);
+      gl.uniform1f(u.uCursorAngle, cursor.angle);
+      gl.uniform1f(u.uCursorSizePx, cursor.sizePx * this.outputDensity);
+      gl.uniform1f(u.uCursorCompression, cursor.compression);
+      gl.uniform1f(u.uCursorHover, cursor.hoverIntensity);
+      gl.uniform1f(u.uCursorClick, cursor.clickImpulse);
+      gl.uniform1f(u.uCursorRecompose, cursor.recompositionStrength);
+    }
+
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     return true;
   }
