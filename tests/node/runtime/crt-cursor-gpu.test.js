@@ -162,6 +162,19 @@ test('GPU cursor resource initializes once and cursor-only updates do not upload
   assert.equal(uniforms.uCursorSizePx, 22)
   assert.equal(uploads.source, 1)
 
+  // Fullscreen passes an already DPR-scaled backing size with dpr=1. Derive
+  // cursor density from the canvas's untransformed CSS box so a 2000px backing
+  // displayed at 1000 CSS px still preserves a 22 CSS px cursor as 44 pixels.
+  canvas.offsetWidth = 1000
+  canvas.offsetHeight = 500
+  crt.resize(2000, 1000, 1)
+  assert.equal(canvas.width, 2000)
+  assert.equal(canvas.height, 1000)
+  assert.equal(crt.render(state, false), true)
+  assert.equal(uniforms.uCursorSizePx, 44)
+  assert.equal(uploads.source, 1)
+  assert.equal(uploads.cursor, 1)
+
   assert.equal(crt.render({ ...state, crt: 0 }, false), true)
   assert.equal(uniforms.uCrt, 0)
   assert.equal(uniforms.uCursorVisible, 1)
