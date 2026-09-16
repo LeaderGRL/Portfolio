@@ -34,10 +34,11 @@ export function createPointerSampleBuffer(windowRef = globalThis.window) {
       return latestSample
     },
 
-    consume() {
+    consume(rebasedTimeStamp = null) {
       const sample = latestSample
       latestSample = null
-      return sample
+      if (!sample || !Number.isFinite(rebasedTimeStamp)) return sample
+      return { ...sample, timeStamp: rebasedTimeStamp }
     },
   }
 }
