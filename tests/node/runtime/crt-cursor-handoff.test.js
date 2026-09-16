@@ -111,9 +111,11 @@ test('projective placement inverts the rendered tube quad and preserves screen-s
       { x: 110, y: 125 },
     ],
   })
-  const placement = gpuCursorPlacementFromClient(projection, 180, 90, 0, 20)
-  assert.ok(Math.abs(placement.hotspotUv.x - 0.5) < 0.03)
-  assert.ok(Math.abs(placement.hotspotUv.y - 0.5) < 0.03)
+  // This is the projective image of local UV (0.5, 0.5), not the
+  // arithmetic centre of the transformed bounding box.
+  const placement = gpuCursorPlacementFromClient(projection, 179.6666666667, 92.4888888889, 0, 20)
+  assert.ok(Math.abs(placement.hotspotUv.x - 0.5) < 1e-5)
+  assert.ok(Math.abs(placement.hotspotUv.y - 0.5) < 1e-5)
   assert.ok(Number.isFinite(placement.angle))
   assert.ok(placement.sizePx > 20)
 })
@@ -172,18 +174,20 @@ test('absorption resumes continuously when the pointer re-enters before unwind c
   const { controller, view, move } = harness()
   move(330, 160, 0)
   move(300, 160, 20)
+  move(280, 160, 35)
   controller.frame(80)
   const beforeRetreat = view.last.phosphor
   assert.ok(beforeRetreat > 0)
 
   move(315, 160, 90)
-  controller.frame(105)
+  controller.frame(95)
   const duringRetreat = view.last.phosphor
   assert.ok(duringRetreat < beforeRetreat)
+  assert.ok(duringRetreat > 0)
   assert.equal(controller.state, CRT_CURSOR_STATE.ABSORBING)
 
-  move(300, 160, 110)
-  controller.frame(140)
+  move(300, 160, 100)
+  controller.frame(120)
   assert.equal(controller.state, CRT_CURSOR_STATE.ABSORBING)
   assert.equal(controller.absorption.reversing, false)
   assert.ok(view.last.phosphor > duringRetreat)
