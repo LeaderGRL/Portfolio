@@ -98,19 +98,21 @@ test('cursor runtime state normalizes partial updates without moving the hotspot
   assert.equal(second.recompositionStrength, 0.25)
 })
 
-test('cursor emission is excluded from persistence and shares the tube signal mapping', () => {
+test('cursor emission is excluded from persistence and adds into the shared tube signal', () => {
   assert.equal(FRAG_PERSIST.includes('uCursor'), false)
   assert.equal(FRAG_PERSIST.includes('cursorEmission'), false)
   assert.ok(FRAG_CRT.includes('vec2 suv = signalUv(vUv);'))
   assert.ok(FRAG_CRT.includes('gCursorSignalHotspot = signalUv(uCursorHotspot);'))
   assert.ok(FRAG_CRT.includes('if (uCursorVisible < 0.5) return base;'))
-  assert.ok(FRAG_CRT.includes('return max(base, cursorEmission(suv));'))
+  assert.ok(FRAG_CRT.includes('return base + cursorEmission(suv);'))
+  assert.equal(FRAG_CRT.includes('return max(base, cursorEmission(suv));'), false)
 })
 
 test('GPU cursor resource initializes once and cursor-only updates do not upload the raster source', () => {
   const { gl, uniforms, uploads } = createFakeGl()
   const source = { width: 480, height: 360 }
-  const crt = new CRT({ getContext: () => gl, width: 480, height: 360 }, source)
+  const canvas = { getContext: () => gl, width: 480, height: 360 }
+  const crt = new CRT(canvas, source)
 
   assert.equal(crt.ok, true)
   assert.equal(crt.cursorResourceInitCount, 1)
@@ -142,6 +144,23 @@ test('GPU cursor resource initializes once and cursor-only updates do not upload
   assert.equal(uniforms.uCursorHover, 0.5)
   assert.equal(uniforms.uCursorClick, 0.6)
   assert.equal(uniforms.uCursorRecompose, 0.2)
+
+  crt.resize(480, 360, 2)
+  assert.equal(canvas.width, 960)
+  assert.equal(canvas.height, 720)
+  assert.equal(crt.render(state, false), true)
+  assert.equal(uniforms.uCursorSizePx, 44)
+  assert.equal(uploads.source, 1)
+  assert.equal(uploads.cursor, 1)
+
+  // The effective scale must update even when a CSS resize happens to keep the
+  // same backing dimensions and resize() takes its early-return path.
+  crt.resize(960, 720, 1)
+  assert.equal(canvas.width, 960)
+  assert.equal(canvas.height, 720)
+  assert.equal(crt.render(state, false), true)
+  assert.equal(uniforms.uCursorSizePx, 22)
+  assert.equal(uploads.source, 1)
 
   assert.equal(crt.render({ ...state, crt: 0 }, false), true)
   assert.equal(uniforms.uCrt, 0)
