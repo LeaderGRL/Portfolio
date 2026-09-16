@@ -510,12 +510,8 @@ export class CrtCursorController {
       const geometryProgress = easeMagneticProgress(magneticZoneProgress(this.aperture, this.edge.signedDistancePx))
       const timeProgress = clamp01((ms - model.startedAtMs) / model.durationMs)
       const desired = Math.min(geometryProgress, timeProgress)
-      if (desired >= model.progress) {
-        const maxForwardStep = (dtMs || 16.67) / model.durationMs
-        model.progress = Math.min(desired, model.progress + maxForwardStep)
-      } else {
-        model.progress = Math.max(desired, model.progress - (dtMs || 16.67) / 90)
-      }
+      if (desired >= model.progress) model.progress = desired
+      else model.progress = Math.max(desired, model.progress - (dtMs || 16.67) / 90)
     }
 
     this._updateDomCursor(model.progress, 'absorb')
