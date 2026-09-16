@@ -14,6 +14,7 @@ import './landscape-mobile.css'
 import './landscape-action-keys.css'
 import './portrait-mobile.css'
 import './fullscreen.css'
+import './crt-cursor.css'
 import { start } from './app.js'
 import { attachArticleCRT } from './article-crt-bridge.js'
 import { installFullscreenSoftkeys } from './fullscreen-softkeys.js'
@@ -23,6 +24,7 @@ import { installLandscapeMobileLayout } from './landscape-mobile.js'
 import { installLandscapeActionKeys } from './landscape-action-keys.js'
 import { installPortraitMobileLayout } from './portrait-mobile.js'
 import { createBootCoordinator } from './boot-coordinator.js'
+import { CrtCursorController } from './crt-cursor-controller.js'
 
 const performanceProbeBoot = globalThis.__JG1500_PERF_TEST__ === true
   // performance.now() is relative to the document time origin, which exists
@@ -39,6 +41,7 @@ const install = app => {
   attachArticleCRT(app)
   installSemanticFocusProxy()
   installFullscreenSoftkeys(app)
+  app.cursorController = new CrtCursorController(app).install()
 }
 
 const boot = createBootCoordinator({ start, install })
