@@ -12,6 +12,7 @@ import {
   CRT_CURSOR_STATE,
   createPointerMotion,
   cursorCapabilityEligible,
+  pointerSpeedAt,
   transitionCursorState,
   updatePointerMotion,
 } from '../../../src/crt-cursor-state.js'
@@ -36,6 +37,27 @@ test('tube aperture removes picture bleed and returns stable centre geometry', (
   assert.ok(centre.signedDistancePx < -200)
   near(centre.normalizedTubeUv.x, 0.5)
   near(centre.normalizedTubeUv.y, 0.5)
+})
+
+test('tube aperture restricts the exponent to the authored convex squircle family', () => {
+  assert.throws(
+    () => createTubeAperture({ left: 0, top: 0, width: 200, height: 200, exponent: 1.5 }),
+    /at least 2/,
+  )
+})
+
+test('superellipse quadrant endpoints stay exact for sharp supported exponents', () => {
+  const sharp = createTubeAperture({
+    left: 0,
+    top: 0,
+    width: 200,
+    height: 200,
+    exponent: 20,
+  })
+  const topEdge = evaluateTubeAperture(sharp, sharp.centerX, sharp.visible.top)
+  near(topEdge.signedDistancePx, 0, 1e-9)
+  near(topEdge.nearestBoundaryPoint.x, sharp.centerX, 1e-9)
+  near(topEdge.nearestBoundaryPoint.y, sharp.visible.top, 1e-9)
 })
 
 test('tube aperture signed distance changes sign across straight and curved edges', () => {
@@ -186,6 +208,18 @@ test('pointer motion filters speed, clamps spikes and preserves the last stable 
   const spike = updatePointerMotion(motion, { x: 10020, y: 10, timeMs: 33 }, { maxSpeedPxPerMs: 2 })
   assert.ok(spike.speedPxPerMs <= 2)
   assert.ok(spike.speedPxPerMs >= motion.speedPxPerMs)
+})
+
+test('filtered pointer speed decays to rest without additional pointer events', () => {
+  let motion = createPointerMotion({ x: 0, y: 0, timeMs: 0 })
+  motion = updatePointerMotion(motion, { x: 30, y: 0, timeMs: 16 })
+  assert.ok(motion.speedPxPerMs > 0)
+  near(pointerSpeedAt(motion, 16), motion.speedPxPerMs, 1e-12)
+
+  const decayed = pointerSpeedAt(motion, 116)
+  assert.ok(decayed > 0)
+  assert.ok(decayed < motion.speedPxPerMs)
+  assert.equal(pointerSpeedAt(motion, 1016), 0)
 })
 
 test('cursor state machine supports capture, reversal, snap and release cancellation', () => {
