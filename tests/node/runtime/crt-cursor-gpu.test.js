@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { CRT, FRAG_CRT, FRAG_PERSIST } from '../../../src/crt.js'
 import {
   CRT_CURSOR_SHAPE,
   DEFAULT_CRT_CURSOR_GPU_STATE,
   normalizeCrtCursorGpuState,
   rasterizeCrtCursorShape,
 } from '../../../src/crt-cursor-shape.js'
+
+globalThis.matchMedia = () => ({ matches: false })
+const { CRT, FRAG_CRT, FRAG_PERSIST } = await import('../../../src/crt.js')
 
 const state = {
   crt: 1,
