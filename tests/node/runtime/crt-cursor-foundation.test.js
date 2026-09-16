@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   DEFAULT_MAGNETIC_ZONE_PX,
+  MAX_TUBE_EXPONENT,
   createTubeAperture,
   evaluateTubeAperture,
   magneticZoneProgress,
@@ -39,25 +40,46 @@ test('tube aperture removes picture bleed and returns stable centre geometry', (
   near(centre.normalizedTubeUv.y, 0.5)
 })
 
-test('tube aperture restricts the exponent to the authored convex squircle family', () => {
+test('tube aperture restricts the exponent to the authored CRT squircle range', () => {
   assert.throws(
     () => createTubeAperture({ left: 0, top: 0, width: 200, height: 200, exponent: 1.5 }),
-    /at least 2/,
+    /between 2 and/,
+  )
+  assert.doesNotThrow(
+    () => createTubeAperture({ left: 0, top: 0, width: 200, height: 200, exponent: MAX_TUBE_EXPONENT }),
+  )
+  assert.throws(
+    () => createTubeAperture({ left: 0, top: 0, width: 200, height: 200, exponent: MAX_TUBE_EXPONENT + 0.01 }),
+    /between 2 and/,
   )
 })
 
-test('superellipse quadrant endpoints stay exact for sharp supported exponents', () => {
+test('superellipse quadrant endpoints stay exact at the sharpest supported exponent', () => {
   const sharp = createTubeAperture({
     left: 0,
     top: 0,
     width: 200,
     height: 200,
-    exponent: 20,
+    exponent: MAX_TUBE_EXPONENT,
   })
   const topEdge = evaluateTubeAperture(sharp, sharp.centerX, sharp.visible.top)
   near(topEdge.signedDistancePx, 0, 1e-9)
   near(topEdge.nearestBoundaryPoint.x, sharp.centerX, 1e-9)
   near(topEdge.nearestBoundaryPoint.y, sharp.visible.top, 1e-9)
+})
+
+test('sharpest supported exponent keeps near-axis penetration accurate', () => {
+  const sharp = createTubeAperture({
+    left: 0,
+    top: 0,
+    width: 200,
+    height: 200,
+    exponent: MAX_TUBE_EXPONENT,
+  })
+  const point = evaluateTubeAperture(sharp, 199, 110)
+  assert.equal(point.inside, true)
+  near(point.signedDistancePx, -1, 0.02)
+  assert.ok(point.signedDistancePx > -sharp.snapDepthPx)
 })
 
 test('tube aperture signed distance changes sign across straight and curved edges', () => {
@@ -192,6 +214,21 @@ test('pointer motion accumulates sub-threshold samples before updating direction
   assert.equal(motion.hasStableAngle, true)
   near(motion.angle, Math.PI * 0.5, 1e-9)
   near(motion.y, 50, 1e-9)
+})
+
+test('pointer motion accumulates speed distance across equal timestamps', () => {
+  const options = { speedResponseHz: 1000, maxSpeedPxPerMs: 10 }
+
+  let accumulated = createPointerMotion({ x: 0, y: 0, timeMs: 0 })
+  accumulated = updatePointerMotion(accumulated, { x: 10, y: 0, timeMs: 0 }, options)
+  accumulated = updatePointerMotion(accumulated, { x: 20, y: 0, timeMs: 10 }, options)
+
+  let direct = createPointerMotion({ x: 0, y: 0, timeMs: 0 })
+  direct = updatePointerMotion(direct, { x: 20, y: 0, timeMs: 10 }, options)
+
+  near(accumulated.speedPxPerMs, direct.speedPxPerMs, 1e-12)
+  assert.equal(accumulated.speedReferenceX, 20)
+  assert.equal(accumulated.speedReferenceTimeMs, 10)
 })
 
 test('pointer motion filters speed, clamps spikes and preserves the last stable angle at rest', () => {
