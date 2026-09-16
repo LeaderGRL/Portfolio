@@ -12,6 +12,9 @@ const clamp = (value, min, max) => value < min ? min : value > max ? max : value
 const signOrOne = value => value < 0 ? -1 : 1
 
 function pointOnSuperellipse(theta, halfWidth, halfHeight, exponent) {
+  if (theta <= 0) return { x: halfWidth, y: 0 }
+  if (theta >= HALF_PI) return { x: 0, y: halfHeight }
+
   const power = 2 / exponent
   const cos = Math.cos(theta)
   const sin = Math.sin(theta)
@@ -146,7 +149,9 @@ export function createTubeAperture({
   if (bleedX < 0 || bleedY < 0 || bleedX * 2 >= width || bleedY * 2 >= height) {
     throw new RangeError('Tube aperture bleed must leave a positive visible aperture')
   }
-  if (exponent <= 1) throw new RangeError('Tube aperture exponent must be greater than 1')
+  // The authored CRT uses a convex squircle. Exponents below 2 describe a
+  // different, diamond-like family and make the centre shortcut invalid.
+  if (exponent < 2) throw new RangeError('Tube aperture exponent must be at least 2')
   if (magneticZonePx <= 0 || hysteresisPx < 0 || snapDepthPx < 0) {
     throw new RangeError('Magnetic-zone values must be non-negative and zone width must be positive')
   }
