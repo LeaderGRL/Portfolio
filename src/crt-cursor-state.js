@@ -79,6 +79,28 @@ export function createPointerMotion({ x = 0, y = 0, timeMs = null, angle = 0 } =
 }
 
 /**
+ * Read filtered speed at an arbitrary time. Pointer events update the speed
+ * estimate; animation-frame consumers use this helper so a stopped pointer
+ * decays toward rest even when the browser emits no more pointermove events.
+ */
+export function pointerSpeedAt(motion, timeMs, {
+  speedDecayHz = 18,
+  stopEpsilonPxPerMs = 0.0001,
+} = {}) {
+  if (!motion || !Number.isFinite(timeMs) || !Number.isFinite(motion.speedPxPerMs)) {
+    throw new TypeError('Pointer speed read requires a motion model and finite timeMs')
+  }
+  if (speedDecayHz < 0 || stopEpsilonPxPerMs < 0) {
+    throw new RangeError('Pointer speed decay values must be non-negative')
+  }
+  if (motion.timeMs == null || motion.speedPxPerMs <= 0) return 0
+
+  const elapsedMs = Math.max(0, timeMs - motion.timeMs)
+  const speed = motion.speedPxPerMs * Math.exp(-(elapsedMs / 1000) * speedDecayHz)
+  return speed <= stopEpsilonPxPerMs ? 0 : speed
+}
+
+/**
  * Advance the pointer sample without owning DOM or rendering state. The future
  * controller can feed this pure model from pointer events or deterministic
  * tests while keeping the browser hotspot authoritative.
