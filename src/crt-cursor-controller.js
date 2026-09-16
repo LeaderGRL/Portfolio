@@ -46,6 +46,123 @@ export function outputUvFromClient(rect, x, y) {
   }
 }
 
+function invert3x3(matrix) {
+  const [a, b, c, d, e, f, g, h, i] = matrix
+  const A = e * i - f * h
+  const B = f * g - d * i
+  const C = d * h - e * g
+  const determinant = a * A + b * B + c * C
+  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-9) return null
+  const inv = 1 / determinant
+  return [
+    A * inv,
+    (c * h - b * i) * inv,
+    (b * f - c * e) * inv,
+    B * inv,
+    (a * i - c * g) * inv,
+    (c * d - a * f) * inv,
+    C * inv,
+    (b * g - a * h) * inv,
+    (a * e - b * d) * inv,
+  ]
+}
+
+function homographyForQuad(points) {
+  if (!Array.isArray(points) || points.length !== 4) return null
+  const [p0, p1, p2, p3] = points
+  if (![p0, p1, p2, p3].every(point => Number.isFinite(point?.x) && Number.isFinite(point?.y))) return null
+
+  const dx1 = p1.x - p2.x
+  const dx2 = p3.x - p2.x
+  const dx3 = p0.x - p1.x + p2.x - p3.x
+  const dy1 = p1.y - p2.y
+  const dy2 = p3.y - p2.y
+  const dy3 = p0.y - p1.y + p2.y - p3.y
+  let g = 0
+  let h = 0
+
+  if (Math.abs(dx3) > 1e-9 || Math.abs(dy3) > 1e-9) {
+    const denominator = dx1 * dy2 - dx2 * dy1
+    if (Math.abs(denominator) < 1e-9) return null
+    g = (dx3 * dy2 - dx2 * dy3) / denominator
+    h = (dx1 * dy3 - dx3 * dy1) / denominator
+  }
+
+  return invert3x3([
+    p1.x - p0.x + g * p1.x,
+    p3.x - p0.x + h * p3.x,
+    p0.x,
+    p1.y - p0.y + g * p1.y,
+    p3.y - p0.y + h * p3.y,
+    p0.y,
+    g,
+    h,
+    1,
+  ])
+}
+
+export function createTubeProjection({ rect, quad = null, localWidth = null, localHeight = null }) {
+  if (!rect || rect.width <= 0 || rect.height <= 0) return null
+  const width = Number.isFinite(localWidth) && localWidth > 0 ? localWidth : rect.width
+  const height = Number.isFinite(localHeight) && localHeight > 0 ? localHeight : rect.height
+  const inverseHomography = homographyForQuad(quad)
+  return {
+    rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+    localWidth: width,
+    localHeight: height,
+    inverseHomography,
+  }
+}
+
+export function localTubeUvFromClient(projection, x, y) {
+  if (!projection) return { x: 0.5, y: 0.5 }
+  const matrix = projection.inverseHomography
+  if (!matrix) {
+    return {
+      x: (x - projection.rect.left) / projection.rect.width,
+      y: (y - projection.rect.top) / projection.rect.height,
+    }
+  }
+
+  const denominator = matrix[6] * x + matrix[7] * y + matrix[8]
+  if (!Number.isFinite(denominator) || Math.abs(denominator) < 1e-9) {
+    return {
+      x: (x - projection.rect.left) / projection.rect.width,
+      y: (y - projection.rect.top) / projection.rect.height,
+    }
+  }
+  return {
+    x: (matrix[0] * x + matrix[1] * y + matrix[2]) / denominator,
+    y: (matrix[3] * x + matrix[4] * y + matrix[5]) / denominator,
+  }
+}
+
+export function gpuCursorPlacementFromClient(projection, x, y, screenAngle, screenSizePx) {
+  if (!projection) {
+    return {
+      hotspotUv: { x: 0.5, y: 0.5 },
+      angle: -screenAngle,
+      sizePx: screenSizePx,
+    }
+  }
+
+  const local = localTubeUvFromClient(projection, x, y)
+  const sample = localTubeUvFromClient(
+    projection,
+    x + Math.cos(screenAngle),
+    y + Math.sin(screenAngle),
+  )
+  const dx = (sample.x - local.x) * projection.localWidth
+  const dy = (sample.y - local.y) * projection.localHeight
+  const localPerScreenPx = Math.hypot(dx, dy)
+
+  return {
+    hotspotUv: { x: local.x, y: 1 - local.y },
+    angle: localPerScreenPx > 1e-6 ? Math.atan2(-dy, dx) : -screenAngle,
+    sizePx: screenSizePx * (localPerScreenPx > 1e-6 ? localPerScreenPx : 1),
+  }
+}
+
 export function inwardBendDegrees(angle, inwardNormal, strength) {
   if (!inwardNormal) return 0
   const normalAngle = Math.atan2(inwardNormal.y, inwardNormal.x)
@@ -56,6 +173,13 @@ export function inwardBendDegrees(angle, inwardNormal, strength) {
 function numericCssPx(style, name, fallback) {
   const value = Number.parseFloat(style?.getPropertyValue?.(name))
   return Number.isFinite(value) ? value : fallback
+}
+
+function quadPointsFor(element) {
+  const quads = element?.getBoxQuads?.({ box: 'border' })
+  const quad = quads?.[0]
+  if (!quad) return null
+  return [quad.p1, quad.p2, quad.p3, quad.p4].map(point => ({ x: point.x, y: point.y }))
 }
 
 export class CrtCursorController {
@@ -81,6 +205,7 @@ export class CrtCursorController {
     this.pointerType = 'mouse'
     this.aperture = null
     this.tubeRect = null
+    this.tubeProjection = null
     this.edge = null
     this.zoneLatched = false
     this.absorption = null
@@ -90,18 +215,22 @@ export class CrtCursorController {
     this.pendingReleaseCancel = false
     this.installed = false
     this.lastFrameMs = null
+    this.geometryStyleDirty = true
+    this.bleedCssX = 12
+    this.bleedCssY = 10
+    this.lastFullscreen = null
 
     this.handlePointerMove = this.handlePointerMove.bind(this)
-    this.refreshGeometry = this.refreshGeometry.bind(this)
+    this.invalidateGeometry = this.invalidateGeometry.bind(this)
   }
 
   install() {
     if (this.installed || !this.window || !this.tube) return this
     this.installed = true
     this.view.mount?.(this.document.body)
-    this.refreshGeometry()
+    this.refreshGeometry(true)
     this.window.addEventListener('pointermove', this.handlePointerMove, { passive: true, capture: true })
-    this.window.addEventListener('resize', this.refreshGeometry, { passive: true })
+    this.window.addEventListener('resize', this.invalidateGeometry, { passive: true })
     this._syncDomState('native')
     return this
   }
@@ -109,31 +238,46 @@ export class CrtCursorController {
   destroy() {
     if (!this.installed) return
     this.window.removeEventListener('pointermove', this.handlePointerMove, true)
-    this.window.removeEventListener('resize', this.refreshGeometry)
+    this.window.removeEventListener('resize', this.invalidateGeometry)
     this._forceNative()
     this.view.destroy?.()
     this.installed = false
   }
 
-  refreshGeometry() {
+  invalidateGeometry() {
+    this.geometryStyleDirty = true
+  }
+
+  refreshGeometry(forceStyle = false) {
     if (!this.tube) return null
     const rect = this.tube.getBoundingClientRect?.()
     if (!rect || rect.width <= 0 || rect.height <= 0) return null
 
     const fullscreen = Boolean(this.app?.state?.fullscreen || this.document?.body?.classList?.contains?.('is-crt-fullscreen'))
-    let bleedX = 0
-    let bleedY = 0
-    if (!fullscreen) {
+    if (forceStyle || this.geometryStyleDirty || fullscreen !== this.lastFullscreen) {
       const style = this.window?.getComputedStyle?.(this.document.documentElement)
-      const scaleX = rect.width / (this.tube.offsetWidth || rect.width)
-      const scaleY = rect.height / (this.tube.offsetHeight || rect.height)
-      bleedX = numericCssPx(style, '--tube-bleed-x', 12) * scaleX
-      bleedY = numericCssPx(style, '--tube-bleed-y', 10) * scaleY
+      this.bleedCssX = numericCssPx(style, '--tube-bleed-x', 12)
+      this.bleedCssY = numericCssPx(style, '--tube-bleed-y', 10)
+      this.geometryStyleDirty = false
+      this.lastFullscreen = fullscreen
     }
 
+    const localWidth = this.tube.offsetWidth || rect.width
+    const localHeight = this.tube.offsetHeight || rect.height
+    const scaleX = rect.width / localWidth
+    const scaleY = rect.height / localHeight
+    let bleedX = fullscreen ? 0 : this.bleedCssX * scaleX
+    let bleedY = fullscreen ? 0 : this.bleedCssY * scaleY
     bleedX = Math.min(Math.max(0, bleedX), rect.width * 0.2)
     bleedY = Math.min(Math.max(0, bleedY), rect.height * 0.2)
+
     this.tubeRect = { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
+    this.tubeProjection = createTubeProjection({
+      rect: this.tubeRect,
+      quad: quadPointsFor(this.tube),
+      localWidth,
+      localHeight,
+    })
     this.aperture = createTubeAperture({
       left: rect.left,
       top: rect.top,
@@ -159,7 +303,7 @@ export class CrtCursorController {
       return
     }
 
-    this.refreshGeometry()
+    if (!this.aperture) this.refreshGeometry()
     if (!this.aperture) return
     this.edge = evaluateTubeAperture(this.aperture, this.motion.x, this.motion.y)
 
@@ -175,7 +319,7 @@ export class CrtCursorController {
         break
       case CRT_CURSOR_STATE.ABSORBING:
         this.zoneLatched = updateMagneticZoneLatch(this.aperture, true, this.edge.signedDistancePx)
-        if (!this.zoneLatched && this.absorption) this.absorption.reversing = true
+        if (this.absorption) this.absorption.reversing = !this.zoneLatched
         break
       case CRT_CURSOR_STATE.CRT_ACTIVE:
         this.zoneLatched = updateMagneticZoneLatch(this.aperture, true, this.edge.signedDistancePx)
@@ -200,15 +344,15 @@ export class CrtCursorController {
       return
     }
 
-    if (this.state !== CRT_CURSOR_STATE.NATIVE_OUTSIDE) {
-      // Keep output-space anchoring aligned with the subtly tilting chassis.
-      // This is a geometry read only; it never invalidates the raster source.
+    if (this.motion.timeMs != null) {
+      // The chassis can tilt every application frame. Read transformed geometry
+      // once here, never on the high-rate pointermove path.
       this.refreshGeometry()
-      if (this.aperture && this.motion.timeMs != null) {
+      if (this.aperture) {
         this.edge = evaluateTubeAperture(this.aperture, this.motion.x, this.motion.y)
         if (this.state === CRT_CURSOR_STATE.ABSORBING) {
           this.zoneLatched = updateMagneticZoneLatch(this.aperture, true, this.edge.signedDistancePx)
-          if (!this.zoneLatched && this.absorption) this.absorption.reversing = true
+          if (this.absorption) this.absorption.reversing = !this.zoneLatched
         } else if (this.state === CRT_CURSOR_STATE.CRT_ACTIVE) {
           this.zoneLatched = updateMagneticZoneLatch(this.aperture, true, this.edge.signedDistancePx)
           this.pendingRelease = !this.zoneLatched
@@ -221,7 +365,7 @@ export class CrtCursorController {
 
     if (this.reducedMotionQuery.matches) {
       this._handleReducedMotion()
-      if (this.state === CRT_CURSOR_STATE.CRT_ACTIVE) this._updateGpu(0, 0)
+      if (this.state === CRT_CURSOR_STATE.CRT_ACTIVE) this._renderActiveRepresentation(0, 0)
       return
     }
 
@@ -254,6 +398,10 @@ export class CrtCursorController {
     return Boolean(this.app?.crt?.ok && this.app?.state?.powerTarget > 0)
   }
 
+  _crtOpticsEnabled() {
+    return Boolean(this.app?.state?.crtTarget > 0.5 && !this.tube?.classList?.contains?.('is-crt-off'))
+  }
+
   _startAbsorption(timeMs) {
     this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.CAPTURE_START)
     const speed = pointerSpeedAt(this.motion, timeMs)
@@ -273,7 +421,7 @@ export class CrtCursorController {
   _frameAbsorption(ms, dtMs) {
     if (!this.absorption || !this.edge || !this.aperture) return
     const model = this.absorption
-    if (!this.zoneLatched) model.reversing = true
+    model.reversing = !this.zoneLatched
 
     if (model.reversing) {
       model.progress = Math.max(0, model.progress - (dtMs || 16.67) / 105)
@@ -305,12 +453,11 @@ export class CrtCursorController {
   }
 
   _snap(ms) {
-    this._updateGpu(0.16, 1)
     this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.SNAP)
     this.absorption = null
     this.recompose = { startedAtMs: ms }
-    this.view.hide?.()
-    this._syncDomState('gpu')
+    this._setOwnership(true)
+    this._renderActiveRepresentation(0.16, 1)
   }
 
   _frameActive(ms) {
@@ -323,7 +470,21 @@ export class CrtCursorController {
       recompositionStrength = remaining
       if (remaining <= 0) this.recompose = null
     }
+    this._renderActiveRepresentation(compression, recompositionStrength)
+  }
+
+  _renderActiveRepresentation(compression, recompositionStrength) {
+    if (!this._crtOpticsEnabled()) {
+      this.app.crt.setCursorState({ visible: false, compression: 0, recompositionStrength: 0 })
+      this.view.show?.()
+      this._updateDomCursor(0.58, 'bypass')
+      this._syncDomState('svg')
+      return
+    }
+
+    this.view.hide?.()
     this._updateGpu(compression, recompositionStrength)
+    this._syncDomState('gpu')
   }
 
   _startRelease(ms) {
@@ -344,9 +505,7 @@ export class CrtCursorController {
     this.release = null
     this.pendingRelease = false
     this.pendingReleaseCancel = false
-    this.view.hide?.()
-    this._updateGpu(0, 0)
-    this._syncDomState('gpu')
+    this._renderActiveRepresentation(0, 0)
   }
 
   _frameRelease(ms) {
@@ -371,14 +530,21 @@ export class CrtCursorController {
     if (!this.edge) return
     const speed = pointerSpeedAt(this.motion, this.lastFrameMs ?? this.motion.timeMs ?? 0)
     const speedStrength = clamp01(speed / 1.8)
-    const crossing = phase === 'absorb'
-      ? smoothstep01((progress - 0.82) / 0.18)
-      : smoothstep01(progress) * 0.32
-    const stretch = phase === 'absorb'
-      ? 1 + progress * (0.21 + speedStrength * 0.08) * (1 - crossing * 0.48)
-      : 1 + progress * 0.055
-    const compression = phase === 'absorb' ? crossing * 0.20 : (1 - progress) * 0.05
-    const bendDeg = inwardBendDegrees(this.motion.angle, this.edge.inwardNormal, phase === 'absorb' ? progress : progress * 0.35)
+    const isBypass = phase === 'bypass'
+    const crossing = isBypass
+      ? 0
+      : phase === 'absorb'
+        ? smoothstep01((progress - 0.82) / 0.18)
+        : smoothstep01(progress) * 0.32
+    const stretch = isBypass
+      ? 1
+      : phase === 'absorb'
+        ? 1 + progress * (0.21 + speedStrength * 0.08) * (1 - crossing * 0.48)
+        : 1 + progress * 0.055
+    const compression = isBypass ? 0 : phase === 'absorb' ? crossing * 0.20 : (1 - progress) * 0.05
+    const bendDeg = isBypass
+      ? 0
+      : inwardBendDegrees(this.motion.angle, this.edge.inwardNormal, phase === 'absorb' ? progress : progress * 0.35)
 
     this.view.update?.({
       x: this.motion.x,
@@ -394,13 +560,20 @@ export class CrtCursorController {
   }
 
   _updateGpu(compression, recompositionStrength) {
-    if (!this.tubeRect) this.refreshGeometry()
-    if (!this.tubeRect) return
+    if (!this.tubeProjection) this.refreshGeometry()
+    if (!this.tubeProjection) return
+    const placement = gpuCursorPlacementFromClient(
+      this.tubeProjection,
+      this.motion.x,
+      this.motion.y,
+      this.motion.angle,
+      CRT_CURSOR_SIZE_PX,
+    )
     this.app.crt.setCursorState({
       visible: true,
-      hotspotUv: outputUvFromClient(this.tubeRect, this.motion.x, this.motion.y),
-      angle: -this.motion.angle,
-      sizePx: CRT_CURSOR_SIZE_PX,
+      hotspotUv: placement.hotspotUv,
+      angle: placement.angle,
+      sizePx: placement.sizePx,
       compression,
       hoverIntensity: 0,
       clickImpulse: 0,
@@ -414,13 +587,12 @@ export class CrtCursorController {
       this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.DIRECT_ENTER)
       this.zoneLatched = true
       this._setOwnership(true)
-      this.view.hide?.()
-      this._updateGpu(0, 0)
-      this._syncDomState('gpu')
+      this._renderActiveRepresentation(0, 0)
     } else if (!this.edge.inside && this.state === CRT_CURSOR_STATE.CRT_ACTIVE) {
       this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.DIRECT_EXIT)
       this.zoneLatched = false
       this.app.crt.setCursorState({ visible: false })
+      this.view.hide?.()
       this._setOwnership(false)
       this._syncDomState('native')
     }
