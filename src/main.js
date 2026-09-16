@@ -24,6 +24,7 @@ import { installLandscapeMobileLayout } from './landscape-mobile.js'
 import { installLandscapeActionKeys } from './landscape-action-keys.js'
 import { installPortraitMobileLayout } from './portrait-mobile.js'
 import { createBootCoordinator } from './boot-coordinator.js'
+import { createPointerSampleBuffer } from './crt-cursor-pointer-buffer.js'
 
 const performanceProbeBoot = globalThis.__JG1500_PERF_TEST__ === true
   // performance.now() is relative to the document time origin, which exists
@@ -44,12 +45,19 @@ const install = app => {
   // Cursor ownership is not required to paint or interact with the first app
   // frame. Load it immediately as a small non-blocking feature chunk so the
   // established boot bundle budget remains intact; native cursor behavior is
-  // the fail-safe until installation succeeds.
+  // the fail-safe until installation succeeds. A tiny synchronous buffer keeps
+  // the last observable pointer sample so an enter-and-stop during chunk load
+  // is not lost before the production controller installs its own listener.
+  const cursorPointerBuffer = createPointerSampleBuffer(globalThis.window).start()
   void import('./crt-cursor-runtime-controller.js').then(
     ({ CrtCursorRuntimeController }) => {
-      app.cursorController = new CrtCursorRuntimeController(app).install()
+      const cursorController = new CrtCursorRuntimeController(app).install()
+      const bufferedPointerSample = cursorPointerBuffer.stop().consume()
+      app.cursorController = cursorController
+      if (bufferedPointerSample) cursorController.handlePointerMove(bufferedPointerSample)
     },
     error => {
+      cursorPointerBuffer.stop()
       console.warn('CRT cursor unavailable; using the native cursor', error)
     },
   )
