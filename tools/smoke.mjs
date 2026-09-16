@@ -104,6 +104,12 @@ if (!code && externalModule) {
     /import\((['"])\.\/crt-cursor-controller-[^'"]+\.js\1\)/g,
     'Promise.reject(new Error("smoke cursor chunk unavailable"))',
   )
+  // Once a child chunk imports helpers that Rollup hoists from the entry, the
+  // browser entry can legitimately end in an ESM export list. window.eval is a
+  // classic-script evaluator and cannot parse that syntax. The cursor import
+  // above is intentionally disabled in this harness, so these chunk-facing
+  // exports have no consumer here and can be removed for jsdom only.
+  code = code.replace(/\bexport\s*\{[^}]*\}\s*;?\s*$/s, '')
 }
 if (!code) throw new Error('dist/index.html does not contain a runnable module script')
 try { w.eval(code) } catch (e) { errors.push(e.message) }
