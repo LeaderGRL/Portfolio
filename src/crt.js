@@ -156,7 +156,7 @@ vec3 cursorEmission(vec2 suv){
 vec3 src(vec2 suv){
   vec3 base = texture(uTex, suv).rgb;
   if (uCursorVisible < 0.5) return base;
-  return max(base, cursorEmission(suv));
+  return base + cursorEmission(suv);
 }
 
 vec3 bloom(vec2 suv, float r){
@@ -263,6 +263,7 @@ export class CRT {
     this.ok = false;
     this.cursorState = DEFAULT_CRT_CURSOR_GPU_STATE;
     this.cursorResourceInitCount = 0;
+    this.outputDensity = 1;
     this.maxDimension = 4096; // Canvas-only fallback keeps the application cap.
     const gl = canvas.getContext("webgl2", {
       alpha: false, antialias: false, premultipliedAlpha: false,
@@ -454,6 +455,7 @@ export class CRT {
     const density = Math.min(dpr, this.maxDimension / Math.max(cssW, cssH));
     const w = Math.max(1, Math.floor(cssW * density));
     const h = Math.max(1, Math.floor(cssH * density));
+    this.outputDensity = density;
     if (this.canvas.width === w && this.canvas.height === h) return;
     this.canvas.width = w; this.canvas.height = h;
   }
@@ -528,7 +530,7 @@ export class CRT {
     gl.uniform1f(this.u.uCursorVisible, cursor.visible ? 1 : 0);
     gl.uniform2f(this.u.uCursorHotspot, cursor.hotspotUv.x, cursor.hotspotUv.y);
     gl.uniform1f(this.u.uCursorAngle, cursor.angle);
-    gl.uniform1f(this.u.uCursorSizePx, cursor.sizePx);
+    gl.uniform1f(this.u.uCursorSizePx, cursor.sizePx * this.outputDensity);
     gl.uniform1f(this.u.uCursorCompression, cursor.compression);
     gl.uniform1f(this.u.uCursorHover, cursor.hoverIntensity);
     gl.uniform1f(this.u.uCursorClick, cursor.clickImpulse);
