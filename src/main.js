@@ -24,7 +24,6 @@ import { installLandscapeMobileLayout } from './landscape-mobile.js'
 import { installLandscapeActionKeys } from './landscape-action-keys.js'
 import { installPortraitMobileLayout } from './portrait-mobile.js'
 import { createBootCoordinator } from './boot-coordinator.js'
-import { CrtCursorController } from './crt-cursor-controller.js'
 
 const performanceProbeBoot = globalThis.__JG1500_PERF_TEST__ === true
   // performance.now() is relative to the document time origin, which exists
@@ -41,7 +40,19 @@ const install = app => {
   attachArticleCRT(app)
   installSemanticFocusProxy()
   installFullscreenSoftkeys(app)
-  app.cursorController = new CrtCursorController(app).install()
+
+  // Cursor ownership is not required to paint or interact with the first app
+  // frame. Load it immediately as a small non-blocking feature chunk so the
+  // established boot bundle budget remains intact; native cursor behavior is
+  // the fail-safe until installation succeeds.
+  void import('./crt-cursor-controller.js').then(
+    ({ CrtCursorController }) => {
+      app.cursorController = new CrtCursorController(app).install()
+    },
+    error => {
+      console.warn('CRT cursor unavailable; using the native cursor', error)
+    },
+  )
 }
 
 const boot = createBootCoordinator({ start, install })
