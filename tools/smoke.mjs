@@ -96,6 +96,14 @@ if (!code && externalModule) {
   // a real ESM script, so provide the entry's real URL while leaving the
   // production bundle and its browser semantics untouched.
   code = code.replace(/\bimport\.meta\.url\b/g, JSON.stringify(new URL(externalModule[1], 'http://localhost/').href))
+  // This legacy smoke intentionally executes only the entry bundle. It cannot
+  // provide a VM module loader for child ESM chunks, so exercise the cursor
+  // feature's real production fallback here. Playwright loads and validates the
+  // actual cursor chunk in a browser after this build gate succeeds.
+  code = code.replace(
+    /import\((['"])\.\/crt-cursor-controller-[^'"]+\.js\1\)/g,
+    'Promise.reject(new Error("smoke cursor chunk unavailable"))',
+  )
 }
 if (!code) throw new Error('dist/index.html does not contain a runnable module script')
 try { w.eval(code) } catch (e) { errors.push(e.message) }
@@ -121,15 +129,21 @@ setTimeout(() => {
   console.log('  integrated LEDs :', keyLeds, ok(keyLeds === 6))
   const powerMarks = d.querySelectorAll('.rocker__marks').length
   console.log('  power I/O marks :', powerMarks, ok(powerMarks === 0))
-  const fellBack = d.getElementById('tube').classList.contains('is-fallback')
+  const tube = d.getElementById('tube')
+  const fellBack = tube?.classList.contains('is-fallback') || false
   console.log('  2D fallback on  :', fellBack)
-  if (WANT_GL) ok(!fellBack)          // with a GL context available it must not fall back
+  if (WANT_GL) ok(Boolean(tube) && !fellBack) // with a GL context available it must not fall back
 
   // Walk every route and open the first item of each collection. Rendering a
   // page is where module-boundary mistakes actually surface — projects and
   // articles both threw on a constant that was never imported, and nothing
   // before this step would have noticed.
   const keys = [...d.querySelectorAll('#nav-keys .key')]
+  if (!keys.length) {
+    if (errors.length) console.log('\n  uncaught errors:\n   ' + [...new Set(errors)].join('\n   '))
+    console.log('\n  application did not boot; route checks skipped')
+    process.exit(1)
+  }
   for (const k of keys) {
     const label = k.querySelector('.key__legend').textContent
     const before = errors.length
