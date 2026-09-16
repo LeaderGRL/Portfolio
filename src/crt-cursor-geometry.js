@@ -79,14 +79,10 @@ function closestPointInQuadrant(point, halfWidth, halfHeight, exponent) {
     }
   }
 
-  // Distance to a superellipse is not guaranteed to be unimodal for points
-  // inside the curve. Scan the full quadrant, then refine every sampled local
-  // minimum instead of applying one golden-section search to the whole arc.
-  for (let index = 1; index < DISTANCE_SCAN_SEGMENTS; index += 1) {
-    if (samples[index] > samples[index - 1] || samples[index] > samples[index + 1]) continue
+  const considerRefinedInterval = (left, right) => {
     const candidate = refineDistanceMinimum(
-      (index - 1) * step,
-      (index + 1) * step,
+      left,
+      right,
       point,
       halfWidth,
       halfHeight,
@@ -96,6 +92,20 @@ function closestPointInQuadrant(point, halfWidth, halfHeight, exponent) {
       bestDistance = candidate.distance
       bestTheta = candidate.theta
     }
+  }
+
+  // Distance to a superellipse is not guaranteed to be unimodal for points
+  // inside the curve. Scan the full quadrant, then refine every sampled local
+  // minimum instead of applying one golden-section search to the whole arc.
+  // The two endpoint intervals need explicit refinement because a true minimum
+  // can sit between the axis and the first/last sample without making either
+  // sampled endpoint a discrete local minimum.
+  considerRefinedInterval(0, step)
+  considerRefinedInterval(HALF_PI - step, HALF_PI)
+
+  for (let index = 1; index < DISTANCE_SCAN_SEGMENTS; index += 1) {
+    if (samples[index] > samples[index - 1] || samples[index] > samples[index + 1]) continue
+    considerRefinedInterval((index - 1) * step, (index + 1) * step)
   }
 
   return pointOnSuperellipse(bestTheta, halfWidth, halfHeight, exponent)
