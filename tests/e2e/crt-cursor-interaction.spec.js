@@ -26,7 +26,7 @@ async function activePoint(page) {
   })
 }
 
-test('Interactive Lock preserves hotspot and only genuine activations fire feedback', async ({ page }, testInfo) => {
+test('Interactive Lock stays on the owned pointer and re-probes stationary content', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium', 'Interactive cursor feedback is exercised once on desktop Chromium')
   await bootCursorPage(page)
   const point = await activePoint(page)
@@ -43,22 +43,36 @@ test('Interactive Lock preserves hotspot and only genuine activations fire feedb
 
   await page.mouse.move(point.x, point.y)
   await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'CRT_ACTIVE', { timeout: 5000 })
-  await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-interactive', 'locked')
+  await expect.poll(() => page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().hoverIntensity)).toBeGreaterThan(0)
 
-  const locked = await page.evaluate(() => {
-    const app = globalThis.__JG1500_APP__
-    return { cursor: app.crt.getCursorState(), x: app.cursorController.motion.x, y: app.cursorController.motion.y }
+  await page.locator('#cursor-action-probe').dispatchEvent('pointerdown', {
+    pointerType: 'touch',
+    pointerId: 42,
+    isPrimary: true,
+    button: 0,
+    clientX: point.x,
+    clientY: point.y,
   })
-  expect(locked.cursor.hoverIntensity).toBeGreaterThan(0)
+  await page.locator('#cursor-action-probe').dispatchEvent('pointerup', {
+    pointerType: 'touch',
+    pointerId: 42,
+    isPrimary: true,
+    button: 0,
+    clientX: point.x,
+    clientY: point.y,
+  })
+  await expect(page.locator('#tube')).not.toHaveAttribute('data-crt-cursor-activation-count', '1')
 
   await page.mouse.click(point.x, point.y)
   await expect(page.locator('#cursor-action-probe')).toHaveAttribute('data-clicks', '1')
   await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-activation-count', '1')
 
-  await page.locator('#cursor-action-probe').evaluate(node => node.remove())
-  await page.mouse.move(point.x + 70, point.y)
-  await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-interactive', 'idle')
-  await page.mouse.click(point.x + 70, point.y)
+  await page.locator('#cursor-action-probe').evaluate(node => {
+    node.style.left = `${Number.parseFloat(node.style.left) + 120}px`
+  })
+  await expect.poll(() => page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().hoverIntensity)).toBe(0)
+
+  await page.mouse.click(point.x, point.y)
   await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-activation-count', '1')
 })
 

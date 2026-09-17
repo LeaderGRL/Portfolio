@@ -147,31 +147,6 @@ export class Foley {
     src.start(t); src.stop(t + 0.24);
   }
 
-  _cursorPulse(startHz, endHz, duration, gain, type) {
-    if (!this.ctx || !this.enabled || this.volume <= 0) return false;
-    const t = this.ctx.currentTime;
-    const o = this.ctx.createOscillator();
-    o.type = type;
-    o.frequency.setValueAtTime(startHz, t);
-    o.frequency.exponentialRampToValueAtTime(endHz, t + duration);
-    const g = this.ctx.createGain();
-    g.gain.setValueAtTime(gain, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-    o.connect(g).connect(this.master);
-    o.start(t); o.stop(t + duration + 0.004);
-    return true;
-  }
-
-  /** Tiny electronic confirmation when absorption reaches Snap. */
-  cursorSnap() {
-    return this._cursorPulse(1180, 760, 0.045, 0.045, "triangle");
-  }
-
-  /** Short electronic tick for a genuine CRT interactive activation. */
-  cursorClick() {
-    return this._cursorPulse(2200, 1150, 0.032, 0.050, "square");
-  }
-
   /** Per-character teletype blip, deliberately almost inaudible. */
   blip() {
     if (!this.ctx || !this.enabled || this.volume < 0.02) return;
