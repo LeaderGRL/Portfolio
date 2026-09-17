@@ -14,6 +14,11 @@ async function bootCursorPage(page) {
   await expect(page.locator('#tube')).toBeVisible()
   await expect.poll(() => page.evaluate(() => Boolean(globalThis.__JG1500_APP__?.cursorController?.aperture))).toBe(true)
   await page.evaluate(() => document.fonts?.ready)
+  await expect.poll(() => page.evaluate(() => {
+    const app = globalThis.__JG1500_APP__
+    return Boolean(app && app.reveal >= app.revealTarget)
+  })).toBe(true)
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
 }
 
 async function requireGpuCursor(page) {
