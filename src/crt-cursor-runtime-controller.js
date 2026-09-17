@@ -10,7 +10,6 @@ const PROBE_CORNERS = [
 
 const CRT_BYPASS_PHOSPHOR = 0.58
 const SOFTKEY_OVERLAY_PHOSPHOR = 0.72
-const EDGE_OVERLAY_PHOSPHOR = 1
 
 function pointFromProbe(probe) {
   const rect = probe?.getBoundingClientRect?.()
@@ -70,52 +69,36 @@ export class CrtCursorRuntimeController extends CrtCursorController {
   constructor(app, options = {}) {
     super(app, options)
     this.softkey = false
-    this.softkeyDirty = true
-    this.softkeyFullscreen = Boolean(app?.state?.fullscreen)
-    this.activePhosphor = 1
-    this.releasePhosphor = 1
-    this.fresh = false
-    this.onPointerOver = event => {
-      if (event?.target?.tagName === 'IFRAME' || this.state === CRT_CURSOR_STATE.NATIVE_EXTERNAL) {
-        this.handlePointerMove(event)
-      }
-    }
+    this.phosphor = 1
     this.removeTubeQuadFallback = installTubeQuadFallback(this.tube, this.document)
   }
 
   install() {
     super.install()
-    if (this.installed) this.window.addEventListener('pointerover', this.onPointerOver, true)
+    if (this.installed) this.window.addEventListener('pointerover', this.handlePointerMove, true)
     return this
   }
 
-  invalidateGeometry() {
-    super.invalidateGeometry()
-    this.softkeyDirty = true
-  }
-
   syncPower() {
-    if (this._powered()) return
-    this.fresh = true
+    if (this._powered() && this._eligible()) return
+    this.motion.timeMs = null
+    this.edge = null
     this._forceNative()
     this._resetReaction?.()
   }
 
   handlePointerMove(event) {
-    const externalBefore = this.state === CRT_CURSOR_STATE.NATIVE_EXTERNAL
-    const externalNow = event?.target?.tagName === 'IFRAME'
-    if (externalBefore && !externalNow) this.motion.timeMs = null
+    const wasExternal = this.state === CRT_CURSOR_STATE.NATIVE_EXTERNAL
+    const isExternal = event?.target?.tagName === 'IFRAME'
+    if (wasExternal && !isExternal) this.motion.timeMs = null
 
     const fullscreen = Boolean(this.app?.state?.fullscreen)
     this.softkey = Boolean(fullscreen && event?.target?.closest?.('.softkeys__key'))
-    this.softkeyFullscreen = fullscreen
-    this.softkeyDirty = false
-    if (this._powered()) this.fresh = false
     super.handlePointerMove(event)
 
     if (!this._powered() || !this._eligible()) return
-    if (externalNow) {
-      if (!externalBefore) {
+    if (isExternal) {
+      if (!wasExternal) {
         this._forceNative()
         this._resetReaction?.()
         this.state = CRT_CURSOR_STATE.NATIVE_EXTERNAL
@@ -124,7 +107,7 @@ export class CrtCursorRuntimeController extends CrtCursorController {
       return
     }
 
-    if (!externalBefore || this.state !== CRT_CURSOR_STATE.NATIVE_EXTERNAL) return
+    if (!wasExternal || this.state !== CRT_CURSOR_STATE.NATIVE_EXTERNAL) return
     if (this.edge?.inside) {
       this.state = CRT_CURSOR_STATE.CRT_ACTIVE
       this.zoneLatched = true
@@ -137,35 +120,29 @@ export class CrtCursorRuntimeController extends CrtCursorController {
   }
 
   frame(ms) {
-    if (!this._powered()) {
+    if (!this._powered() || !this._eligible()) {
       this.syncPower()
-      this.lastFrameMs = ms
-      return
-    }
-    if (this.fresh) {
       this.lastFrameMs = ms
       return
     }
 
     const fullscreen = Boolean(this.app?.state?.fullscreen)
-    if (fullscreen !== this.softkeyFullscreen) {
-      this.softkeyFullscreen = fullscreen
-      this.softkeyDirty = true
-    }
-
     if (!fullscreen) {
       this.softkey = false
-      this.softkeyDirty = false
-    } else if (this.motion.timeMs != null && this.softkeyDirty) {
-      this.softkey = Boolean(this.document?.elementFromPoint?.(this.motion.x, this.motion.y)?.closest?.('.softkeys__key'))
-      this.softkeyDirty = false
+    } else if (
+      this.motion.timeMs != null
+      && (fullscreen !== this.lastFullscreen || this.geometryStyleDirty)
+    ) {
+      this.softkey = Boolean(
+        this.document?.elementFromPoint?.(this.motion.x, this.motion.y)?.closest?.('.softkeys__key'),
+      )
     }
 
     super.frame(ms)
   }
 
   _showDomActiveRepresentation(phosphor, owner) {
-    this.activePhosphor = phosphor
+    this.phosphor = phosphor
     this.app.crt.setCursorState({
       visible: false,
       compression: 0,
@@ -183,32 +160,26 @@ export class CrtCursorRuntimeController extends CrtCursorController {
     }
 
     if (this.state === CRT_CURSOR_STATE.CRT_ACTIVE && this.edge?.signedDistancePx > 0) {
-      const phosphor = this._crtOpticsEnabled()
-        ? EDGE_OVERLAY_PHOSPHOR
-        : CRT_BYPASS_PHOSPHOR
-      this._showDomActiveRepresentation(phosphor, 'svg-edge')
+      this._showDomActiveRepresentation(
+        this._crtOpticsEnabled() ? 1 : CRT_BYPASS_PHOSPHOR,
+        'svg-edge',
+      )
       return
     }
 
-    this.activePhosphor = this._crtOpticsEnabled() ? 1 : CRT_BYPASS_PHOSPHOR
+    this.phosphor = this._crtOpticsEnabled() ? 1 : CRT_BYPASS_PHOSPHOR
     super._renderActiveRepresentation(compression, recompositionStrength)
-  }
-
-  _startRelease(ms) {
-    // Preserve the treatment actually visible before runtime flags change.
-    this.releasePhosphor = this.activePhosphor
-    super._startRelease(ms)
   }
 
   _updateDomCursor(progress, phase) {
     super._updateDomCursor(
-      phase === 'release' ? progress * this.releasePhosphor : progress,
+      phase === 'release' ? progress * this.phosphor : progress,
       phase,
     )
   }
 
   destroy() {
-    this.window?.removeEventListener('pointerover', this.onPointerOver, true)
+    this.window?.removeEventListener('pointerover', this.handlePointerMove, true)
     super.destroy()
     this.removeTubeQuadFallback?.()
     this.removeTubeQuadFallback = null
