@@ -25,6 +25,7 @@ import { installLandscapeActionKeys } from './landscape-action-keys.js'
 import { installPortraitMobileLayout } from './portrait-mobile.js'
 import { createBootCoordinator } from './boot-coordinator.js'
 import { createPointerSampleBuffer } from './crt-cursor-pointer-buffer.js'
+import { installCrtCursorInteraction } from './crt-cursor-interaction.js'
 
 const performanceProbeBoot = globalThis.__JG1500_PERF_TEST__ === true
   // performance.now() is relative to the document time origin, which exists
@@ -55,6 +56,7 @@ const install = app => {
       const bufferedPointerSample = cursorPointerBuffer.stop().consume(cursorController.now())
       app.cursorController = cursorController
       if (bufferedPointerSample) cursorController.handlePointerMove(bufferedPointerSample)
+      app.cursorInteraction = installCrtCursorInteraction(app, cursorController)
     },
     error => {
       cursorPointerBuffer.stop()
