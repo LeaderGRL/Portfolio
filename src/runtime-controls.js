@@ -11,7 +11,7 @@ import { syncContactLinks } from './contact-links.js'
  * and keeps native CONTACT anchors aligned with terminal navigation state.
  * ========================================================================== */
 
-const INTERACTIVE_SELECTOR = [
+export const INTERACTIVE_SELECTOR = [
   'button',
   'a[href]',
   'input',
@@ -33,8 +33,8 @@ const LIST_FIRST_ROW = 3
 const TAP_SLOP_PX = 12
 const TERMINAL_DRAG_SLOP_PX = 6
 
-function closestInteractive(target) {
-  return target instanceof Element ? target.closest(INTERACTIVE_SELECTOR) : null
+export function closestInteractive(target) {
+  return target?.closest?.(INTERACTIVE_SELECTOR) || null
 }
 
 function usesPortableTouchLayout(machine) {
@@ -65,6 +65,27 @@ function containsClientRect(rect, x, y) {
     && x <= rect.left + rect.width
     && y >= rect.top
     && y <= rect.top + rect.height
+}
+
+export function screenListingIndexAt(app, clientX, clientY, documentRef = globalThis.document) {
+  const tube = documentRef?.getElementById?.('tube')
+  const machine = documentRef?.getElementById?.('machine')
+  if (!app || !tube || !machine) return -1
+  if (!usesPortableTouchLayout(machine) && !app.state?.fullscreen) return -1
+
+  const route = app.state?.route
+  if ((route !== 'projects' && route !== 'articles') || app.state?.item) return -1
+  const rect = app.rasterClientRect?.() || tube.getBoundingClientRect()
+  if (!rect.width || !rect.height || !containsClientRect(rect, clientX, clientY)) return -1
+
+  const sourceY = ((clientY - rect.top) / rect.height) * SRC_H
+  const row = Math.floor((sourceY - PAD_Y) / CHAR_H)
+  const relativeRow = row - LIST_FIRST_ROW
+  if (relativeRow < 0) return -1
+
+  const items = route === 'projects' ? CONTENT.projects : CONTENT.articles
+  const index = Math.floor(relativeRow / 2)
+  return index >= 0 && index < items.length ? index : -1
 }
 
 function setSliderFromPoint(slider, clientX) {
@@ -133,53 +154,27 @@ function bindCompactTargetExpansion() {
 
 function bindScreenListingPointer(app) {
   const tube = document.getElementById('tube')
-  const machine = document.getElementById('machine')
-  if (!tube || !machine) return () => {}
+  if (!tube) return () => {}
 
   const starts = new Map()
-  // Rows are direct targets wherever the panel keys are out of reach: portable
-  // portrait, portable landscape, and full screen on any layout.
-  const rowsAreTargets = () => usesPortableTouchLayout(machine) || Boolean(app.state?.fullscreen)
-  const rasterRect = () => app.rasterClientRect?.() || tube.getBoundingClientRect()
-
   const onPointerDown = event => {
-    if (!event.isPrimary || event.button > 0) return
-    if (!rowsAreTargets()) return
-    if (closestInteractive(event.target)) return
-
-    const rect = rasterRect()
-    if (!rect.width || !rect.height || !containsClientRect(rect, event.clientX, event.clientY)) return
-    starts.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (!event.isPrimary || event.button > 0 || closestInteractive(event.target)) return
+    const index = screenListingIndexAt(app, event.clientX, event.clientY)
+    if (index < 0) return
+    starts.set(event.pointerId, { x: event.clientX, y: event.clientY, index })
   }
-
   const clear = event => starts.delete(event.pointerId)
-
   const onPointerUp = event => {
     const start = starts.get(event.pointerId)
     starts.delete(event.pointerId)
-    if (!start || !event.isPrimary || event.button > 0) return
-    if (!rowsAreTargets()) return
-    if (closestInteractive(event.target)) return
-
-    const rect = rasterRect()
-    if (!rect.width || !rect.height || !containsClientRect(rect, event.clientX, event.clientY)) return
+    if (!start || !event.isPrimary || event.button > 0 || closestInteractive(event.target)) return
 
     const dx = event.clientX - start.x
     const dy = event.clientY - start.y
     if (Math.hypot(dx, dy) > TAP_SLOP_PX) return
 
-    const route = app.state?.route
-    if ((route !== 'projects' && route !== 'articles') || app.state?.item) return
-
-    const items = route === 'projects' ? CONTENT.projects : CONTENT.articles
-    const sourceY = ((event.clientY - rect.top) / rect.height) * SRC_H
-    const row = Math.floor((sourceY - PAD_Y) / CHAR_H)
-    const relativeRow = row - LIST_FIRST_ROW
-    if (relativeRow < 0) return
-
-    const index = Math.floor(relativeRow / 2)
-    if (index < 0 || index >= items.length) return
-
+    const index = screenListingIndexAt(app, event.clientX, event.clientY)
+    if (index < 0 || index !== start.index) return
     app.state.cursor = index
     app.render()
     app.enter()
