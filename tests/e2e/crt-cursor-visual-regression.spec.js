@@ -70,6 +70,7 @@ async function visualGeometry(page) {
       outside: offset(-(aperture.magneticZonePx + aperture.hysteresisPx + 10)),
       absorb: offset(-8),
       preSnap: offset(1),
+      release: offset(-(aperture.magneticZonePx + aperture.hysteresisPx + 2)),
       center: project(aperture.centerX, aperture.centerY),
       boundary: project(cornerX + dx / length * 10, cornerY + dy / length * 10),
     }
@@ -183,15 +184,18 @@ for (const visualCase of [
     await freeze(page)
   }],
   ['release', async page => {
-    await bootActive(page)
+    const points = await bootActive(page)
+    await page.mouse.move(points.release.x, points.release.y)
     await page.evaluate(() => {
       const controller = globalThis.__JG1500_APP__.cursorController
       const now = performance.now()
-      controller._startRelease(now)
+      if (controller.state === 'CRT_ACTIVE') controller._startRelease(now)
+      if (!controller.release) throw new Error('Release state did not initialize')
       controller.release.startedAtMs = now - 60
       controller._frameRelease(now)
       controller._release(now)
     })
+    await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'RELEASING')
     await freeze(page)
   }],
   ['crt-off-active', async page => {
