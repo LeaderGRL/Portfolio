@@ -7,11 +7,7 @@ import {
   normalizeCrtGlassReactionState,
   releaseReactionSample,
 } from '../../../src/crt-cursor-reaction.js'
-import {
-  FRAG_CRT_REACTION,
-  CRTReactive,
-} from '../../../src/crt-reactive.js'
-import { FRAG_PERSIST } from '../../../src/crt.js'
+import { CRT, FRAG_CRT, FRAG_CRT_BASE, FRAG_PERSIST } from '../../../src/crt.js'
 import {
   CrtCursorGlassController,
   gpuReactionPlacementFromClient,
@@ -169,19 +165,25 @@ test('reaction state stays bounded and recoil damps through a small signed overs
 
 test('reaction shader is localized, keeps the cursor hotspot unwarped and stays outside persistence', () => {
   assert.equal(FRAG_PERSIST.includes('uReaction'), false)
-  assert.ok(FRAG_CRT_REACTION.includes('return exp(-q * 3.25);'))
-  assert.ok(FRAG_CRT_REACTION.includes('texture(uTex, reactionWarp(suv)).rgb'))
-  assert.ok(FRAG_CRT_REACTION.includes('return base + cursorEmission(suv);'))
-  assert.ok(FRAG_CRT_REACTION.includes('uReactionStrength * 1.85'))
-  assert.ok(FRAG_CRT_REACTION.includes('uReactionSubmerged * 0.45'))
-  assert.ok(FRAG_CRT_REACTION.includes('scanBendPx'))
+  assert.ok(FRAG_CRT.includes('return exp(-q * 3.25);'))
+  assert.ok(FRAG_CRT.includes('texture(uTex, reactionWarp(suv)).rgb'))
+  assert.ok(FRAG_CRT.includes('return base + cursorEmission(suv);'))
+  assert.ok(FRAG_CRT.includes('uReactionStrength * 1.85'))
+  assert.ok(FRAG_CRT.includes('uReactionSubmerged * 0.45'))
+  assert.ok(FRAG_CRT.includes('scanBendPx'))
+
+  // The established idle fast path must contain no reachable reaction warp or
+  // scanline deformation even though dead helper functions may remain in GLSL.
+  assert.ok(FRAG_CRT_BASE.includes('vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }'))
+  assert.equal(FRAG_CRT_BASE.includes('gReactionSignalHotspot = signalUv(uReactionHotspot);'), false)
+  assert.equal(FRAG_CRT_BASE.includes('float scanBendPx = reactionMask'), false)
 })
 
 test('reaction-only frames use uniforms without re-uploading the raster source or cursor resource', () => {
   const { gl, uniforms, uploads, programUses } = createFakeGl()
   const source = { width: 480, height: 360 }
   const canvas = { getContext: () => gl, width: 480, height: 360, offsetWidth: 480, offsetHeight: 360 }
-  const crt = new CRTReactive(canvas, source)
+  const crt = new CRT(canvas, source)
 
   assert.equal(crt.ok, true)
   assert.equal(crt.render(renderState, false), true)
@@ -199,7 +201,7 @@ test('reaction-only frames use uniforms without re-uploading the raster source o
     radiusPx: 52,
   })
   assert.equal(crt.render(renderState, false), true)
-  assert.equal(programUses.at(-1), crt.progCrtReaction.id)
+  assert.equal(programUses.at(-1), crt.progCrt.id)
   assert.equal(uploads.source, 1)
   assert.equal(uploads.cursor, 1)
   assert.equal(uniforms.uCursorVisible, 0)
