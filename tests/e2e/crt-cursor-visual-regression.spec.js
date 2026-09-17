@@ -106,7 +106,7 @@ async function captureVisual(page, name) {
     width,
     height,
   }
-  await expect(page).toHaveScreenshot(`crt-cursor-${name}.png`, {
+  await expect(page).toHaveScreenshot(`crt-cursor-${name}.jpg`, {
     animations: 'disabled',
     caret: 'hide',
     clip,
