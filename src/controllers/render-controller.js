@@ -148,6 +148,10 @@ export class RenderController {
     }
 
     app.tilt?.frame?.()
+    // Cursor state is sampled by the same physical CRT frame. It must run
+    // before source dirtiness is captured and before crt.render() so SVG↔GPU
+    // ownership can switch atomically without ever invalidating the raster.
+    app.cursorController?.frame?.(ms)
     app.documentRuntime?.frame?.(ms)
     const sourceDirty = app.dirty
     if (sourceDirty) {

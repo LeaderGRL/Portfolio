@@ -14,6 +14,7 @@ import './landscape-mobile.css'
 import './landscape-action-keys.css'
 import './portrait-mobile.css'
 import './fullscreen.css'
+import './crt-cursor.css'
 import { start } from './app.js'
 import { attachArticleCRT } from './article-crt-bridge.js'
 import { installFullscreenSoftkeys } from './fullscreen-softkeys.js'
@@ -23,6 +24,7 @@ import { installLandscapeMobileLayout } from './landscape-mobile.js'
 import { installLandscapeActionKeys } from './landscape-action-keys.js'
 import { installPortraitMobileLayout } from './portrait-mobile.js'
 import { createBootCoordinator } from './boot-coordinator.js'
+import { createPointerSampleBuffer } from './crt-cursor-pointer-buffer.js'
 
 const performanceProbeBoot = globalThis.__JG1500_PERF_TEST__ === true
   // performance.now() is relative to the document time origin, which exists
@@ -39,6 +41,26 @@ const install = app => {
   attachArticleCRT(app)
   installSemanticFocusProxy()
   installFullscreenSoftkeys(app)
+
+  // Cursor ownership is not required to paint or interact with the first app
+  // frame. Load it immediately as a small non-blocking feature chunk so the
+  // established boot bundle budget remains intact; native cursor behavior is
+  // the fail-safe until installation succeeds. A tiny synchronous buffer keeps
+  // the last observable pointer sample so an enter-and-stop during chunk load
+  // is not lost before the production controller installs its own listener.
+  const cursorPointerBuffer = createPointerSampleBuffer(globalThis.window).start()
+  void import('./crt-cursor-runtime-controller.js').then(
+    ({ CrtCursorRuntimeController }) => {
+      const cursorController = new CrtCursorRuntimeController(app).install()
+      const bufferedPointerSample = cursorPointerBuffer.stop().consume(cursorController.now())
+      app.cursorController = cursorController
+      if (bufferedPointerSample) cursorController.handlePointerMove(bufferedPointerSample)
+    },
+    error => {
+      cursorPointerBuffer.stop()
+      console.warn('CRT cursor unavailable; using the native cursor', error)
+    },
+  )
 }
 
 const boot = createBootCoordinator({ start, install })
