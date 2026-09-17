@@ -82,6 +82,14 @@ export class CrtCursorRuntimeController extends CrtCursorController {
     this.removeTubeQuadFallback = installTubeQuadFallback(this.tube, this.document)
   }
 
+  install() {
+    super.install()
+    if (this.installed) {
+      this.window.addEventListener('pointerover', this.handlePointerMove, { passive: true, capture: true })
+    }
+    return this
+  }
+
   invalidateGeometry() {
     super.invalidateGeometry()
     this.softkeyHitTestDirty = true
@@ -213,6 +221,7 @@ export class CrtCursorRuntimeController extends CrtCursorController {
   }
 
   destroy() {
+    this.window?.removeEventListener('pointerover', this.handlePointerMove, true)
     super.destroy()
     this.removeTubeQuadFallback?.()
     this.removeTubeQuadFallback = null
