@@ -2,6 +2,7 @@
 title: CPU CACHES · ECS IN RUST
 sub: From latency to data layout
 year: 2026
+narration: /media/narration/03-cpu-cache-optimization.mp3
 ---
 ::media{src=medium/cpu-cache-optimization/01.webp label="Article illustration" fit=contain background=off height=300}
 ## 1. Introduction: The Problem Nobody sees

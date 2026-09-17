@@ -2,6 +2,7 @@
 title: 3D PARALLAX CARDS
 sub: AI imagery, depth layers and Rive
 year: 2025
+narration: /media/narration/06-parallax-cards-rive.mp3
 ---
 As a solo game developer, I’ve quickly realized that mastering every aspect of game development from art creation to animations can be daunting and time-consuming. To stay productive without sacrificing quality, I’ve adopted creative tricks and shortcuts to achieve visually impressive results without needing extensive expertise in every domain. Today, with the new Gemini 2.0 flash and ChatGPT-4o models, one effective solution I’ve found is creating stunning 3D parallax cards using AI-generated images combined with Rive App’s powerful animations.
 ### Step 1: Generating Stunning Imagery with AI

@@ -2,6 +2,7 @@
 title: ECS #2 · GENERATIONAL IDS
 sub: Safe entity recycling in Rust
 year: 2026
+narration: /media/narration/01-ecs-entity-management.mp3
 ---
 *How do you identify an entity ? A subject that can be useful in contexts other than an ECS* ! *This is the second article in a series about building a high performance Entity Component System from scratch in Rust.*
 ## Quick Reminder: What is an Entity?

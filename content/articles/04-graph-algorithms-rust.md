@@ -2,6 +2,7 @@
 title: GRAPH ALGORITHMS · RUST
 sub: Theory, bitsets, SIMD and Rayon
 year: 2025
+narration: /media/narration/04-graph-algorithms-rust.mp3
 ---
 ## Introduction: Why Are Graphs Everywhere?
 Imagine you’re browsing LinkedIn. Each person is a point (node), each connection is a line (edge). That’s a graph! Google Maps? Intersections are nodes, roads are edges. Facebook, Twitter, neural networks, the Internet itself… everything is a graph.
