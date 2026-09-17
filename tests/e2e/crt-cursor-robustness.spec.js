@@ -12,6 +12,11 @@ async function bootCursorPage(page) {
   await expect.poll(() => page.evaluate(() => Boolean(globalThis.__JG1500_APP__?.cursorController?.aperture))).toBe(true)
 }
 
+async function requireCrtRuntime(page) {
+  const available = await page.evaluate(() => Boolean(globalThis.__JG1500_APP__?.crt?.ok))
+  test.skip(!available, 'CRT cursor behavior requires an available WebGL runtime')
+}
+
 async function tubePoints(page) {
   return page.locator('#tube').evaluate(node => {
     const rect = node.getBoundingClientRect()
@@ -38,6 +43,7 @@ test.describe('exceptional cursor ownership', () => {
   test('POWER off restores native ownership synchronously and POWER on waits for fresh pointer input', async ({ page }, testInfo) => {
     test.skip(!DESKTOP_PROJECTS.has(testInfo.project.name), 'Fine-pointer robustness runs on desktop engines')
     await bootCursorPage(page)
+    await requireCrtRuntime(page)
     const { safe } = await tubePoints(page)
     await activateCursor(page, safe)
 
@@ -63,6 +69,7 @@ test.describe('exceptional cursor ownership', () => {
   test('sandboxed iframe uses native external ownership and returns directly to CRT_ACTIVE', async ({ page }, testInfo) => {
     test.skip(!DESKTOP_PROJECTS.has(testInfo.project.name), 'Cross-origin cursor fallback runs on desktop engines')
     await bootCursorPage(page)
+    await requireCrtRuntime(page)
     const { center, safe } = await tubePoints(page)
     await activateCursor(page, safe)
 
@@ -90,6 +97,7 @@ test.describe('exceptional cursor ownership', () => {
   test('WebGL loss fails safe to native ownership and does not recapture stale pointer state', async ({ page }, testInfo) => {
     test.skip(!DESKTOP_PROJECTS.has(testInfo.project.name), 'Runtime fail-safe runs on desktop engines')
     await bootCursorPage(page)
+    await requireCrtRuntime(page)
     const { safe } = await tubePoints(page)
     await activateCursor(page, safe)
 
@@ -105,6 +113,19 @@ test.describe('exceptional cursor ownership', () => {
     })
     expect(fallback).toEqual({ state: 'NATIVE_OUTSIDE', waiting: true, owned: false })
   })
+
+  test('unavailable WebGL runtime keeps native ownership on fallback engines', async ({ page }, testInfo) => {
+    test.skip(!DESKTOP_PROJECTS.has(testInfo.project.name), 'Runtime fail-safe runs on desktop engines')
+    await bootCursorPage(page)
+    const available = await page.evaluate(() => Boolean(globalThis.__JG1500_APP__?.crt?.ok))
+    test.skip(available, 'This engine has WebGL; explicit runtime loss is covered separately')
+
+    const { center } = await tubePoints(page)
+    await page.mouse.move(center.x, center.y)
+    await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'NATIVE_OUTSIDE')
+    await expect(page.locator('html')).not.toHaveClass(/crt-cursor-owned/)
+    expect(await page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().visible)).toBe(false)
+  })
 })
 
 test.describe('reduced motion cursor ownership', () => {
@@ -113,6 +134,7 @@ test.describe('reduced motion cursor ownership', () => {
   test('switches directly at the aperture without Absorption or Release', async ({ page }, testInfo) => {
     test.skip(!DESKTOP_PROJECTS.has(testInfo.project.name), 'Reduced-motion cursor policy runs on desktop engines')
     await bootCursorPage(page)
+    await requireCrtRuntime(page)
     const { center, outside } = await tubePoints(page)
 
     await page.mouse.move(center.x, center.y)
