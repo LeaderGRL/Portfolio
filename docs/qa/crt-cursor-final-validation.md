@@ -19,14 +19,14 @@ The throwaway prototype modules are absent from the integration tree. Production
 | AC-001 | `tests/e2e/crt-cursor-final-validation.spec.js` starts on the physical POWER control and asserts `NATIVE_OUTSIDE` with no owned-cursor class. |
 | AC-002 | `tests/node/runtime/crt-cursor-foundation.test.js` validates the squircle aperture/magnetic zone; final E2E enters Absorption from outside the visible aperture. |
 | AC-003 | `tests/e2e/crt-cursor-handoff.spec.js` checks the DOM cursor tip against the real pointer to sub-pixel tolerance. |
-| AC-004 | Final E2E oscillates rapidly inside the hysteresis band, then retreats beyond it and proves reversible capture without Snap. |
+| AC-004 | Final E2E oscillates rapidly inside the hysteresis band, asserts `zoneLatched` remains true after every move, then retreats beyond it and proves the latch releases without Snap. |
 | AC-005 | Final E2E validates GPU hotspot UV alignment at the centre, four straight-edge positions and four curved-corner positions; handoff E2E validates the SVG hotspot. |
 | AC-006 | `tests/node/runtime/crt-cursor-foundation.test.js` covers the bounded 180–240 ms speed mapping. |
 | AC-007 | `crt-cursor-visual-regression.spec.js` includes deterministic mid-Absorption and pre-Snap baselines. |
 | AC-008 | `tests/node/runtime/crt-cursor-reaction.test.js` validates localized reaction math; visual baselines cover pre-Snap, recoil and click reaction states. |
 | AC-009 | `tests/e2e/crt-cursor-handoff.spec.js` validates SVG → GPU ownership and asserts the inactive representation is hidden. |
 | AC-010 | `tests/node/runtime/crt-cursor-gpu.test.js` validates the final CRT composite cursor path; visual baselines cover active GPU states and no DOM duplicate. |
-| AC-011 | `tests/node/runtime/crt-cursor-performance.test.js` moves the cursor for 180 rendered frames and proves source/cursor texture upload counts remain unchanged until a real source invalidation. |
+| AC-011 | Final E2E instruments the production `RenderController → crt.render` call and proves real pointer motion keeps `sourceDirty=false`; `tests/node/runtime/crt-cursor-performance.test.js` then proves 180 such clean frames do not increase source/cursor texture upload counts while a real invalidation uploads exactly once. |
 | AC-012 | Cursor state/unit coverage validates movement angle and stable rest behavior; final E2E and visual baselines cover active centre/boundary rendering without a trail layer. |
 | AC-013 | `tests/e2e/crt-cursor-interaction.spec.js` and `tests/node/runtime/crt-cursor-interaction.test.js` validate Interactive Lock without hotspot movement; visual baselines cover lock and click impulse. |
 | AC-014 | `tests/e2e/crt-cursor-handoff.spec.js` validates clicks during Absorption; interaction E2E validates normal active-pointer activation semantics. |
@@ -40,13 +40,17 @@ The throwaway prototype modules are absent from the integration tree. Production
 
 ## Performance proof
 
-`crt-cursor-performance.test.js` stabilizes the CRT source, records both source and immutable cursor raster upload counts, then renders 180 pointer-only cursor frames with changing hotspot, angle, compression, hover, click impulse and recomposition values.
+The proof is deliberately split across the real application path and the GL upload layer.
 
-The source upload count must remain unchanged for the entire sequence. The immutable cursor raster upload count must also remain unchanged. A final render with a real source invalidation must increment the source upload count by exactly one. This protects the accepted rule that pointer motion updates uniforms/state only and never dirties the source texture.
+`tests/e2e/crt-cursor-final-validation.spec.js` first stabilizes the terminal source, instruments the actual `crt.render(state, sourceDirty)` call used by `RenderController`, moves the real pointer repeatedly while the CRT cursor remains active and asserts every sampled pointer frame reaches the renderer with `sourceDirty=false`. It then calls the normal `renderController.render()` source path and proves the next CRT frame observes `sourceDirty=true`.
+
+`tests/node/runtime/crt-cursor-performance.test.js` separately records source and immutable cursor raster upload counts, then renders 180 clean cursor frames with changing hotspot, angle, compression, hover, click impulse and recomposition values. The source upload count and cursor raster upload count must remain unchanged for the entire sequence. A final render with a real source invalidation must increment the source upload count by exactly one.
+
+Together these layers protect the accepted rule end-to-end: pointer motion never dirties the application source, and a clean CRT frame never re-uploads that stabilized source texture.
 
 ## Deterministic visual review
 
-`tests/e2e/crt-cursor-visual-regression.spec.js` freezes model state before every screenshot instead of racing real animation time. Approved raster baselines cover:
+`tests/e2e/crt-cursor-visual-regression.spec.js` freezes both cursor model progression and chassis tilt before every screenshot instead of racing real animation time. Approved raster baselines cover:
 
 - mid-Absorption stretch;
 - pre-Snap squash/glass crossing;
@@ -59,7 +63,7 @@ The source upload count must remain unchanged for the entire sequence. The immut
 - CRT effect OFF while interaction remains active;
 - reduced-motion active ownership.
 
-The captures use the same desktop Chromium visual-regression project as the existing physical-composition baselines. Baselines are committed; CI never auto-approves changes.
+The captures use the same desktop Chromium visual-regression project as the existing physical-composition baselines. Cursor snapshots use an absolute diff budget small enough that removing the cursor cannot remain under the visual threshold. Baselines are committed; CI never auto-approves changes.
 
 ## `master` → `cursor` integration audit
 
