@@ -55,8 +55,8 @@ export function gpuReactionPlacementFromClient(
 export class CrtCursorGlassController extends CrtCursorRuntimeController {
   constructor(app, options = {}) {
     super(app, options)
-    this.glassRecoil = null
-    this.releaseSeed = null
+    this.recoil = null
+    this.seed = null
     this.lastReactionPhase = 'idle'
   }
 
@@ -71,34 +71,34 @@ export class CrtCursorGlassController extends CrtCursorRuntimeController {
       && this.state === CRT_CURSOR_STATE.CRT_ACTIVE
       && !this.reducedMotionQuery.matches
 
-    if (snapped) this._startGlassRecoil(ms)
+    if (snapped) this._startRecoil(ms)
     if (previousState === CRT_CURSOR_STATE.CRT_ACTIVE && this.state === CRT_CURSOR_STATE.RELEASING) {
-      this.releaseSeed = renderedReaction?.active ? renderedReaction : null
+      this.seed = renderedReaction?.active ? renderedReaction : null
     }
 
     switch (this.state) {
       case CRT_CURSOR_STATE.ABSORBING:
-        this.glassRecoil = null
-        this.releaseSeed = null
-        this._frameAbsorptionReaction()
+        this.recoil = null
+        this.seed = null
+        this._absorb()
         break
       case CRT_CURSOR_STATE.CRT_ACTIVE:
-        this.releaseSeed = null
-        this._frameGlassRecoil(ms)
+        this.seed = null
+        this._recoil(ms)
         break
       case CRT_CURSOR_STATE.RELEASING:
-        this.glassRecoil = null
-        this._frameReleaseReaction(ms)
+        this.recoil = null
+        this._release(ms)
         break
       default:
-        this.glassRecoil = null
-        this.releaseSeed = null
-        this._resetGlassReaction()
+        this.recoil = null
+        this.seed = null
+        this._resetReaction()
         break
     }
   }
 
-  _currentReactionPlacement() {
+  _placement() {
     if (!this.tubeProjection || !this.edge) return null
     return gpuReactionPlacementFromClient(
       this.tubeProjection,
@@ -109,7 +109,7 @@ export class CrtCursorGlassController extends CrtCursorRuntimeController {
     )
   }
 
-  _applyGlassReaction(placement, sample, phase) {
+  _applyReaction(placement, sample, phase) {
     const strength = clamp01(sample?.strength ?? 0)
     const submergedStrength = clamp01(sample?.submergedStrength ?? 0)
     const recoilStrength = Math.max(-1, Math.min(1, sample?.recoilStrength ?? 0))
@@ -142,59 +142,58 @@ export class CrtCursorGlassController extends CrtCursorRuntimeController {
     }
   }
 
-  _frameAbsorptionReaction() {
+  _absorb() {
     const progress = clamp01(this.absorption?.progress ?? 0)
     const crossing = smoothstep01((progress - 0.80) / 0.20)
-    this._applyGlassReaction(this._currentReactionPlacement(), {
+    this._applyReaction(this._placement(), {
       strength: smoothstep01(progress),
       submergedStrength: crossing * 0.72,
       recoilStrength: 0,
     }, crossing > 0.02 ? 'pre-snap' : 'absorb')
   }
 
-  _startGlassRecoil(ms) {
-    const placement = this._currentReactionPlacement()
+  _startRecoil(ms) {
+    const placement = this._placement()
     if (!placement) {
-      this.glassRecoil = null
+      this.recoil = null
       return
     }
-    this.glassRecoil = { startedAtMs: ms, placement }
+    this.recoil = { startedAtMs: ms, placement }
   }
 
-  _frameGlassRecoil(ms) {
-    if (!this.glassRecoil) {
-      this._resetGlassReaction()
+  _recoil(ms) {
+    if (!this.recoil) {
+      this._resetReaction()
       return
     }
 
-    const elapsed = Math.max(0, ms - this.glassRecoil.startedAtMs)
+    const elapsed = Math.max(0, ms - this.recoil.startedAtMs)
     const sample = glassRecoilSample(elapsed)
-    this._applyGlassReaction(this.glassRecoil.placement, sample, 'recoil')
+    this._applyReaction(this.recoil.placement, sample, 'recoil')
     if (elapsed >= GLASS_RECOIL_DURATION_MS) {
-      this.glassRecoil = null
-      this._resetGlassReaction()
+      this.recoil = null
+      this._resetReaction()
     }
   }
 
-  _frameReleaseReaction(ms) {
+  _release(ms) {
     if (!this.release) {
-      this._resetGlassReaction()
+      this._resetReaction()
       return
     }
     const elapsed = Math.max(0, ms - this.release.startedAtMs)
     const quiet = releaseReactionSample(clamp01(elapsed / 120))
-    const seed = this.releaseSeed
-    const blend = seed ? smoothstep01(elapsed / 36) : 1
-    const sample = seed ? {
-      strength: seed.strength + (quiet.strength - seed.strength) * blend,
-      submergedStrength: seed.submergedStrength + (quiet.submergedStrength - seed.submergedStrength) * blend,
-      recoilStrength: seed.recoilStrength * (1 - blend),
+    const blend = this.seed ? smoothstep01(elapsed / 36) : 1
+    const sample = this.seed ? {
+      strength: this.seed.strength + (quiet.strength - this.seed.strength) * blend,
+      submergedStrength: this.seed.submergedStrength + (quiet.submergedStrength - this.seed.submergedStrength) * blend,
+      recoilStrength: this.seed.recoilStrength * (1 - blend),
     } : quiet
-    this._applyGlassReaction(this._currentReactionPlacement(), sample, 'release')
+    this._applyReaction(this._placement(), sample, 'release')
   }
 
-  _resetGlassReaction() {
-    this._applyGlassReaction(null, {
+  _resetReaction() {
+    this._applyReaction(null, {
       strength: 0,
       submergedStrength: 0,
       recoilStrength: 0,
@@ -202,9 +201,9 @@ export class CrtCursorGlassController extends CrtCursorRuntimeController {
   }
 
   destroy() {
-    this.glassRecoil = null
-    this.releaseSeed = null
-    this._resetGlassReaction()
+    this.recoil = null
+    this.seed = null
+    this._resetReaction()
     super.destroy()
   }
 }
