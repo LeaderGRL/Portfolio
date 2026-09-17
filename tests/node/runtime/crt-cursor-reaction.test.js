@@ -1,21 +1,22 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import {
+
+globalThis.matchMedia = () => ({ matches: false })
+
+const {
   DEFAULT_CRT_GLASS_REACTION_STATE,
   GLASS_RECOIL_DURATION_MS,
   glassRecoilSample,
   normalizeCrtGlassReactionState,
   releaseReactionSample,
-} from '../../../src/crt-cursor-reaction.js'
-import { CRT, FRAG_CRT, FRAG_CRT_BASE, FRAG_PERSIST } from '../../../src/crt.js'
-import {
+} = await import('../../../src/crt-cursor-reaction.js')
+const { CRT, FRAG_CRT, FRAG_CRT_BASE, FRAG_PERSIST } = await import('../../../src/crt.js')
+const {
   CrtCursorGlassController,
   gpuReactionPlacementFromClient,
-} from '../../../src/crt-cursor-glass-controller.js'
-import { createTubeProjection } from '../../../src/crt-cursor-controller.js'
-import { CRT_CURSOR_STATE } from '../../../src/crt-cursor-state.js'
-
-globalThis.matchMedia = () => ({ matches: false })
+} = await import('../../../src/crt-cursor-glass-controller.js')
+const { createTubeProjection } = await import('../../../src/crt-cursor-controller.js')
+const { CRT_CURSOR_STATE } = await import('../../../src/crt-cursor-state.js')
 
 const renderState = {
   crt: 1,
@@ -130,7 +131,9 @@ function controllerHarness() {
   return { controller, app, crt, tube, move }
 }
 
-test('reaction state stays bounded and recoil damps through a small signed overshoot', () => {
+const directionalDisplacementPx = sample => sample.strength * 1.85 + sample.recoilStrength * 1.10
+
+test('reaction state stays bounded and recoil damps through a small visible overshoot', () => {
   const normalized = normalizeCrtGlassReactionState({
     active: true,
     hotspotUv: { x: 0.2, y: 0.8 },
@@ -154,6 +157,8 @@ test('reaction state stays bounded and recoil damps through a small signed overs
   assert.equal(start.strength, 1)
   assert.ok(start.recoilStrength > 0)
   assert.ok(overshoot.recoilStrength < 0)
+  assert.ok(directionalDisplacementPx(overshoot) < -0.05)
+  assert.ok(directionalDisplacementPx(start) < 3)
   assert.deepEqual(end, { strength: 0, submergedStrength: 0, recoilStrength: 0 })
 
   const release = releaseReactionSample(0)
@@ -170,7 +175,8 @@ test('reaction shader is localized, keeps the cursor hotspot unwarped and stays 
   assert.ok(FRAG_CRT.includes('return base + cursorEmission(suv);'))
   assert.ok(FRAG_CRT.includes('uReactionStrength * 1.85'))
   assert.ok(FRAG_CRT.includes('uReactionSubmerged * 0.45'))
-  assert.ok(FRAG_CRT.includes('scanBendPx'))
+  assert.ok(FRAG_CRT.includes('reactionVertical'))
+  assert.ok(FRAG_CRT.includes('reactionVertical + uReactionDirection.y * 0.35'))
 
   // The established idle fast path must contain no reachable reaction warp or
   // scanline deformation even though dead helper functions may remain in GLSL.
@@ -272,11 +278,35 @@ test('absorption reaction follows progress, reversal clears it, and Snap produce
   controller.frame(490)
   assert.equal(tube.dataset.crtCursorReaction, 'recoil')
   assert.ok(crt.reactionState.recoilStrength < 0)
+  assert.ok(directionalDisplacementPx(crt.reactionState) < -0.05)
 
   controller.frame(660)
   assert.equal(crt.reactionState.active, false)
   assert.equal(tube.dataset.crtCursorReaction, 'idle')
   assert.equal(app.dirty, false)
+})
+
+test('Release blends continuously from an in-flight recoil before becoming quiet', () => {
+  const { controller, crt, tube, move } = controllerHarness()
+  move(300, 160, 20)
+  move(280, 160, 40)
+  controller.frame(270)
+  assert.equal(controller.state, CRT_CURSOR_STATE.CRT_ACTIVE)
+  assert.equal(tube.dataset.crtCursorReaction, 'recoil')
+  const before = crt.reactionState
+  assert.ok(before.strength > 0.99)
+
+  move(315, 160, 280)
+  controller.frame(280)
+  assert.equal(controller.state, CRT_CURSOR_STATE.RELEASING)
+  assert.equal(tube.dataset.crtCursorReaction, 'release')
+  assert.ok(Math.abs(crt.reactionState.strength - before.strength) < 1e-9)
+  assert.ok(Math.abs(crt.reactionState.recoilStrength - before.recoilStrength) < 1e-9)
+
+  controller.frame(320)
+  assert.equal(tube.dataset.crtCursorReaction, 'release')
+  assert.ok(crt.reactionState.strength <= 0.18)
+  assert.equal(crt.reactionState.recoilStrength, 0)
 })
 
 test('Release uses only a quiet crossing cue and power reset leaves no stale reaction', () => {
