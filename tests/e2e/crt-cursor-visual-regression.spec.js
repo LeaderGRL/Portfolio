@@ -122,6 +122,72 @@ async function waitForGpuHotspot(page, hotspotUv) {
   }, hotspotUv)).toBeLessThan(0.002)
 }
 
+async function captureCursorCrop(page, point) {
+  const width = 64
+  const height = 64
+  const clip = {
+    x: Math.round(Math.max(0, Math.min(1440 - width, point.x - width * 0.5))),
+    y: Math.round(Math.max(0, Math.min(900 - height, point.y - height * 0.5))),
+    width,
+    height,
+  }
+  return page.screenshot({
+    type: 'png',
+    scale: 'css',
+    animations: 'disabled',
+    caret: 'hide',
+    clip,
+  })
+}
+
+async function cursorCropDifference(page, before, after) {
+  return page.evaluate(async ({ beforeBase64, afterBase64 }) => {
+    const decode = async base64 => {
+      const response = await fetch(`data:image/png;base64,${base64}`)
+      const bitmap = await createImageBitmap(await response.blob())
+      const canvas = document.createElement('canvas')
+      canvas.width = bitmap.width
+      canvas.height = bitmap.height
+      const context = canvas.getContext('2d', { willReadFrequently: true })
+      context.drawImage(bitmap, 0, 0)
+      const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height).data
+      const result = { width: bitmap.width, height: bitmap.height, pixels }
+      bitmap.close()
+      return result
+    }
+
+    const a = await decode(beforeBase64)
+    const b = await decode(afterBase64)
+    if (a.width !== b.width || a.height !== b.height) throw new Error('Cursor crops have different dimensions')
+
+    let changedPixels = 0
+    let maxDelta = 0
+    for (let index = 0; index < a.pixels.length; index += 4) {
+      const delta = Math.max(
+        Math.abs(a.pixels[index] - b.pixels[index]),
+        Math.abs(a.pixels[index + 1] - b.pixels[index + 1]),
+        Math.abs(a.pixels[index + 2] - b.pixels[index + 2]),
+      )
+      maxDelta = Math.max(maxDelta, delta)
+      if (delta >= 4) changedPixels += 1
+    }
+    return { changedPixels, maxDelta }
+  }, {
+    beforeBase64: before.toString('base64'),
+    afterBase64: after.toString('base64'),
+  })
+}
+
+async function assertFocusedCursorStateChange(page, point, mutate, label) {
+  const before = await captureCursorCrop(page, point)
+  await mutate()
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  const after = await captureCursorCrop(page, point)
+  const difference = await cursorCropDifference(page, before, after)
+  expect(difference.changedPixels, `${label} must change the rendered cursor footprint`).toBeGreaterThan(8)
+  expect(difference.maxDelta, `${label} must visibly change cursor emission`).toBeGreaterThanOrEqual(6)
+}
+
 async function captureVisual(page, name) {
   let pointer
   if (name === 'active-curved-boundary' || name === 'release') {
@@ -205,19 +271,19 @@ for (const visualCase of [
     })
   }],
   ['interactive-lock', async page => {
-    await bootActive(page)
+    const points = await bootActive(page)
     await freeze(page)
-    await page.evaluate(() => {
+    await assertFocusedCursorStateChange(page, points.center, () => page.evaluate(() => {
       globalThis.__JG1500_APP__.crt.setCursorState({
         compression: 0.055,
         hoverIntensity: 0.48,
       })
-    })
+    }), 'Interactive Lock')
   }],
   ['click-impulse', async page => {
-    await bootActive(page)
+    const points = await bootActive(page)
     await freeze(page)
-    await page.evaluate(() => {
+    await assertFocusedCursorStateChange(page, points.center, () => page.evaluate(() => {
       const app = globalThis.__JG1500_APP__
       const controller = app.cursorController
       app.crt.setCursorState({
@@ -230,7 +296,7 @@ for (const visualCase of [
         submergedStrength: 0.08,
         recoilStrength: 0.04,
       }, 'interaction')
-    })
+    }), 'click impulse')
   }],
   ['release', async page => {
     const points = await bootActive(page)
