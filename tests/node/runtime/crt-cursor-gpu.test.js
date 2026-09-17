@@ -144,7 +144,7 @@ test('GPU cursor resource initializes once, switches programs by visibility and 
   })
   assert.equal(crt.render(state, false), true)
 
-  assert.equal(programUses.at(-1), crt.progCrt.id)
+  assert.equal(programUses.at(-1), crt.progCrtCursor.id)
   assert.equal(uploads.cursor, 1)
   assert.equal(uploads.source, 1)
   assert.equal(crt.cursorResourceInitCount, 1)
