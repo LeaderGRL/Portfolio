@@ -240,11 +240,14 @@ void main(){
   col += bloom(suv, 0.055) * vec3(0.30, 0.40, 0.34) * 0.55 * uCrt;
 
   // Keep the original tube's beam count independently of source resolution.
-  // Local glass pull bends only nearby scanlines by about a pixel.
+  // The radial term curves scanlines even for left/right entries where the
+  // physical inward normal has no vertical component.
   float reactionMask = reactionWeight(suv);
+  vec2 reactionDeltaPx = (suv - gReactionSignalHotspot) * uOut;
+  float reactionVertical = clamp(reactionDeltaPx.y / max(uReactionRadiusPx, 1.0), -1.0, 1.0);
   float scanBendPx = reactionMask
     * (uReactionStrength * 1.25 + uReactionRecoil * 0.70)
-    * uReactionDirection.y;
+    * (reactionVertical + uReactionDirection.y * 0.35);
   float scanY = suv.y + scanBendPx / max(uOut.y, 1.0);
   float scanWave = 0.5 + 0.5 * cos(scanY * uScanlines * 6.2831853);
   float scan = pow(scanWave, 7.0);
@@ -252,7 +255,6 @@ void main(){
 
   // Tiny directional cues suggest the glass surface indenting while preserving
   // the authored shade/gloss stack above this canvas.
-  vec2 reactionDeltaPx = (suv - gReactionSignalHotspot) * uOut;
   float normalCoord = dot(reactionDeltaPx, uReactionDirection) / max(uReactionRadiusPx, 1.0);
   float lightSide = max(-normalCoord, 0.0) * reactionMask;
   float shadowSide = max(normalCoord, 0.0) * reactionMask;
@@ -307,9 +309,11 @@ const BASE_SCAN_BLOCK = `  float scanWave = 0.5 + 0.5 * cos(suv.y * uScanlines *
   float scan = pow(scanWave, 7.0);
   col *= mix(1.0, 1.0 - scan * 0.20, uCrt);`;
 const REACTION_SCAN_BLOCK = `  float reactionMask = reactionWeight(suv);
+  vec2 reactionDeltaPx = (suv - gReactionSignalHotspot) * uOut;
+  float reactionVertical = clamp(reactionDeltaPx.y / max(uReactionRadiusPx, 1.0), -1.0, 1.0);
   float scanBendPx = reactionMask
     * (uReactionStrength * 1.25 + uReactionRecoil * 0.70)
-    * uReactionDirection.y;
+    * (reactionVertical + uReactionDirection.y * 0.35);
   float scanY = suv.y + scanBendPx / max(uOut.y, 1.0);
   float scanWave = 0.5 + 0.5 * cos(scanY * uScanlines * 6.2831853);
   float scan = pow(scanWave, 7.0);
@@ -317,7 +321,6 @@ const REACTION_SCAN_BLOCK = `  float reactionMask = reactionWeight(suv);
 
   // Tiny directional cues suggest the glass surface indenting while preserving
   // the authored shade/gloss stack above this canvas.
-  vec2 reactionDeltaPx = (suv - gReactionSignalHotspot) * uOut;
   float normalCoord = dot(reactionDeltaPx, uReactionDirection) / max(uReactionRadiusPx, 1.0);
   float lightSide = max(-normalCoord, 0.0) * reactionMask;
   float shadowSide = max(normalCoord, 0.0) * reactionMask;
