@@ -97,8 +97,16 @@ async function activate(page, point) {
 
 async function freeze(page) {
   await page.evaluate(() => {
-    const controller = globalThis.__JG1500_APP__.cursorController
-    controller.frame = () => {}
+    const app = globalThis.__JG1500_APP__
+    app.cursorController.frame = () => {}
+    // Match the two settling RAFs this helper historically allowed, but run
+    // them synchronously before disabling tilt so the chassis cannot continue
+    // drifting after cursor geometry has been frozen.
+    if (app.tilt) {
+      app.tilt.frame()
+      app.tilt.frame()
+      app.tilt.frame = () => {}
+    }
   })
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
 }
@@ -144,8 +152,8 @@ async function captureVisual(page, name) {
     clip,
   })
   expect(screenshot).toMatchSnapshot(`crt-cursor-${name}.jpg`, {
-    maxDiffPixelRatio: 0.008,
-    threshold: 0.22,
+    maxDiffPixels: 96,
+    threshold: 0.15,
   })
 }
 
