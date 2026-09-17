@@ -130,14 +130,17 @@ test('native chassis ownership survives capture reversal and rapid hysteresis os
   await page.mouse.move(geometry.capture.x, geometry.capture.y)
   await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'ABSORBING')
   await expect(page.locator('html')).toHaveClass(/crt-cursor-owned/)
+  expect(await page.evaluate(() => globalThis.__JG1500_APP__.cursorController.zoneLatched)).toBe(true)
 
   for (const point of geometry.hysteresisInside) {
     await page.mouse.move(point.x, point.y)
+    expect(await page.evaluate(() => globalThis.__JG1500_APP__.cursorController.zoneLatched)).toBe(true)
     await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'ABSORBING')
     expect(await page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState().visible)).toBe(false)
   }
 
   await page.mouse.move(geometry.reversal.x, geometry.reversal.y)
+  expect(await page.evaluate(() => globalThis.__JG1500_APP__.cursorController.zoneLatched)).toBe(false)
   await expect(page.locator('#tube')).toHaveAttribute(
     'data-crt-cursor-state',
     'NATIVE_OUTSIDE',
@@ -175,6 +178,48 @@ test('GPU hotspot remains aligned at centre, straight edges and all curved corne
     expect(Math.abs(gpu.hotspotUv.y - sample.hotspotUv.y), `${sample.name} y hotspot`).toBeLessThan(0.002)
     await expect(page.locator('.crt-cursor-dom__svg')).toBeHidden()
   }
+})
+
+test('pointer-only frames keep the real RenderController source clean', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'RenderController dirty-path validation runs once on desktop Chromium')
+  await bootCursorPage(page)
+  await requireGpuCursor(page, testInfo)
+  await expect.poll(() => page.evaluate(() => {
+    const app = globalThis.__JG1500_APP__
+    return Boolean(app && app.reveal >= app.revealTarget && !app.dirty)
+  })).toBe(true)
+
+  const geometry = await finalValidationGeometry(page)
+  await activateAt(page, geometry.samples[0].point)
+  await page.evaluate(() => {
+    const app = globalThis.__JG1500_APP__
+    const render = app.crt.render.bind(app.crt)
+    app.__cursorSourceDirtySamples = []
+    app.crt.render = (state, sourceDirty) => {
+      app.__cursorSourceDirtySamples.push(Boolean(sourceDirty))
+      return render(state, sourceDirty)
+    }
+  })
+
+  for (let frame = 0; frame < 36; frame += 1) {
+    const sample = geometry.samples[1 + (frame % (geometry.samples.length - 1))]
+    await page.evaluate(() => {
+      globalThis.__JG1500_APP__.__cursorSourceDirtySamples.length = 0
+    })
+    await page.mouse.move(sample.point.x, sample.point.y)
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)))
+    const dirtySamples = await page.evaluate(() => globalThis.__JG1500_APP__.__cursorSourceDirtySamples.slice())
+    expect(dirtySamples.length, `frame ${frame} should reach crt.render`).toBeGreaterThan(0)
+    expect(dirtySamples.every(value => value === false), `frame ${frame} pointer motion must keep source clean`).toBe(true)
+  }
+
+  await page.evaluate(() => {
+    const app = globalThis.__JG1500_APP__
+    app.__cursorSourceDirtySamples.length = 0
+    app.renderController.render()
+  })
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)))
+  expect(await page.evaluate(() => globalThis.__JG1500_APP__.__cursorSourceDirtySamples.includes(true))).toBe(true)
 })
 
 test('CRT optics switch keeps electronic ownership while bypassing the GPU cursor', async ({ page }, testInfo) => {
