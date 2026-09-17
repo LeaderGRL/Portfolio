@@ -43,7 +43,7 @@ function createInstrumentedGl() {
   return { gl, uploads }
 }
 
-test('multi-frame cursor-only motion never re-uploads the stabilized CRT source', () => {
+test('CRT upload layer preserves a stabilized source across 180 cursor-only frames', () => {
   const { gl, uploads } = createInstrumentedGl()
   const source = { width: 480, height: 360 }
   const canvas = { getContext: () => gl, width: 480, height: 360 }
@@ -57,6 +57,10 @@ test('multi-frame cursor-only motion never re-uploads the stabilized CRT source'
   assert.equal(stableSourceUploads, 1)
   assert.equal(stableCursorUploads, 1)
 
+  // The final-validation E2E suite separately proves that real pointer motion
+  // reaches CRT.render through RenderController with sourceDirty=false. This
+  // lower-level layer proves that a clean flag then performs zero source GL
+  // uploads while cursor uniforms keep changing for many consecutive frames.
   for (let frame = 0; frame < 180; frame += 1) {
     const phase = frame / 179
     crt.setCursorState({
@@ -78,7 +82,7 @@ test('multi-frame cursor-only motion never re-uploads the stabilized CRT source'
   assert.equal(
     uploads.source,
     stableSourceUploads,
-    'Pointer-only cursor frames must not dirty or upload the source texture',
+    'Clean cursor frames must not upload the stabilized source texture',
   )
   assert.equal(
     uploads.cursor,
