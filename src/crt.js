@@ -5,6 +5,10 @@ import {
   normalizeCrtCursorGpuState,
   rasterizeCrtCursorShape,
 } from './crt-cursor-shape.js'
+import {
+  DEFAULT_CRT_GLASS_REACTION_STATE,
+  normalizeCrtGlassReactionState,
+} from './crt-cursor-reaction.js'
 
 /* ==========================================================================
  * 6. CRT — WebGL2 phosphor persistence + composite
@@ -53,6 +57,12 @@ uniform float uCursorCompression;
 uniform float uCursorHover;
 uniform float uCursorClick;
 uniform float uCursorRecompose;
+uniform vec2  uReactionHotspot;
+uniform vec2  uReactionDirection;
+uniform float uReactionStrength;
+uniform float uReactionSubmerged;
+uniform float uReactionRecoil;
+uniform float uReactionRadiusPx;
 
 const vec4 CURSOR_BOUNDS = vec4(
   ${CRT_CURSOR_SHAPE.bounds.minX},
@@ -62,6 +72,7 @@ const vec4 CURSOR_BOUNDS = vec4(
 );
 
 vec2 gCursorSignalHotspot;
+vec2 gReactionSignalHotspot;
 
 // ===========================================================================
 // This shader got considerably smaller in this revision, and that is the
@@ -96,9 +107,8 @@ vec2 curve(vec2 uv){
   return uv * 0.5 + 0.5;
 }
 
-// One mapping function owns the live tube transform for both display sampling
-// and the cursor hotspot. That keeps Optical Coupling exact instead of adding
-// a second approximation for the pointer near the curved rim.
+// One mapping function owns the live tube transform for display sampling,
+// cursor hotspot and local glass reaction.
 vec2 signalUv(vec2 uv){
   float vS = smoothstep(0.22, 1.0, uPower);
   float hS = smoothstep(0.0, 0.22, uPower);
@@ -114,6 +124,24 @@ vec2 signalUv(vec2 uv){
   }
   uv.y += sin(uTime * 0.35) * 0.0006 * uCrt;
   return curve(uv);
+}
+
+float reactionWeight(vec2 suv){
+  vec2 deltaPx = (suv - gReactionSignalHotspot) * uOut;
+  float radiusPx = max(uReactionRadiusPx, 1.0);
+  float q = dot(deltaPx, deltaPx) / (radiusPx * radiusPx);
+  return exp(-q * 3.25);
+}
+
+vec2 reactionWarp(vec2 suv){
+  float weight = reactionWeight(suv);
+  vec2 deltaPx = (suv - gReactionSignalHotspot) * uOut;
+  float distancePx = length(deltaPx);
+  vec2 radial = distancePx > 0.001 ? deltaPx / distancePx : vec2(0.0);
+  float inwardPx = uReactionStrength * 1.85 + uReactionRecoil * 1.10;
+  vec2 displacementPx = uReactionDirection * inwardPx * weight
+    + radial * uReactionSubmerged * 0.45 * weight;
+  return suv - displacementPx / max(uOut, vec2(1.0));
 }
 
 vec2 cursorLocalPx(vec2 suv){
@@ -148,13 +176,10 @@ vec3 cursorEmission(vec2 suv){
   return shape.rgb * shape.a * energy;
 }
 
-// Every provider paints the whole glass. Clamping continues its background
-// at the very edge of the curvature, without a second picture border. The
-// cursor is injected here, after persistence but before all analogue sampling,
-// so bloom/defocus/overshoot/etc affect it without ever entering phosphor
-// history. With visibility off the renderer selects FRAG_CRT_BASE instead.
+// Reaction bends only the persisted source under the glass. Cursor emission
+// stays unwarped so the visible arrow tip remains the exact browser hotspot.
 vec3 src(vec2 suv){
-  vec3 base = texture(uTex, suv).rgb;
+  vec3 base = texture(uTex, reactionWarp(suv)).rgb;
   if (uCursorVisible < 0.5) return base;
   return base + cursorEmission(suv);
 }
@@ -175,9 +200,10 @@ void main(){
   float vS = smoothstep(0.22, 1.0, uPower);
   float hS = smoothstep(0.0, 0.22, uPower);
 
-  // Display pixels and cursor hotspot use the same signal-space mapping.
+  // Display pixels, cursor hotspot and reaction share signal-space mapping.
   vec2 suv = signalUv(vUv);
   gCursorSignalHotspot = signalUv(uCursorHotspot);
+  gReactionSignalHotspot = signalUv(uReactionHotspot);
 
   // ---- chromatic aberration, stronger toward the edges -------------------
   vec2 off = suv - 0.5;
@@ -213,11 +239,29 @@ void main(){
   col += bloom(suv, 0.020) * 0.28 * uCrt;
   col += bloom(suv, 0.055) * vec3(0.30, 0.40, 0.34) * 0.55 * uCrt;
 
-  // Keep the original tube's beam count independently of source resolution:
-  // high-resolution articles must not make its scanlines disappear.
-  float scanWave = 0.5 + 0.5 * cos(suv.y * uScanlines * 6.2831853);
+  // Keep the original tube's beam count independently of source resolution.
+  // The radial term curves scanlines even for left/right entries where the
+  // physical inward normal has no vertical component.
+  float reactionMask = reactionWeight(suv);
+  vec2 reactionDeltaPx = (suv - gReactionSignalHotspot) * uOut;
+  float reactionVertical = clamp(reactionDeltaPx.y / max(uReactionRadiusPx, 1.0), -1.0, 1.0);
+  float scanBendPx = reactionMask
+    * (uReactionStrength * 1.25 + uReactionRecoil * 0.70)
+    * (reactionVertical + uReactionDirection.y * 0.35);
+  float scanY = suv.y + scanBendPx / max(uOut.y, 1.0);
+  float scanWave = 0.5 + 0.5 * cos(scanY * uScanlines * 6.2831853);
   float scan = pow(scanWave, 7.0);
   col *= mix(1.0, 1.0 - scan * 0.20, uCrt);
+
+  // Tiny directional cues suggest the glass surface indenting while preserving
+  // the authored shade/gloss stack above this canvas.
+  float normalCoord = dot(reactionDeltaPx, uReactionDirection) / max(uReactionRadiusPx, 1.0);
+  float lightSide = max(-normalCoord, 0.0) * reactionMask;
+  float shadowSide = max(normalCoord, 0.0) * reactionMask;
+  col += vec3(0.10, 0.28, 0.15) * lightSide * uReactionStrength * 0.16;
+  col *= 1.0 - shadowSide * uReactionStrength * 0.055;
+  col *= 1.0 + reactionMask * uReactionStrength * 0.050;
+  col *= 1.0 - reactionMask * uReactionSubmerged * 0.075;
 
   // ---- aperture grille ---------------------------------------------------
   float m = mod(vUv.x * uOut.x, 3.0);
@@ -256,18 +300,52 @@ void main(){
   outColor = vec4(max(col, 0.0), 1.0);
 }`;
 
-const CURSOR_SRC_BLOCK = `vec3 src(vec2 suv){
-  vec3 base = texture(uTex, suv).rgb;
+const REACTIVE_SRC_BLOCK = `vec3 src(vec2 suv){
+  vec3 base = texture(uTex, reactionWarp(suv)).rgb;
   if (uCursorVisible < 0.5) return base;
   return base + cursorEmission(suv);
 }`;
-const CURSOR_HOTSPOT_LINE = '  gCursorSignalHotspot = signalUv(uCursorHotspot);\n';
+const CURSOR_SRC_BLOCK = `vec3 src(vec2 suv){
+  return texture(uTex, suv).rgb + cursorEmission(suv);
+}`;
+const BASE_SRC_BLOCK = 'vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }';
+const BASE_SCAN_BLOCK = `  float scanWave = 0.5 + 0.5 * cos(suv.y * uScanlines * 6.2831853);
+  float scan = pow(scanWave, 7.0);
+  col *= mix(1.0, 1.0 - scan * 0.20, uCrt);`;
+const REACTION_SCAN_BLOCK = `  float reactionMask = reactionWeight(suv);
+  vec2 reactionDeltaPx = (suv - gReactionSignalHotspot) * uOut;
+  float reactionVertical = clamp(reactionDeltaPx.y / max(uReactionRadiusPx, 1.0), -1.0, 1.0);
+  float scanBendPx = reactionMask
+    * (uReactionStrength * 1.25 + uReactionRecoil * 0.70)
+    * (reactionVertical + uReactionDirection.y * 0.35);
+  float scanY = suv.y + scanBendPx / max(uOut.y, 1.0);
+  float scanWave = 0.5 + 0.5 * cos(scanY * uScanlines * 6.2831853);
+  float scan = pow(scanWave, 7.0);
+  col *= mix(1.0, 1.0 - scan * 0.20, uCrt);
 
-// Keep the ordinary CRT on a program that contains no reachable cursor work.
-// Chromium software WebGL pays a measurable cost for the cursor branch when it
-// sits inside every bloom/defocus source sample, even while the cursor is off.
-export const FRAG_CRT_BASE = FRAG_CRT
-  .replace(CURSOR_SRC_BLOCK, 'vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }')
+  // Tiny directional cues suggest the glass surface indenting while preserving
+  // the authored shade/gloss stack above this canvas.
+  float normalCoord = dot(reactionDeltaPx, uReactionDirection) / max(uReactionRadiusPx, 1.0);
+  float lightSide = max(-normalCoord, 0.0) * reactionMask;
+  float shadowSide = max(normalCoord, 0.0) * reactionMask;
+  col += vec3(0.10, 0.28, 0.15) * lightSide * uReactionStrength * 0.16;
+  col *= 1.0 - shadowSide * uReactionStrength * 0.055;
+  col *= 1.0 + reactionMask * uReactionStrength * 0.050;
+  col *= 1.0 - reactionMask * uReactionSubmerged * 0.075;`;
+const CURSOR_HOTSPOT_LINE = '  gCursorSignalHotspot = signalUv(uCursorHotspot);\n';
+const REACTION_HOTSPOT_LINE = '  gReactionSignalHotspot = signalUv(uReactionHotspot);\n';
+
+// Keep steady cursor ownership off the reaction shader. Chromium software WebGL
+// pays measurable cost for reactionWeight() inside every bloom/defocus sample,
+// so only active glass deformation is allowed onto the reaction program.
+export const FRAG_CRT_CURSOR = FRAG_CRT
+  .replace(REACTIVE_SRC_BLOCK, CURSOR_SRC_BLOCK)
+  .replace(REACTION_SCAN_BLOCK, BASE_SCAN_BLOCK)
+  .replace(REACTION_HOTSPOT_LINE, '');
+
+// Ordinary CRT frames keep the established #81 no-cursor fast path.
+export const FRAG_CRT_BASE = FRAG_CRT_CURSOR
+  .replace(CURSOR_SRC_BLOCK, BASE_SRC_BLOCK)
   .replace(CURSOR_HOTSPOT_LINE, '');
 
 export class CRT {
@@ -276,6 +354,7 @@ export class CRT {
     this.source = source;
     this.ok = false;
     this.cursorState = DEFAULT_CRT_CURSOR_GPU_STATE;
+    this.reactionState = DEFAULT_CRT_GLASS_REACTION_STATE;
     this.cursorResourceInitCount = 0;
     this.outputDensity = 1;
     this.maxDimension = 4096; // Canvas-only fallback keeps the application cap.
@@ -306,6 +385,15 @@ export class CRT {
     return this.cursorState;
   }
 
+  setReactionState(value = {}) {
+    this.reactionState = normalizeCrtGlassReactionState(value, this.reactionState);
+    return this.reactionState;
+  }
+
+  getReactionState() {
+    return this.reactionState;
+  }
+
   _syncOutputDensity(fallbackDensity = 1) {
     const cssW = Number(this.canvas.offsetWidth);
     const cssH = Number(this.canvas.offsetHeight);
@@ -327,6 +415,7 @@ export class CRT {
     if (this.vao) gl.deleteVertexArray(this.vao);
     if (this.progPersist) gl.deleteProgram(this.progPersist);
     if (this.progCrtBase) gl.deleteProgram(this.progCrtBase);
+    if (this.progCrtCursor) gl.deleteProgram(this.progCrtCursor);
     if (this.progCrt) gl.deleteProgram(this.progCrt);
     console.warn('CRT unavailable; using the live 2D source', error);
   }
@@ -439,6 +528,7 @@ export class CRT {
 
     this.progPersist = this._program(VERT, FRAG_PERSIST);
     this.progCrtBase = this._program(VERT, FRAG_CRT_BASE);
+    this.progCrtCursor = this._program(VERT, FRAG_CRT_CURSOR);
     this.progCrt = this._program(VERT, FRAG_CRT);
 
     const vao = gl.createVertexArray();
@@ -476,10 +566,18 @@ export class CRT {
     const commonUniforms = [
       "uTex","uOut","uSrc","uTime","uPower","uCrt","uDegauss","uStatic","uWarm","uScanlines",
     ];
+    const cursorUniforms = [
+      "uCursorTex","uCursorVisible","uCursorHotspot","uCursorAngle","uCursorSizePx","uCursorCompression","uCursorHover","uCursorClick","uCursorRecompose",
+    ];
     this.uBase = this._uniforms(this.progCrtBase, commonUniforms);
+    this.uCursor = this._uniforms(this.progCrtCursor, [
+      ...commonUniforms,
+      ...cursorUniforms,
+    ]);
     this.u = this._uniforms(this.progCrt, [
       ...commonUniforms,
-      "uCursorTex","uCursorVisible","uCursorHotspot","uCursorAngle","uCursorSizePx","uCursorCompression","uCursorHover","uCursorClick","uCursorRecompose",
+      ...cursorUniforms,
+      "uReactionHotspot","uReactionDirection","uReactionStrength","uReactionSubmerged","uReactionRecoil","uReactionRadiusPx",
     ]);
   }
 
@@ -544,9 +642,19 @@ export class CRT {
 
     // --- composite pass ---
     const cursor = this.cursorState;
+    const reaction = this.reactionState;
     const cursorVisible = Boolean(cursor.visible);
-    const program = cursorVisible ? this.progCrt : this.progCrtBase;
-    const u = cursorVisible ? this.u : this.uBase;
+    const reactionActive = Boolean(reaction.active);
+    const program = reactionActive
+      ? this.progCrt
+      : cursorVisible
+        ? this.progCrtCursor
+        : this.progCrtBase;
+    const u = reactionActive
+      ? this.u
+      : cursorVisible
+        ? this.uCursor
+        : this.uBase;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.useProgram(program);
@@ -562,10 +670,10 @@ export class CRT {
     gl.uniform1f(u.uStatic, state.static);
     gl.uniform1f(u.uWarm, state.warm);
 
-    if (cursorVisible) {
+    if (cursorVisible || reactionActive) {
       gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.cursorTex);
       gl.uniform1i(u.uCursorTex, 2);
-      gl.uniform1f(u.uCursorVisible, 1);
+      gl.uniform1f(u.uCursorVisible, cursorVisible ? 1 : 0);
       gl.uniform2f(u.uCursorHotspot, cursor.hotspotUv.x, cursor.hotspotUv.y);
       gl.uniform1f(u.uCursorAngle, cursor.angle);
       gl.uniform1f(u.uCursorSizePx, cursor.sizePx * this.outputDensity);
@@ -573,6 +681,15 @@ export class CRT {
       gl.uniform1f(u.uCursorHover, cursor.hoverIntensity);
       gl.uniform1f(u.uCursorClick, cursor.clickImpulse);
       gl.uniform1f(u.uCursorRecompose, cursor.recompositionStrength);
+    }
+
+    if (reactionActive) {
+      gl.uniform2f(u.uReactionHotspot, reaction.hotspotUv.x, reaction.hotspotUv.y);
+      gl.uniform2f(u.uReactionDirection, reaction.direction.x, reaction.direction.y);
+      gl.uniform1f(u.uReactionStrength, reaction.strength);
+      gl.uniform1f(u.uReactionSubmerged, reaction.submergedStrength);
+      gl.uniform1f(u.uReactionRecoil, reaction.recoilStrength);
+      gl.uniform1f(u.uReactionRadiusPx, reaction.radiusPx * this.outputDensity);
     }
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
