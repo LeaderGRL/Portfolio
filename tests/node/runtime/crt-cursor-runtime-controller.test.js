@@ -28,6 +28,10 @@ function runtimeHarness() {
   const plainTarget = {
     closest() { return null },
   }
+  const iframeTarget = {
+    tagName: 'IFRAME',
+    closest() { return null },
+  }
   const tube = {
     offsetWidth: 200,
     offsetHeight: 120,
@@ -90,15 +94,18 @@ function runtimeHarness() {
     app,
     controller,
     crt,
+    iframeTarget,
+    plainTarget,
+    rootClasses,
     tube,
     view,
-    move(x, y, timeStamp) {
+    move(x, y, timeStamp, target = hitSoftkey ? softkey : plainTarget) {
       controller.handlePointerMove({
         clientX: x,
         clientY: y,
         timeStamp,
         pointerType: 'mouse',
-        target: hitSoftkey ? softkey : plainTarget,
+        target,
       })
     },
     setRect(nextRect) {
@@ -273,6 +280,65 @@ test('active ownership uses an above-bezel DOM cursor outside the visible apertu
   assert.equal(controller.state, CRT_CURSOR_STATE.CRT_ACTIVE)
   assert.equal(tube.dataset.crtCursorOwner, 'gpu')
   assert.equal(view.visible, false)
+  assert.equal(crt.state.visible, true)
+})
+
+test('power off is immediate and power on waits for a fresh pointer sample', () => {
+  const { app, controller, crt, rootClasses, view, move } = runtimeHarness()
+
+  move(280, 160, 0)
+  controller.frame(260)
+  assert.equal(controller.state, CRT_CURSOR_STATE.CRT_ACTIVE)
+  assert.equal(rootClasses.contains('crt-cursor-owned'), true)
+
+  app.state.powerTarget = 0
+  controller.syncPowerState()
+  assert.equal(controller.state, CRT_CURSOR_STATE.NATIVE_OUTSIDE)
+  assert.equal(controller.awaitFreshPointer, true)
+  assert.equal(rootClasses.contains('crt-cursor-owned'), false)
+  assert.equal(crt.state.visible, false)
+  assert.equal(view.visible, false)
+
+  app.state.powerTarget = 1
+  controller.frame(300)
+  assert.equal(controller.state, CRT_CURSOR_STATE.NATIVE_OUTSIDE)
+  assert.equal(controller.awaitFreshPointer, true)
+  assert.equal(rootClasses.contains('crt-cursor-owned'), false)
+
+  move(280, 160, 320)
+  assert.equal(controller.awaitFreshPointer, false)
+  controller.frame(600)
+  assert.equal(controller.state, CRT_CURSOR_STATE.CRT_ACTIVE)
+})
+
+test('cross-origin iframe ownership falls back to native and returns directly to CRT_ACTIVE', () => {
+  const {
+    controller,
+    crt,
+    iframeTarget,
+    plainTarget,
+    rootClasses,
+    tube,
+    view,
+    move,
+  } = runtimeHarness()
+
+  move(280, 160, 0)
+  controller.frame(260)
+  assert.equal(controller.state, CRT_CURSOR_STATE.CRT_ACTIVE)
+
+  move(280, 160, 300, iframeTarget)
+  assert.equal(controller.state, CRT_CURSOR_STATE.NATIVE_EXTERNAL)
+  assert.equal(tube.dataset.crtCursorOwner, 'external')
+  assert.equal(rootClasses.contains('crt-cursor-owned'), false)
+  assert.equal(crt.state.visible, false)
+  assert.equal(view.visible, false)
+
+  move(275, 160, 340, plainTarget)
+  assert.equal(controller.state, CRT_CURSOR_STATE.CRT_ACTIVE)
+  assert.equal(tube.dataset.crtCursorOwner, 'gpu')
+  assert.equal(rootClasses.contains('crt-cursor-owned'), true)
+  assert.equal(controller.motion.speedPxPerMs, 0)
   assert.equal(crt.state.visible, true)
 })
 
