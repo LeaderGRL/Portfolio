@@ -136,10 +136,14 @@ async function captureVisual(page, name) {
     width,
     height,
   }
-  await expect(page).toHaveScreenshot(`crt-cursor-${name}.webp`, {
+  const screenshot = await page.screenshot({
+    type: 'jpeg',
+    quality: 30,
     animations: 'disabled',
     caret: 'hide',
     clip,
+  })
+  expect(screenshot).toMatchSnapshot(`crt-cursor-${name}.jpg`, {
     maxDiffPixelRatio: 0.008,
     threshold: 0.22,
   })
