@@ -20,7 +20,7 @@ The throwaway prototype modules are absent from the integration tree. Production
 | AC-002 | `tests/node/runtime/crt-cursor-foundation.test.js` validates the squircle aperture/magnetic zone; final E2E enters Absorption from outside the visible aperture. |
 | AC-003 | `tests/e2e/crt-cursor-handoff.spec.js` checks the DOM cursor tip against the real pointer to sub-pixel tolerance. |
 | AC-004 | Final E2E oscillates rapidly inside the hysteresis band, asserts `zoneLatched` remains true after every move, then retreats beyond it and proves the latch releases without Snap. |
-| AC-005 | Final E2E validates GPU hotspot UV alignment at the centre, four straight-edge positions and four curved-corner positions; handoff E2E validates the SVG hotspot. |
+| AC-005 | Final E2E validates GPU hotspot UV alignment at the centre, four straight-edge positions and four curved-corner positions, then captures each rendered location with the cursor visible/hidden and proves significant cursor emission remains anchored to the browser hotspot; handoff E2E validates the SVG hotspot. |
 | AC-006 | `tests/node/runtime/crt-cursor-foundation.test.js` covers the bounded 180–240 ms speed mapping. |
 | AC-007 | `crt-cursor-visual-regression.spec.js` includes deterministic mid-Absorption and pre-Snap baselines. |
 | AC-008 | `tests/node/runtime/crt-cursor-reaction.test.js` validates localized reaction math; visual baselines cover pre-Snap, recoil and click reaction states. |
@@ -28,7 +28,7 @@ The throwaway prototype modules are absent from the integration tree. Production
 | AC-010 | `tests/node/runtime/crt-cursor-gpu.test.js` validates the final CRT composite cursor path; visual baselines cover active GPU states and no DOM duplicate. |
 | AC-011 | Final E2E instruments the production `RenderController → crt.render` call and proves real pointer motion keeps `sourceDirty=false`; `tests/node/runtime/crt-cursor-performance.test.js` then proves 180 such clean frames do not increase source/cursor texture upload counts while a real invalidation uploads exactly once. |
 | AC-012 | Cursor state/unit coverage validates movement angle and stable rest behavior; final E2E and visual baselines cover active centre/boundary rendering without a trail layer. |
-| AC-013 | `tests/e2e/crt-cursor-interaction.spec.js` and `tests/node/runtime/crt-cursor-interaction.test.js` validate Interactive Lock without hotspot movement; visual baselines cover lock and click impulse. |
+| AC-013 | `tests/e2e/crt-cursor-interaction.spec.js` and `tests/node/runtime/crt-cursor-interaction.test.js` validate Interactive Lock without hotspot movement; visual regression keeps approved lock/click baselines and adds lossless cursor-focused before/after comparisons so those subtle rendered states cannot collapse back to the ordinary active cursor unnoticed. |
 | AC-014 | `tests/e2e/crt-cursor-handoff.spec.js` validates clicks during Absorption; interaction E2E validates normal active-pointer activation semantics. |
 | AC-015 | `tests/e2e/crt-cursor-interaction.spec.js` navigates content under a stationary owned pointer and proves `CRT_ACTIVE` continuity without replaying Absorption. |
 | AC-016 | Handoff E2E validates Release to native ownership; reaction tests and the deterministic Release visual baseline validate the quieter exit model. |
@@ -63,7 +63,9 @@ Together these layers protect the accepted rule end-to-end: pointer motion never
 - CRT effect OFF while interaction remains active;
 - reduced-motion active ownership.
 
-The captures use the same desktop Chromium visual-regression project as the existing physical-composition baselines. Cursor snapshots use an absolute diff budget small enough that removing the cursor cannot remain under the visual threshold. Baselines are committed; CI never auto-approves changes.
+The captures use the same desktop Chromium visual-regression project as the existing physical-composition baselines. Cursor snapshots use an absolute diff budget small enough that removing the cursor cannot remain under the visual threshold. Interactive Lock and click impulse additionally compare lossless 64×64 cursor-focused crops before and after the injected state, so their subtler compression/emission changes are guarded independently of the broader JPEG baseline tolerance. Baselines are committed; CI never auto-approves changes.
+
+The final hotspot E2E adds a second rendered proof for AC-005: at the centre, four straight edges and four curved corners, it freezes model/tilt motion, captures the same local region with the GPU cursor visible and hidden, subtracts the two lossless images, and requires strong cursor pixels to remain within 3.25 CSS px of the real browser hotspot. This protects the shader/composite path as well as the controller's queued uniforms.
 
 ## `master` → `cursor` integration audit
 
