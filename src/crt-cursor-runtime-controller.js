@@ -69,7 +69,6 @@ export class CrtCursorRuntimeController extends CrtCursorController {
   constructor(app, options = {}) {
     super(app, options)
     this.softkey = false
-    this.phosphor = 1
     this.removeTubeQuadFallback = installTubeQuadFallback(this.tube, this.document)
   }
 
@@ -80,7 +79,6 @@ export class CrtCursorRuntimeController extends CrtCursorController {
   }
 
   syncPower() {
-    if (this._powered() && this._eligible()) return
     this.motion.timeMs = null
     this.edge = null
     this._forceNative()
@@ -92,11 +90,11 @@ export class CrtCursorRuntimeController extends CrtCursorController {
     const isExternal = event?.target?.tagName === 'IFRAME'
     if (wasExternal && !isExternal) this.motion.timeMs = null
 
-    const fullscreen = Boolean(this.app?.state?.fullscreen)
-    this.softkey = Boolean(fullscreen && event?.target?.closest?.('.softkeys__key'))
+    const fullscreen = !!this.app?.state?.fullscreen
+    this.softkey = !!(fullscreen && event?.target?.closest?.('.softkeys__key'))
     super.handlePointerMove(event)
 
-    if (!this._powered() || !this._eligible()) return
+    if (!(this._powered() && this._eligible())) return
     if (isExternal) {
       if (!wasExternal) {
         this._forceNative()
@@ -110,7 +108,6 @@ export class CrtCursorRuntimeController extends CrtCursorController {
     if (!wasExternal || this.state !== CRT_CURSOR_STATE.NATIVE_EXTERNAL) return
     if (this.edge?.inside) {
       this.state = CRT_CURSOR_STATE.CRT_ACTIVE
-      this.zoneLatched = true
       this._setOwnership(true)
       this._renderActiveRepresentation(0, 0)
     } else {
@@ -120,22 +117,21 @@ export class CrtCursorRuntimeController extends CrtCursorController {
   }
 
   frame(ms) {
-    if (!this._powered() || !this._eligible()) {
+    if (!(this._powered() && this._eligible())) {
       this.syncPower()
-      this.lastFrameMs = ms
       return
     }
 
-    const fullscreen = Boolean(this.app?.state?.fullscreen)
+    const fullscreen = !!this.app?.state?.fullscreen
     if (!fullscreen) {
       this.softkey = false
     } else if (
       this.motion.timeMs != null
       && (fullscreen !== this.lastFullscreen || this.geometryStyleDirty)
     ) {
-      this.softkey = Boolean(
-        this.document?.elementFromPoint?.(this.motion.x, this.motion.y)?.closest?.('.softkeys__key'),
-      )
+      this.softkey = !!this.document
+        ?.elementFromPoint?.(this.motion.x, this.motion.y)
+        ?.closest?.('.softkeys__key')
     }
 
     super.frame(ms)
