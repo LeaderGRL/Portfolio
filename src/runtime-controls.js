@@ -28,8 +28,6 @@ export const INTERACTIVE_SELECTOR = [
   '[contenteditable]:not([contenteditable="false"])',
 ].join(',')
 
-export const CRT_CURSOR_ACTIVATE_EVENT = 'crt-cursor-activate'
-
 const MIN_TARGET_PX = 24
 const LIST_FIRST_ROW = 3
 const TAP_SLOP_PX = 12
@@ -156,46 +154,27 @@ function bindCompactTargetExpansion() {
 
 function bindScreenListingPointer(app) {
   const tube = document.getElementById('tube')
-  const machine = document.getElementById('machine')
-  if (!tube || !machine) return () => {}
+  if (!tube) return () => {}
 
   const starts = new Map()
-  // Rows are direct targets wherever the panel keys are out of reach: portable
-  // portrait, portable landscape, and full screen on any layout.
-  const rowsAreTargets = () => usesPortableTouchLayout(machine) || Boolean(app.state?.fullscreen)
-  const rasterRect = () => app.rasterClientRect?.() || tube.getBoundingClientRect()
-
   const onPointerDown = event => {
-    if (!event.isPrimary || event.button > 0) return
-    if (!rowsAreTargets()) return
-    if (closestInteractive(event.target)) return
-
-    const rect = rasterRect()
-    if (!rect.width || !rect.height || !containsClientRect(rect, event.clientX, event.clientY)) return
-    starts.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (!event.isPrimary || event.button > 0 || closestInteractive(event.target)) return
+    const index = screenListingIndexAt(app, event.clientX, event.clientY)
+    if (index < 0) return
+    starts.set(event.pointerId, { x: event.clientX, y: event.clientY, index })
   }
-
   const clear = event => starts.delete(event.pointerId)
-
   const onPointerUp = event => {
     const start = starts.get(event.pointerId)
     starts.delete(event.pointerId)
-    if (!start || !event.isPrimary || event.button > 0) return
-    if (!rowsAreTargets()) return
-    if (closestInteractive(event.target)) return
+    if (!start || !event.isPrimary || event.button > 0 || closestInteractive(event.target)) return
 
     const dx = event.clientX - start.x
     const dy = event.clientY - start.y
     if (Math.hypot(dx, dy) > TAP_SLOP_PX) return
 
     const index = screenListingIndexAt(app, event.clientX, event.clientY)
-    if (index < 0) return
-    const route = app.state.route
-
-    tube.dispatchEvent(new CustomEvent(CRT_CURSOR_ACTIVATE_EVENT, {
-      bubbles: true,
-      detail: { kind: 'listing', route, index },
-    }))
+    if (index < 0 || index !== start.index) return
     app.state.cursor = index
     app.render()
     app.enter()
