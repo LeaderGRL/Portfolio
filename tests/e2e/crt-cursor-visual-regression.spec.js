@@ -91,14 +91,20 @@ async function freeze(page) {
 }
 
 async function captureVisual(page, name) {
-  const tube = await page.locator('#tube').boundingBox()
-  expect(tube).not.toBeNull()
-  const margin = 42
+  const pointer = await page.evaluate(() => {
+    const motion = globalThis.__JG1500_APP__.cursorController.motion
+    return { x: motion.x, y: motion.y }
+  })
+  expect(Number.isFinite(pointer.x)).toBe(true)
+  expect(Number.isFinite(pointer.y)).toBe(true)
+
+  const width = 280
+  const height = 200
   const clip = {
-    x: Math.max(0, tube.x - margin),
-    y: Math.max(0, tube.y - margin),
-    width: Math.min(1440 - Math.max(0, tube.x - margin), tube.width + margin * 2),
-    height: Math.min(900 - Math.max(0, tube.y - margin), tube.height + margin * 2),
+    x: Math.round(Math.max(0, Math.min(1440 - width, pointer.x - width * 0.5))),
+    y: Math.round(Math.max(0, Math.min(900 - height, pointer.y - height * 0.5))),
+    width,
+    height,
   }
   await expect(page).toHaveScreenshot(`crt-cursor-${name}.png`, {
     animations: 'disabled',
