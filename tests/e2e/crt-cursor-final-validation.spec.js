@@ -115,6 +115,130 @@ async function activateAt(page, point) {
   )
 }
 
+async function waitForFrames(page, count = 2) {
+  await page.evaluate(frameCount => new Promise(resolve => {
+    let remaining = frameCount
+    const next = () => {
+      remaining -= 1
+      if (remaining <= 0) resolve()
+      else requestAnimationFrame(next)
+    }
+    requestAnimationFrame(next)
+  }), count)
+}
+
+async function compareRenderedCursorPair(page, visible, hidden, hotspot) {
+  return page.evaluate(async ({ visibleBase64, hiddenBase64, expected }) => {
+    const decode = async base64 => {
+      const response = await fetch(`data:image/png;base64,${base64}`)
+      const bitmap = await createImageBitmap(await response.blob())
+      const canvas = document.createElement('canvas')
+      canvas.width = bitmap.width
+      canvas.height = bitmap.height
+      const context = canvas.getContext('2d', { willReadFrequently: true })
+      context.drawImage(bitmap, 0, 0)
+      const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height).data
+      const result = { width: bitmap.width, height: bitmap.height, pixels }
+      bitmap.close()
+      return result
+    }
+
+    const before = await decode(visibleBase64)
+    const after = await decode(hiddenBase64)
+    if (before.width !== after.width || before.height !== after.height) {
+      throw new Error('Cursor comparison images have different dimensions')
+    }
+
+    let changedPixels = 0
+    let nearestStrongPx = Number.POSITIVE_INFINITY
+    let hotspotPeak = 0
+    for (let y = 0; y < before.height; y += 1) {
+      for (let x = 0; x < before.width; x += 1) {
+        const index = (y * before.width + x) * 4
+        const delta = Math.max(
+          Math.abs(before.pixels[index] - after.pixels[index]),
+          Math.abs(before.pixels[index + 1] - after.pixels[index + 1]),
+          Math.abs(before.pixels[index + 2] - after.pixels[index + 2]),
+        )
+        const distance = Math.hypot(x + 0.5 - expected.x, y + 0.5 - expected.y)
+        if (distance <= 3) hotspotPeak = Math.max(hotspotPeak, delta)
+        if (delta >= 18) {
+          changedPixels += 1
+          nearestStrongPx = Math.min(nearestStrongPx, distance)
+        }
+      }
+    }
+
+    return { changedPixels, nearestStrongPx, hotspotPeak }
+  }, {
+    visibleBase64: visible.toString('base64'),
+    hiddenBase64: hidden.toString('base64'),
+    expected: hotspot,
+  })
+}
+
+async function measureRenderedCursorAtHotspot(page, point) {
+  const viewport = page.viewportSize()
+  const width = 56
+  const height = 56
+  const clip = {
+    x: Math.round(Math.max(0, Math.min(viewport.width - width, point.x - width * 0.5))),
+    y: Math.round(Math.max(0, Math.min(viewport.height - height, point.y - height * 0.5))),
+    width,
+    height,
+  }
+
+  const cursorState = await page.evaluate(() => {
+    const app = globalThis.__JG1500_APP__
+    app.__hotspotCursorFrame = app.cursorController.frame
+    app.__hotspotTiltFrame = app.tilt?.frame || null
+    if (app.tilt?.frame) {
+      app.tilt.frame()
+      app.tilt.frame()
+      app.tilt.frame = () => {}
+    }
+    app.cursorController.frame = () => {}
+    return app.crt.getCursorState()
+  })
+  await waitForFrames(page)
+
+  const visible = await page.screenshot({
+    type: 'png',
+    scale: 'css',
+    animations: 'disabled',
+    caret: 'hide',
+    clip,
+  })
+  await page.evaluate(() => {
+    const app = globalThis.__JG1500_APP__
+    app.crt.setCursorState({ ...app.crt.getCursorState(), visible: false })
+  })
+  await waitForFrames(page)
+  const hidden = await page.screenshot({
+    type: 'png',
+    scale: 'css',
+    animations: 'disabled',
+    caret: 'hide',
+    clip,
+  })
+
+  const metrics = await compareRenderedCursorPair(page, visible, hidden, {
+    x: point.x - clip.x,
+    y: point.y - clip.y,
+  })
+
+  await page.evaluate(savedState => {
+    const app = globalThis.__JG1500_APP__
+    app.crt.setCursorState(savedState)
+    app.cursorController.frame = app.__hotspotCursorFrame
+    if (app.tilt && app.__hotspotTiltFrame) app.tilt.frame = app.__hotspotTiltFrame
+    delete app.__hotspotCursorFrame
+    delete app.__hotspotTiltFrame
+  }, cursorState)
+  await waitForFrames(page, 1)
+  return metrics
+}
+
 test('native chassis ownership survives capture reversal and rapid hysteresis oscillation', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium', 'Final fine-pointer validation runs once on desktop Chromium')
   await bootCursorPage(page)
@@ -177,6 +301,11 @@ test('GPU hotspot remains aligned at centre, straight edges and all curved corne
     expect(Math.abs(gpu.hotspotUv.x - sample.hotspotUv.x), `${sample.name} x hotspot`).toBeLessThan(0.002)
     expect(Math.abs(gpu.hotspotUv.y - sample.hotspotUv.y), `${sample.name} y hotspot`).toBeLessThan(0.002)
     await expect(page.locator('.crt-cursor-dom__svg')).toBeHidden()
+
+    const rendered = await measureRenderedCursorAtHotspot(page, sample.point)
+    expect(rendered.changedPixels, `${sample.name} should render visible cursor pixels`).toBeGreaterThan(6)
+    expect(rendered.hotspotPeak, `${sample.name} should render cursor energy at the browser hotspot`).toBeGreaterThanOrEqual(12)
+    expect(rendered.nearestStrongPx, `${sample.name} rendered cursor tip should stay on the browser hotspot`).toBeLessThan(3.25)
   }
 })
 
