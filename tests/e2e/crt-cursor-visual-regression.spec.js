@@ -65,6 +65,10 @@ async function visualGeometry(page) {
     const dx = aperture.centerX - cornerX
     const dy = aperture.centerY - cornerY
     const length = Math.hypot(dx, dy) || 1
+    const boundaryLocal = {
+      x: cornerX + dx / length * 10,
+      y: cornerY + dy / length * 10,
+    }
 
     return {
       outside: offset(-(aperture.magneticZonePx + aperture.hysteresisPx + 10)),
@@ -72,7 +76,11 @@ async function visualGeometry(page) {
       preSnap: offset(1),
       release: offset(-(aperture.magneticZonePx + aperture.hysteresisPx + 2)),
       center: project(aperture.centerX, aperture.centerY),
-      boundary: project(cornerX + dx / length * 10, cornerY + dy / length * 10),
+      boundary: project(boundaryLocal.x, boundaryLocal.y),
+      boundaryHotspotUv: {
+        x: boundaryLocal.x / projection.localWidth,
+        y: 1 - boundaryLocal.y / projection.localHeight,
+      },
     }
   })
 }
@@ -88,6 +96,17 @@ async function freeze(page) {
     controller.frame = () => {}
   })
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+}
+
+async function waitForGpuHotspot(page, hotspotUv) {
+  await expect.poll(() => page.evaluate(expected => {
+    const gpu = globalThis.__JG1500_APP__.crt.getCursorState()
+    if (!gpu.visible) return Number.POSITIVE_INFINITY
+    return Math.max(
+      Math.abs(gpu.hotspotUv.x - expected.x),
+      Math.abs(gpu.hotspotUv.y - expected.y),
+    )
+  }, hotspotUv)).toBeLessThan(0.002)
 }
 
 async function captureVisual(page, name) {
@@ -120,6 +139,7 @@ async function prepareAbsorption(page, progress, pointName) {
   await page.mouse.move(points.outside.x, points.outside.y)
   await page.mouse.move(points[pointName].x, points[pointName].y)
   await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'ABSORBING')
+  await freeze(page)
   await page.evaluate(value => {
     const controller = globalThis.__JG1500_APP__.cursorController
     controller.absorption.progress = value
@@ -127,7 +147,6 @@ async function prepareAbsorption(page, progress, pointName) {
     controller._updateDomCursor(value, 'absorb')
     controller._absorb()
   }, progress)
-  await freeze(page)
 }
 
 async function bootActive(page, pointName = 'center') {
@@ -148,10 +167,12 @@ for (const visualCase of [
     const points = await visualGeometry(page)
     await page.mouse.move(points.boundary.x, points.boundary.y)
     await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-owner', 'gpu')
+    await waitForGpuHotspot(page, points.boundaryHotspotUv)
     await freeze(page)
   }],
   ['glass-recoil', async page => {
     await bootActive(page)
+    await freeze(page)
     await page.evaluate(() => {
       const controller = globalThis.__JG1500_APP__.cursorController
       const now = performance.now()
@@ -159,20 +180,20 @@ for (const visualCase of [
       controller._recoil(now)
       controller._renderActiveRepresentation(0.08, 0.45)
     })
-    await freeze(page)
   }],
   ['interactive-lock', async page => {
     await bootActive(page)
+    await freeze(page)
     await page.evaluate(() => {
       globalThis.__JG1500_APP__.crt.setCursorState({
         compression: 0.055,
         hoverIntensity: 0.48,
       })
     })
-    await freeze(page)
   }],
   ['click-impulse', async page => {
     await bootActive(page)
+    await freeze(page)
     await page.evaluate(() => {
       const app = globalThis.__JG1500_APP__
       const controller = app.cursorController
@@ -187,7 +208,6 @@ for (const visualCase of [
         recoilStrength: 0.04,
       }, 'interaction')
     })
-    await freeze(page)
   }],
   ['release', async page => {
     const points = await bootActive(page)
@@ -212,13 +232,13 @@ for (const visualCase of [
   }],
   ['crt-off-active', async page => {
     await bootActive(page)
+    await freeze(page)
     await page.evaluate(() => {
       const app = globalThis.__JG1500_APP__
       app.machineController.toggleCrt()
       app.cursorController._renderActiveRepresentation(0, 0)
     })
     await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-owner', 'svg')
-    await freeze(page)
   }],
   ['reduced-motion-active', async page => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
