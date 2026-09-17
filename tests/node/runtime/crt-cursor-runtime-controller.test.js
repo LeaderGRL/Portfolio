@@ -193,7 +193,7 @@ test('stationary fullscreen capture recomputes softkey overlay ownership without
 
   move(330, 160, 0)
   assert.equal(controller.state, CRT_CURSOR_STATE.NATIVE_OUTSIDE)
-  assert.equal(controller.softkeyOverlayActive, false)
+  assert.equal(controller.softkey, false)
 
   app.state.fullscreen = true
   setRect({ left: 140 })
@@ -201,7 +201,7 @@ test('stationary fullscreen capture recomputes softkey overlay ownership without
 
   controller.frame(16)
   assert.equal(controller.state, CRT_CURSOR_STATE.ABSORBING)
-  assert.equal(controller.softkeyOverlayActive, true)
+  assert.equal(controller.softkey, true)
 
   controller.frame(300)
   assert.equal(controller.state, CRT_CURSOR_STATE.CRT_ACTIVE)
@@ -292,9 +292,9 @@ test('power off is immediate and power on waits for a fresh pointer sample', () 
   assert.equal(rootClasses.contains('crt-cursor-owned'), true)
 
   app.state.powerTarget = 0
-  controller.syncPowerState()
+  controller.syncPower()
   assert.equal(controller.state, CRT_CURSOR_STATE.NATIVE_OUTSIDE)
-  assert.equal(controller.awaitFreshPointer, true)
+  assert.equal(controller.fresh, true)
   assert.equal(rootClasses.contains('crt-cursor-owned'), false)
   assert.equal(crt.state.visible, false)
   assert.equal(view.visible, false)
@@ -302,11 +302,11 @@ test('power off is immediate and power on waits for a fresh pointer sample', () 
   app.state.powerTarget = 1
   controller.frame(300)
   assert.equal(controller.state, CRT_CURSOR_STATE.NATIVE_OUTSIDE)
-  assert.equal(controller.awaitFreshPointer, true)
+  assert.equal(controller.fresh, true)
   assert.equal(rootClasses.contains('crt-cursor-owned'), false)
 
   move(280, 160, 320)
-  assert.equal(controller.awaitFreshPointer, false)
+  assert.equal(controller.fresh, false)
   controller.frame(600)
   assert.equal(controller.state, CRT_CURSOR_STATE.CRT_ACTIVE)
 })
