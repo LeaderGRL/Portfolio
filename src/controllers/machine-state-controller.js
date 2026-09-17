@@ -58,7 +58,7 @@ export class MachineStateController {
     const on = app.state.powerTarget < 0.5
     app.state.powerTarget = on ? 1 : 0
     this.syncPowerSurface()
-    app.cursorController?.syncPowerState?.()
+    app.cursorController?.syncPower?.()
     foley.ensure()
     foley.clunk(on ? 0.85 : 0.7)
     if (on) {
