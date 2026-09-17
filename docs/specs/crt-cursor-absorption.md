@@ -1,8 +1,8 @@
 # CRT Cursor Absorption — Implementation Specification
 
-- **Status:** Ready for implementation
+- **Status:** Implemented
 - **Date:** 2026-09-16
-- **Branch:** `prototype/crt-cursor-visuals`
+- **Branch:** `cursor`
 - **Source decision:** `docs/adr/0001-crt-cursor-absorption.md`
 - **Domain glossary:** `CONTEXT.md`
 
