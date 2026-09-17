@@ -71,15 +71,15 @@ export function glassRecoilSample(elapsedMs) {
   const t = clamp01(elapsed / GLASS_RECOIL_DURATION_MS)
   if (t >= 1) return Object.freeze({ strength: 0, submergedStrength: 0, recoilStrength: 0 })
 
-  // The indentation itself settles monotonically. A much smaller signed term
-  // crosses neutral about one and a half times to give the accepted glass
-  // recoil without turning the whole signal into a spring.
-  const settle = 1 - t * t * (3 - 2 * t)
+  // The main indentation settles quickly enough for the smaller signed term to
+  // carry the visible glass just past neutral, then return with a tiny damped
+  // oscillation. The combined shader displacement remains well below 3 px.
+  const settle = Math.pow(1 - t, 9)
   const oscillation = Math.exp(-4.6 * t) * Math.cos(t * Math.PI * 3.2)
   return Object.freeze({
     strength: settle,
     submergedStrength: settle * 0.42,
-    recoilStrength: oscillation * 0.30,
+    recoilStrength: oscillation * 0.60,
   })
 }
 
