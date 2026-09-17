@@ -2,6 +2,7 @@
 title: ECS #1 · WHY RUST
 sub: Data-oriented engine architecture
 year: 2026
+narration: /media/narration/02-ecs-rust-data-oriented-design.mp3
 ---
 *This is (almost) the first article in a series about building a high-performance Entity Component System from scratch in Rust. We’ll explore the architecture, optimizations, and lessons learned along the way.*
 ::media{src=medium/ecs-rust-data-oriented-design/01.webp label="Entities" fit=contain background=off height=300}
