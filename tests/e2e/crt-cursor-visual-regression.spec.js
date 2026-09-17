@@ -188,6 +188,7 @@ for (const visualCase of [
     await page.mouse.move(points.release.x, points.release.y)
     await page.evaluate(() => {
       const controller = globalThis.__JG1500_APP__.cursorController
+      controller.frame = () => {}
       const now = performance.now()
       if (controller.state === 'CRT_ACTIVE') controller._startRelease(now)
       if (!controller.release) throw new Error('Release state did not initialize')
