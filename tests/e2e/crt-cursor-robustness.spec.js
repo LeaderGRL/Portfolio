@@ -99,7 +99,7 @@ test.describe('exceptional cursor ownership', () => {
       app.cursorController.frame(performance.now())
       return {
         state: app.cursorController.state,
-        waiting: app.cursorController.awaitFreshPointer,
+        waiting: app.cursorController.motion.timeMs == null,
         owned: document.documentElement.classList.contains('crt-cursor-owned'),
       }
     })
