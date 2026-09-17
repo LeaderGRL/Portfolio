@@ -305,6 +305,10 @@ const REACTIVE_SRC_BLOCK = `vec3 src(vec2 suv){
   if (uCursorVisible < 0.5) return base;
   return base + cursorEmission(suv);
 }`;
+const CURSOR_SRC_BLOCK = `vec3 src(vec2 suv){
+  return texture(uTex, suv).rgb + cursorEmission(suv);
+}`;
+const BASE_SRC_BLOCK = 'vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }';
 const BASE_SCAN_BLOCK = `  float scanWave = 0.5 + 0.5 * cos(suv.y * uScanlines * 6.2831853);
   float scan = pow(scanWave, 7.0);
   col *= mix(1.0, 1.0 - scan * 0.20, uCrt);`;
@@ -331,14 +335,18 @@ const REACTION_SCAN_BLOCK = `  float reactionMask = reactionWeight(suv);
 const CURSOR_HOTSPOT_LINE = '  gCursorSignalHotspot = signalUv(uCursorHotspot);\n';
 const REACTION_HOTSPOT_LINE = '  gReactionSignalHotspot = signalUv(uReactionHotspot);\n';
 
-// Keep ordinary CRT frames on a program with no reachable cursor/reaction
-// sampling. Chromium software WebGL pays measurable cost for work inside every
-// bloom/defocus source sample even when the corresponding strength is zero.
-export const FRAG_CRT_BASE = FRAG_CRT
-  .replace(REACTIVE_SRC_BLOCK, 'vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }')
+// Keep steady cursor ownership off the reaction shader. Chromium software WebGL
+// pays measurable cost for reactionWeight() inside every bloom/defocus sample,
+// so only active glass deformation is allowed onto the reaction program.
+export const FRAG_CRT_CURSOR = FRAG_CRT
+  .replace(REACTIVE_SRC_BLOCK, CURSOR_SRC_BLOCK)
   .replace(REACTION_SCAN_BLOCK, BASE_SCAN_BLOCK)
-  .replace(CURSOR_HOTSPOT_LINE, '')
   .replace(REACTION_HOTSPOT_LINE, '');
+
+// Ordinary CRT frames keep the established #81 no-cursor fast path.
+export const FRAG_CRT_BASE = FRAG_CRT_CURSOR
+  .replace(CURSOR_SRC_BLOCK, BASE_SRC_BLOCK)
+  .replace(CURSOR_HOTSPOT_LINE, '');
 
 export class CRT {
   constructor(canvas, source) {
@@ -407,6 +415,7 @@ export class CRT {
     if (this.vao) gl.deleteVertexArray(this.vao);
     if (this.progPersist) gl.deleteProgram(this.progPersist);
     if (this.progCrtBase) gl.deleteProgram(this.progCrtBase);
+    if (this.progCrtCursor) gl.deleteProgram(this.progCrtCursor);
     if (this.progCrt) gl.deleteProgram(this.progCrt);
     console.warn('CRT unavailable; using the live 2D source', error);
   }
@@ -519,6 +528,7 @@ export class CRT {
 
     this.progPersist = this._program(VERT, FRAG_PERSIST);
     this.progCrtBase = this._program(VERT, FRAG_CRT_BASE);
+    this.progCrtCursor = this._program(VERT, FRAG_CRT_CURSOR);
     this.progCrt = this._program(VERT, FRAG_CRT);
 
     const vao = gl.createVertexArray();
@@ -556,10 +566,17 @@ export class CRT {
     const commonUniforms = [
       "uTex","uOut","uSrc","uTime","uPower","uCrt","uDegauss","uStatic","uWarm","uScanlines",
     ];
+    const cursorUniforms = [
+      "uCursorTex","uCursorVisible","uCursorHotspot","uCursorAngle","uCursorSizePx","uCursorCompression","uCursorHover","uCursorClick","uCursorRecompose",
+    ];
     this.uBase = this._uniforms(this.progCrtBase, commonUniforms);
+    this.uCursor = this._uniforms(this.progCrtCursor, [
+      ...commonUniforms,
+      ...cursorUniforms,
+    ]);
     this.u = this._uniforms(this.progCrt, [
       ...commonUniforms,
-      "uCursorTex","uCursorVisible","uCursorHotspot","uCursorAngle","uCursorSizePx","uCursorCompression","uCursorHover","uCursorClick","uCursorRecompose",
+      ...cursorUniforms,
       "uReactionHotspot","uReactionDirection","uReactionStrength","uReactionSubmerged","uReactionRecoil","uReactionRadiusPx",
     ]);
   }
@@ -628,9 +645,16 @@ export class CRT {
     const reaction = this.reactionState;
     const cursorVisible = Boolean(cursor.visible);
     const reactionActive = Boolean(reaction.active);
-    const effectsActive = cursorVisible || reactionActive;
-    const program = effectsActive ? this.progCrt : this.progCrtBase;
-    const u = effectsActive ? this.u : this.uBase;
+    const program = reactionActive
+      ? this.progCrt
+      : cursorVisible
+        ? this.progCrtCursor
+        : this.progCrtBase;
+    const u = reactionActive
+      ? this.u
+      : cursorVisible
+        ? this.uCursor
+        : this.uBase;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.useProgram(program);
@@ -646,7 +670,7 @@ export class CRT {
     gl.uniform1f(u.uStatic, state.static);
     gl.uniform1f(u.uWarm, state.warm);
 
-    if (effectsActive) {
+    if (cursorVisible || reactionActive) {
       gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.cursorTex);
       gl.uniform1i(u.uCursorTex, 2);
       gl.uniform1f(u.uCursorVisible, cursorVisible ? 1 : 0);
@@ -657,12 +681,14 @@ export class CRT {
       gl.uniform1f(u.uCursorHover, cursor.hoverIntensity);
       gl.uniform1f(u.uCursorClick, cursor.clickImpulse);
       gl.uniform1f(u.uCursorRecompose, cursor.recompositionStrength);
+    }
 
+    if (reactionActive) {
       gl.uniform2f(u.uReactionHotspot, reaction.hotspotUv.x, reaction.hotspotUv.y);
       gl.uniform2f(u.uReactionDirection, reaction.direction.x, reaction.direction.y);
-      gl.uniform1f(u.uReactionStrength, reactionActive ? reaction.strength : 0);
-      gl.uniform1f(u.uReactionSubmerged, reactionActive ? reaction.submergedStrength : 0);
-      gl.uniform1f(u.uReactionRecoil, reactionActive ? reaction.recoilStrength : 0);
+      gl.uniform1f(u.uReactionStrength, reaction.strength);
+      gl.uniform1f(u.uReactionSubmerged, reaction.submergedStrength);
+      gl.uniform1f(u.uReactionRecoil, reaction.recoilStrength);
       gl.uniform1f(u.uReactionRadiusPx, reaction.radiusPx * this.outputDensity);
     }
 

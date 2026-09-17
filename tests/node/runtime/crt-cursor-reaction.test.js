@@ -10,7 +10,13 @@ const {
   normalizeCrtGlassReactionState,
   releaseReactionSample,
 } = await import('../../../src/crt-cursor-reaction.js')
-const { CRT, FRAG_CRT, FRAG_CRT_BASE, FRAG_PERSIST } = await import('../../../src/crt.js')
+const {
+  CRT,
+  FRAG_CRT,
+  FRAG_CRT_BASE,
+  FRAG_CRT_CURSOR,
+  FRAG_PERSIST,
+} = await import('../../../src/crt.js')
 const {
   CrtCursorGlassController,
   gpuReactionPlacementFromClient,
@@ -178,9 +184,16 @@ test('reaction shader is localized, keeps the cursor hotspot unwarped and stays 
   assert.ok(FRAG_CRT.includes('reactionVertical'))
   assert.ok(FRAG_CRT.includes('reactionVertical + uReactionDirection.y * 0.35'))
 
-  // The established idle fast path must contain no reachable reaction warp or
-  // scanline deformation even though dead helper functions may remain in GLSL.
+  // Cursor-only frames keep the GPU cursor but contain no reachable reaction
+  // warp or scanline deformation after the recoil has settled.
+  assert.ok(FRAG_CRT_CURSOR.includes('return texture(uTex, suv).rgb + cursorEmission(suv);'))
+  assert.equal(FRAG_CRT_CURSOR.includes('texture(uTex, reactionWarp(suv)).rgb'), false)
+  assert.equal(FRAG_CRT_CURSOR.includes('gReactionSignalHotspot = signalUv(uReactionHotspot);'), false)
+  assert.equal(FRAG_CRT_CURSOR.includes('float scanBendPx = reactionMask'), false)
+
+  // The established idle fast path contains neither cursor nor reaction work.
   assert.ok(FRAG_CRT_BASE.includes('vec3 src(vec2 suv){ return texture(uTex, suv).rgb; }'))
+  assert.equal(FRAG_CRT_BASE.includes('gCursorSignalHotspot = signalUv(uCursorHotspot);'), false)
   assert.equal(FRAG_CRT_BASE.includes('gReactionSignalHotspot = signalUv(uReactionHotspot);'), false)
   assert.equal(FRAG_CRT_BASE.includes('float scanBendPx = reactionMask'), false)
 })
@@ -197,6 +210,16 @@ test('reaction-only frames use uniforms without re-uploading the raster source o
   assert.equal(uploads.cursor, 1)
   assert.equal(programUses.at(-1), crt.progCrtBase.id)
 
+  crt.setCursorState({
+    visible: true,
+    hotspotUv: { x: 0.4, y: 0.6 },
+  })
+  assert.equal(crt.render(renderState, false), true)
+  assert.equal(programUses.at(-1), crt.progCrtCursor.id)
+  assert.equal(uploads.source, 1)
+  assert.equal(uploads.cursor, 1)
+
+  crt.setCursorState({ visible: false })
   crt.setReactionState({
     active: true,
     hotspotUv: { x: 0.7, y: 0.3 },
@@ -302,6 +325,11 @@ test('Release blends continuously from an in-flight recoil before becoming quiet
   assert.equal(tube.dataset.crtCursorReaction, 'release')
   assert.ok(Math.abs(crt.reactionState.strength - before.strength) < 1e-9)
   assert.ok(Math.abs(crt.reactionState.recoilStrength - before.recoilStrength) < 1e-9)
+  assert.ok(Math.abs(crt.reactionState.hotspotUv.x - before.hotspotUv.x) < 1e-9)
+  assert.ok(Math.abs(crt.reactionState.hotspotUv.y - before.hotspotUv.y) < 1e-9)
+  assert.ok(Math.abs(crt.reactionState.direction.x - before.direction.x) < 1e-9)
+  assert.ok(Math.abs(crt.reactionState.direction.y - before.direction.y) < 1e-9)
+  assert.ok(Math.abs(crt.reactionState.radiusPx - before.radiusPx) < 1e-9)
 
   controller.frame(320)
   assert.equal(tube.dataset.crtCursorReaction, 'release')
