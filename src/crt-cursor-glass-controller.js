@@ -17,27 +17,6 @@ const smoothstep01 = value => {
 }
 const lerp = (from, to, t) => from + (to - from) * t
 
-function blendReactionPlacement(from, to, progress) {
-  if (!from) return to
-  if (!to) return from
-
-  const t = clamp01(progress)
-  const directionX = lerp(from.direction.x, to.direction.x, t)
-  const directionY = lerp(from.direction.y, to.direction.y, t)
-  const directionLength = Math.hypot(directionX, directionY)
-
-  return {
-    hotspotUv: {
-      x: lerp(from.hotspotUv.x, to.hotspotUv.x, t),
-      y: lerp(from.hotspotUv.y, to.hotspotUv.y, t),
-    },
-    direction: directionLength > 1e-6
-      ? { x: directionX / directionLength, y: directionY / directionLength }
-      : from.direction,
-    radiusPx: lerp(from.radiusPx, to.radiusPx, t),
-  }
-}
-
 export function gpuReactionPlacementFromClient(
   projection,
   x,
@@ -211,10 +190,18 @@ export class CrtCursorGlassController extends CrtCursorRuntimeController {
       submergedStrength: this.seed.submergedStrength + (quiet.submergedStrength - this.seed.submergedStrength) * blend,
       recoilStrength: this.seed.recoilStrength * (1 - blend),
     } : quiet
-    const currentPlacement = this._placement()
-    const placement = this.seed
-      ? blendReactionPlacement(this.seed, currentPlacement, blend)
-      : currentPlacement
+    const current = this._placement()
+    const placement = this.seed && current ? {
+      hotspotUv: {
+        x: lerp(this.seed.hotspotUv.x, current.hotspotUv.x, blend),
+        y: lerp(this.seed.hotspotUv.y, current.hotspotUv.y, blend),
+      },
+      direction: {
+        x: lerp(this.seed.direction.x, current.direction.x, blend),
+        y: lerp(this.seed.direction.y, current.direction.y, blend),
+      },
+      radiusPx: lerp(this.seed.radiusPx, current.radiusPx, blend),
+    } : this.seed || current
     this._applyReaction(placement, sample, 'release')
   }
 
