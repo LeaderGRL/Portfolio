@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import { registerHooks } from 'node:module'
 import test from 'node:test'
 import { Foley, foley } from '../../../src/audio.js'
-import { CHAR_H, PAD_Y, SRC_H } from '../../../src/core.js'
 import { CRT_CURSOR_SHAPE } from '../../../src/crt-cursor-shape.js'
 
 const contentSource = `export default ${JSON.stringify({
@@ -27,10 +26,14 @@ const hooks = registerHooks({
   },
 })
 
+globalThis.matchMedia = () => ({ matches: false })
+
 const [
+  { CHAR_H, PAD_Y, SRC_H },
   { installCrtCursorInteraction },
   { screenListingIndexAt },
 ] = await Promise.all([
+  import('../../../src/core.js'),
   import('../../../src/crt-cursor-interaction.js'),
   import('../../../src/runtime-controls.js'),
 ])
