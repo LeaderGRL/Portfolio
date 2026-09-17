@@ -106,7 +106,7 @@ async function captureVisual(page, name) {
     width,
     height,
   }
-  await expect(page).toHaveScreenshot(`crt-cursor-${name}.jpg`, {
+  await expect(page).toHaveScreenshot(`crt-cursor-${name}.webp`, {
     animations: 'disabled',
     caret: 'hide',
     clip,
@@ -191,17 +191,22 @@ for (const visualCase of [
   }],
   ['release', async page => {
     const points = await bootActive(page)
-    await page.mouse.move(points.release.x, points.release.y)
-    await page.evaluate(() => {
+    await page.evaluate(point => {
       const controller = globalThis.__JG1500_APP__.cursorController
       controller.frame = () => {}
       const now = performance.now()
-      if (controller.state === 'CRT_ACTIVE') controller._startRelease(now)
-      if (!controller.release) throw new Error('Release state did not initialize')
+      controller.handlePointerMove({
+        clientX: point.x,
+        clientY: point.y,
+        timeStamp: now,
+        pointerType: 'mouse',
+      })
+      if (controller.state !== 'CRT_ACTIVE') throw new Error(`Expected CRT_ACTIVE before Release, got ${controller.state}`)
+      controller._startRelease(now)
       controller.release.startedAtMs = now - 60
       controller._frameRelease(now)
       controller._release(now)
-    })
+    }, points.release)
     await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'RELEASING')
     await freeze(page)
   }],
