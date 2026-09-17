@@ -115,10 +115,16 @@ async function waitForGpuHotspot(page, hotspotUv) {
 }
 
 async function captureVisual(page, name) {
-  const pointer = await page.evaluate(() => {
-    const motion = globalThis.__JG1500_APP__.cursorController.motion
-    return { x: motion.x, y: motion.y }
-  })
+  let pointer
+  if (name === 'active-curved-boundary' || name === 'release') {
+    const points = await visualGeometry(page)
+    pointer = name === 'active-curved-boundary' ? points.boundary : points.release
+  } else {
+    pointer = await page.evaluate(() => {
+      const motion = globalThis.__JG1500_APP__.cursorController.motion
+      return { x: motion.x, y: motion.y }
+    })
+  }
   expect(Number.isFinite(pointer.x)).toBe(true)
   expect(Number.isFinite(pointer.y)).toBe(true)
 
