@@ -1,10 +1,40 @@
 import assert from 'node:assert/strict'
+import { registerHooks } from 'node:module'
 import test from 'node:test'
 import { Foley, foley } from '../../../src/audio.js'
 import { CHAR_H, PAD_Y, SRC_H } from '../../../src/core.js'
 import { CRT_CURSOR_SHAPE } from '../../../src/crt-cursor-shape.js'
-import { installCrtCursorInteraction } from '../../../src/crt-cursor-interaction.js'
-import { screenListingIndexAt } from '../../../src/runtime-controls.js'
+
+const contentSource = `export default ${JSON.stringify({
+  identity: {},
+  model: {},
+  made: [],
+  contact: [],
+  projects: [{ id: 'project-1', title: 'Project', blocks: [] }],
+  articles: [{ id: 'article-1', title: 'Article', blocks: [] }],
+  pages: {},
+})}`
+
+const hooks = registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === 'virtual:content') {
+      return {
+        url: `data:text/javascript,${encodeURIComponent(contentSource)}`,
+        shortCircuit: true,
+      }
+    }
+    return nextResolve(specifier, context)
+  },
+})
+
+const [
+  { installCrtCursorInteraction },
+  { screenListingIndexAt },
+] = await Promise.all([
+  import('../../../src/crt-cursor-interaction.js'),
+  import('../../../src/runtime-controls.js'),
+])
+hooks.deregister()
 
 function classList(...initial) {
   const values = new Set(initial)
