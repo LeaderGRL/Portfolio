@@ -49,9 +49,9 @@ const install = app => {
   // the last observable pointer sample so an enter-and-stop during chunk load
   // is not lost before the production controller installs its own listener.
   const cursorPointerBuffer = createPointerSampleBuffer(globalThis.window).start()
-  void import('./crt-cursor-runtime-controller.js').then(
-    ({ CrtCursorRuntimeController }) => {
-      const cursorController = new CrtCursorRuntimeController(app).install()
+  void import('./crt-cursor-glass-controller.js').then(
+    ({ CrtCursorGlassController }) => {
+      const cursorController = new CrtCursorGlassController(app).install()
       const bufferedPointerSample = cursorPointerBuffer.stop().consume(cursorController.now())
       app.cursorController = cursorController
       if (bufferedPointerSample) cursorController.handlePointerMove(bufferedPointerSample)
