@@ -160,6 +160,15 @@ test('GPU hotspot remains aligned at centre, straight edges and all curved corne
     await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'CRT_ACTIVE')
     await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-owner', 'gpu')
 
+    await expect.poll(() => page.evaluate(expected => {
+      const gpu = globalThis.__JG1500_APP__.crt.getCursorState()
+      if (!gpu.visible) return Number.POSITIVE_INFINITY
+      return Math.max(
+        Math.abs(gpu.hotspotUv.x - expected.x),
+        Math.abs(gpu.hotspotUv.y - expected.y),
+      )
+    }, sample.hotspotUv)).toBeLessThan(0.002)
+
     const gpu = await page.evaluate(() => globalThis.__JG1500_APP__.crt.getCursorState())
     expect(gpu.visible, `${sample.name} GPU cursor should be visible`).toBe(true)
     expect(Math.abs(gpu.hotspotUv.x - sample.hotspotUv.x), `${sample.name} x hotspot`).toBeLessThan(0.002)
