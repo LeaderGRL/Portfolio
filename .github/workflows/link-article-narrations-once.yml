@@ -1,0 +1,78 @@
+name: Link article narrations once
+
+on:
+  push:
+    branches:
+      - fix/article-narration-links
+    paths:
+      - .github/workflows/link-article-narrations-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  link-narrations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/article-narration-links
+          fetch-depth: 0
+
+      - name: Add narration frontmatter
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          narrations = {
+              "content/articles/01-ecs-entity-management.md": "/media/narration/01-ecs-entity-management.mp3",
+              "content/articles/02-ecs-rust-data-oriented-design.md": "/media/narration/02-ecs-rust-data-oriented-design.mp3",
+              "content/articles/03-cpu-cache-optimization.md": "/media/narration/03-cpu-cache-optimization.mp3",
+              "content/articles/04-graph-algorithms-rust.md": "/media/narration/04-graph-algorithms-rust.mp3",
+              "content/articles/06-parallax-cards-rive.md": "/media/narration/06-parallax-cards-rive.mp3",
+          }
+
+          for article_path, narration_path in narrations.items():
+              path = Path(article_path)
+              text = path.read_text(encoding="utf-8")
+
+              if not text.startswith("---\n"):
+                  raise SystemExit(f"Missing frontmatter opener: {article_path}")
+
+              closing = text.find("\n---\n", 4)
+              if closing == -1:
+                  raise SystemExit(f"Missing frontmatter closer: {article_path}")
+
+              frontmatter = text[:closing]
+              expected = f"narration: {narration_path}"
+
+              if expected in frontmatter:
+                  continue
+              if "\nnarration:" in frontmatter:
+                  raise SystemExit(f"Unexpected existing narration field: {article_path}")
+
+              text = text[:closing] + f"\n{expected}" + text[closing:]
+              path.write_text(text, encoding="utf-8")
+
+              audio = Path("public") / narration_path.removeprefix("/")
+              if not audio.is_file():
+                  raise SystemExit(f"Missing narration asset: {audio}")
+          PY
+
+      - name: Remove one-shot workflow
+        run: rm .github/workflows/link-article-narrations-once.yml
+
+      - name: Verify diff
+        run: |
+          git diff --check
+          git diff -- content/articles
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add content/articles .github/workflows/link-article-narrations-once.yml
+          git commit -m "Link article narrations"
+          git push origin HEAD:fix/article-narration-links
