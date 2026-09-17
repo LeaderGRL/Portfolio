@@ -1,5 +1,9 @@
 import { CrtCursorController } from './crt-cursor-controller.js'
-import { CRT_CURSOR_STATE } from './crt-cursor-state.js'
+import {
+  CRT_CURSOR_EVENT,
+  CRT_CURSOR_STATE,
+  transitionCursorState,
+} from './crt-cursor-state.js'
 
 const PROBE_CORNERS = [
   { left: '0', top: '0' },
@@ -74,6 +78,7 @@ export class CrtCursorRuntimeController extends CrtCursorController {
     this.lastSoftkeyFullscreen = Boolean(app?.state?.fullscreen)
     this.activeDomPhosphorScale = 1
     this.releasePhosphorScale = 1
+    this.awaitFreshPointer = false
     this.removeTubeQuadFallback = installTubeQuadFallback(this.tube, this.document)
   }
 
@@ -82,7 +87,18 @@ export class CrtCursorRuntimeController extends CrtCursorController {
     this.softkeyHitTestDirty = true
   }
 
+  syncPowerState() {
+    if (this._powered()) return
+    this.awaitFreshPointer = true
+    this._forceNative()
+    this._resetReaction?.()
+  }
+
   handlePointerMove(event) {
+    const wasExternal = this.state === CRT_CURSOR_STATE.NATIVE_EXTERNAL
+    const external = event?.target?.tagName === 'IFRAME'
+    if (wasExternal && !external) this.motion.timeMs = null
+
     const fullscreen = Boolean(this.app?.state?.fullscreen)
     this.softkeyOverlayActive = Boolean(
       fullscreen
@@ -90,10 +106,47 @@ export class CrtCursorRuntimeController extends CrtCursorController {
     )
     this.lastSoftkeyFullscreen = fullscreen
     this.softkeyHitTestDirty = false
+    if (this._powered()) this.awaitFreshPointer = false
     super.handlePointerMove(event)
+
+    if (!this._powered() || !this._eligible()) return
+    if (external) {
+      if (this.state !== CRT_CURSOR_STATE.NATIVE_EXTERNAL) {
+        this._forceNative()
+        this._resetReaction?.()
+        this.state = transitionCursorState(this.state, CRT_CURSOR_EVENT.EXTERNAL_TAKEOVER)
+        this._syncDomState('external')
+      }
+      return
+    }
+
+    if (wasExternal && this.state === CRT_CURSOR_STATE.NATIVE_EXTERNAL) {
+      const inside = Boolean(this.edge?.inside)
+      this.state = transitionCursorState(
+        this.state,
+        inside ? CRT_CURSOR_EVENT.EXTERNAL_RETURN_INSIDE : CRT_CURSOR_EVENT.EXTERNAL_RETURN_OUTSIDE,
+      )
+      if (inside) {
+        this.zoneLatched = true
+        this._setOwnership(true)
+        this._renderActiveRepresentation(0, 0)
+      } else {
+        this._syncDomState('native')
+      }
+    }
   }
 
   frame(ms) {
+    if (!this._powered()) {
+      this.syncPowerState()
+      this.lastFrameMs = ms
+      return
+    }
+    if (this.awaitFreshPointer) {
+      this.lastFrameMs = ms
+      return
+    }
+
     const fullscreen = Boolean(this.app?.state?.fullscreen)
     if (fullscreen !== this.lastSoftkeyFullscreen) {
       this.lastSoftkeyFullscreen = fullscreen
