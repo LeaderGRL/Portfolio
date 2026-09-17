@@ -1,7 +1,7 @@
 import { fullscreenLayout } from './fullscreen-layout.js'
 import { aspectRatio, fittedRect } from './layout-engine.js'
 import { COLS, ROWS, SRC_H, SRC_W, now } from './core.js'
-import { CRT } from './crt.js'
+import { CRT } from './crt-reactive.js'
 import { bindAssets, bindTilt } from './panel.js'
 import { Rasteriser, Terminal } from './terminal.js'
 import { InputController } from './controllers/input-controller.js'
