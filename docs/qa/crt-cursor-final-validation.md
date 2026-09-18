@@ -20,7 +20,7 @@ The throwaway prototype modules are absent from the integration tree. Production
 | AC-002 | `tests/node/runtime/crt-cursor-foundation.test.js` validates the squircle aperture/magnetic zone; final E2E enters Absorption from outside the visible aperture. |
 | AC-003 | `tests/e2e/crt-cursor-handoff.spec.js` checks the DOM cursor tip against the real pointer to sub-pixel tolerance. |
 | AC-004 | Final E2E oscillates rapidly inside the hysteresis band, asserts `zoneLatched` remains true after every move, then retreats beyond it and proves the latch releases without Snap. |
-| AC-005 | Final E2E validates GPU hotspot UV alignment at the centre, four straight-edge positions and four curved-corner positions, then captures each rendered location with the cursor visible/hidden and proves significant cursor emission remains anchored to the browser hotspot; handoff E2E validates the SVG hotspot. |
+| AC-005 | Final E2E validates GPU hotspot UV alignment at the centre, four straight-edge positions and four curved-corner positions. It then compares cursor-visible/hidden WebGL framebuffer samples and independently places an invisible DOM probe in the transformed tube plane to prove the browser-composited hotspot still lands on the real pointer; handoff E2E validates the SVG hotspot. |
 | AC-006 | `tests/node/runtime/crt-cursor-foundation.test.js` covers the bounded 180–240 ms speed mapping. |
 | AC-007 | `crt-cursor-visual-regression.spec.js` includes deterministic mid-Absorption and pre-Snap baselines. |
 | AC-008 | `tests/node/runtime/crt-cursor-reaction.test.js` validates localized reaction math; visual baselines cover pre-Snap, recoil and click reaction states. |
@@ -50,7 +50,7 @@ Together these layers protect the accepted rule end-to-end: pointer motion never
 
 ## Deterministic visual review
 
-`tests/e2e/crt-cursor-visual-regression.spec.js` freezes both cursor model progression and chassis tilt before every screenshot instead of racing real animation time. Approved raster baselines cover:
+`tests/e2e/crt-cursor-visual-regression.spec.js` settles chassis tilt first while the cursor controller is still live, refreshes cursor geometry/rerenders against that final transform, and only then freezes both loops before each screenshot. Release uses the same pointer sample for tilt and cursor ownership before its deterministic 60 ms state is staged. Approved raster baselines cover:
 
 - mid-Absorption stretch;
 - pre-Snap squash/glass crossing;
@@ -65,7 +65,7 @@ Together these layers protect the accepted rule end-to-end: pointer motion never
 
 The captures use the same desktop Chromium visual-regression project as the existing physical-composition baselines. Cursor snapshots use an absolute diff budget small enough that removing the cursor cannot remain under the visual threshold. Interactive Lock and click impulse additionally compare lossless 64×64 cursor-focused crops before and after the injected state, so their subtler compression/emission changes are guarded independently of the broader JPEG baseline tolerance. Baselines are committed; CI never auto-approves changes.
 
-The final hotspot E2E adds a second rendered proof for AC-005: at the centre, four straight edges and four curved corners, it freezes model/tilt motion, captures the same local region with the GPU cursor visible and hidden, subtracts the two lossless images, and requires strong cursor pixels to remain within 3.25 CSS px of the real browser hotspot. This protects the shader/composite path as well as the controller's queued uniforms.
+The final hotspot E2E adds two independent rendered/geometry proofs for AC-005. At the centre, four straight edges and four curved corners, it renders cursor-visible and cursor-hidden states synchronously and samples the local WebGL framebuffer with `readPixels`, requiring strong cursor emission to remain anchored to the expected GPU hotspot. It then places a zero-size DOM probe at the same local tube UV and reads its viewport rect after the browser applies the real machine perspective/tilt transform; that post-transform point must remain within 1.5 CSS px of the real pointer. Together these checks protect the shader/composite path, browser composition and the controller's queued uniforms without screenshot timing races.
 
 ## `master` → `cursor` integration audit
 
