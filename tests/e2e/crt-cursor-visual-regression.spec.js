@@ -98,15 +98,31 @@ async function activate(page, point) {
 async function freeze(page) {
   await page.evaluate(() => {
     const app = globalThis.__JG1500_APP__
-    app.cursorController.frame = () => {}
-    // Match the two settling RAFs this helper historically allowed, but run
-    // them synchronously before disabling tilt so the chassis cannot continue
-    // drifting after cursor geometry has been frozen.
-    if (app.tilt) {
+    const controller = app.cursorController
+
+    // Settle the chassis first, while the real controller can still refresh
+    // against the resulting perspective. Then rerender the current cursor
+    // representation from that fresh projection before freezing both loops.
+    if (app.tilt?.frame) {
       app.tilt.frame()
       app.tilt.frame()
-      app.tilt.frame = () => {}
     }
+    controller.refreshGeometry()
+
+    if (controller.state === 'CRT_ACTIVE') {
+      const gpu = app.crt.getCursorState()
+      controller._renderActiveRepresentation(
+        gpu.compression || 0,
+        gpu.recompositionStrength || 0,
+      )
+    } else if (controller.state === 'ABSORBING') {
+      const progress = controller.absorption?.progress || 0
+      controller._updateDomCursor(progress, 'absorb')
+      controller._absorb?.()
+    }
+
+    controller.frame = () => {}
+    if (app.tilt) app.tilt.frame = () => {}
   })
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
 }
@@ -301,15 +317,28 @@ for (const visualCase of [
   ['release', async page => {
     const points = await bootActive(page)
     await page.evaluate(point => {
-      const controller = globalThis.__JG1500_APP__.cursorController
-      controller.frame = () => {}
-      const now = performance.now()
-      controller.handlePointerMove({
+      const app = globalThis.__JG1500_APP__
+      const controller = app.cursorController
+
+      // Feed the same pointer sample to both the tilt listener and the cursor
+      // controller, settle the transform, then refresh geometry before staging
+      // the deterministic 60 ms Release frame.
+      dispatchEvent(new PointerEvent('pointermove', {
         clientX: point.x,
         clientY: point.y,
-        timeStamp: now,
         pointerType: 'mouse',
-      })
+        bubbles: true,
+        isPrimary: true,
+      }))
+      if (app.tilt?.frame) {
+        app.tilt.frame()
+        app.tilt.frame()
+      }
+      controller.refreshGeometry()
+      controller.frame = () => {}
+      if (app.tilt) app.tilt.frame = () => {}
+
+      const now = performance.now()
       if (controller.state !== 'CRT_ACTIVE') throw new Error(`Expected CRT_ACTIVE before Release, got ${controller.state}`)
       controller._startRelease(now)
       controller.release.startedAtMs = now - 60
@@ -317,7 +346,7 @@ for (const visualCase of [
       controller._release(now)
     }, points.release)
     await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'RELEASING')
-    await freeze(page)
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
   }],
   ['crt-off-active', async page => {
     await bootActive(page)
