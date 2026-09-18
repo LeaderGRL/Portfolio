@@ -99,19 +99,22 @@ async function freeze(page) {
   await page.evaluate(() => {
     const app = globalThis.__JG1500_APP__
     const controller = app.cursorController
-
-    // Settle the chassis first, then rebuild both projection and pointer-edge
-    // geometry against that exact transform before freezing either loop.
-    if (app.tilt?.frame) {
-      app.tilt.frame()
-      app.tilt.frame()
-    }
-    controller.refreshGeometry()
     const motion = controller.motion
+
+    // Visual baselines use an explicit pointer-derived chassis pose instead of
+    // sampling an in-flight tilt lerp. That makes projection/edge geometry
+    // independent of how many RAFs happened before Playwright reached freeze().
+    const px = Math.max(-1, Math.min(1, (motion.x / innerWidth) * 2 - 1))
+    const py = Math.max(-1, Math.min(1, (motion.y / innerHeight) * 2 - 1))
+    const root = document.documentElement.style
+    root.setProperty('--px', px.toFixed(3))
+    root.setProperty('--py', py.toFixed(3))
+
+    controller.refreshGeometry()
     controller.handlePointerMove({
       clientX: motion.x,
       clientY: motion.y,
-      timeStamp: motion.timeMs ?? performance.now(),
+      timeStamp: performance.now(),
       pointerType: controller.pointerType || 'mouse',
       target: document.elementFromPoint(motion.x, motion.y),
     })
@@ -334,30 +337,21 @@ for (const visualCase of [
       const app = globalThis.__JG1500_APP__
       const controller = app.cursorController
 
-      // Feed the same pointer sample to both the tilt listener and the cursor
-      // controller, settle the transform, then refresh geometry before staging
-      // the deterministic 60 ms Release frame.
-      dispatchEvent(new PointerEvent('pointermove', {
-        clientX: point.x,
-        clientY: point.y,
-        pointerType: 'mouse',
-        bubbles: true,
-        isPrimary: true,
-      }))
-      if (app.tilt?.frame) {
-        app.tilt.frame()
-        app.tilt.frame()
-      }
+      // Snap the visual-test chassis to the pointer-derived pose, then rebuild
+      // projection and edge from the same sample before staging Release.
+      const px = Math.max(-1, Math.min(1, (point.x / innerWidth) * 2 - 1))
+      const py = Math.max(-1, Math.min(1, (point.y / innerHeight) * 2 - 1))
+      const root = document.documentElement.style
+      root.setProperty('--px', px.toFixed(3))
+      root.setProperty('--py', py.toFixed(3))
       controller.refreshGeometry()
-      // Re-sample the same pointer after the transform settles so signed
-      // distance and inward normal match the refreshed projection.
-      dispatchEvent(new PointerEvent('pointermove', {
+      controller.handlePointerMove({
         clientX: point.x,
         clientY: point.y,
+        timeStamp: performance.now(),
         pointerType: 'mouse',
-        bubbles: true,
-        isPrimary: true,
-      }))
+        target: document.elementFromPoint(point.x, point.y),
+      })
 
       if (controller.state !== 'CRT_ACTIVE') throw new Error(`Expected CRT_ACTIVE before Release, got ${controller.state}`)
       controller.recompose = null
