@@ -115,6 +115,33 @@ async function activateAt(page, point) {
   )
 }
 
+async function browserCompositedHotspotError(page, hotspotUv, pointer) {
+  return page.evaluate(({ hotspot, expectedPointer }) => {
+    const tube = document.querySelector('#tube')
+    if (!tube) throw new Error('CRT tube unavailable for composited hotspot probe')
+
+    // The probe lives in the same transformed tube plane as the WebGL canvas.
+    // Reading its viewport rect asks the browser for the final perspective/tilt
+    // composition independently of the cursor controller's homography.
+    const probe = document.createElement('span')
+    probe.setAttribute('aria-hidden', 'true')
+    Object.assign(probe.style, {
+      position: 'absolute',
+      left: `${hotspot.x * tube.offsetWidth}px`,
+      top: `${(1 - hotspot.y) * tube.offsetHeight}px`,
+      width: '0',
+      height: '0',
+      pointerEvents: 'none',
+      visibility: 'hidden',
+    })
+    tube.appendChild(probe)
+    const rect = probe.getBoundingClientRect()
+    probe.remove()
+
+    return Math.hypot(rect.left - expectedPointer.x, rect.top - expectedPointer.y)
+  }, { hotspot: hotspotUv, expectedPointer: pointer })
+}
+
 async function measureRenderedCursorAtHotspot(page, hotspotUv) {
   return page.evaluate(expected => {
     const app = globalThis.__JG1500_APP__
@@ -246,6 +273,12 @@ test('GPU hotspot remains aligned at centre, straight edges and all curved corne
     expect(rendered.changedPixels, `${sample.name} should render visible cursor pixels`).toBeGreaterThan(6)
     expect(rendered.hotspotPeak, `${sample.name} should render cursor energy at the browser hotspot`).toBeGreaterThanOrEqual(12)
     expect(rendered.nearestStrongPx, `${sample.name} rendered cursor tip should stay on the browser hotspot`).toBeLessThan(3.25)
+
+    const compositedError = await browserCompositedHotspotError(page, sample.hotspotUv, sample.point)
+    expect(
+      compositedError,
+      `${sample.name} browser-composited hotspot should stay on the real pointer`,
+    ).toBeLessThan(1.5)
   }
 })
 
