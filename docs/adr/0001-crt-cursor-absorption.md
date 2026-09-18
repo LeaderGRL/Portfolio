@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-16
-- **Branch:** `prototype/crt-cursor-visuals`
+- **Branch:** `cursor`
 - **Scope:** Desktop fine-pointer interaction on the JG-1500 chassis and powered CRT
 
 ## Context
