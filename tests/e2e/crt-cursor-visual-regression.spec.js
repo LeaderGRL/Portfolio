@@ -259,6 +259,17 @@ async function prepareAbsorption(page, progress, pointName) {
   await freeze(page)
   await page.evaluate(value => {
     const controller = globalThis.__JG1500_APP__.cursorController
+
+    // Absorption visuals must not depend on Playwright event timing. Pin the
+    // filtered pointer speed to rest before rendering the injected progress;
+    // direction remains the last stable movement angle.
+    controller.motion.speedPxPerMs = 0
+    controller.motion.speedPendingDistancePx = 0
+    controller.motion.speedReferenceX = controller.motion.x
+    controller.motion.speedReferenceY = controller.motion.y
+    controller.motion.speedReferenceTimeMs = controller.motion.timeMs
+    controller.lastFrameMs = controller.motion.timeMs
+
     controller.absorption.progress = value
     controller.absorption.reversing = false
     controller._updateDomCursor(value, 'absorb')
