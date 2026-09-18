@@ -111,6 +111,7 @@ async function pinVisualGeometry(page, point = null) {
     root.setProperty('--py', py.toFixed(3))
     controller.frame = () => {}
     if (app.tilt) app.tilt.frame = () => {}
+    if (app.renderController) app.renderController.frame = () => {}
   }, point)
 
   // Let style/compositor state catch up before measuring transformed geometry.
@@ -164,6 +165,36 @@ async function waitForGpuHotspot(page, hotspotUv) {
       Math.abs(gpu.hotspotUv.y - expected.y),
     )
   }, hotspotUv)).toBeLessThan(0.002)
+}
+
+async function renderStableCursorFrame(page, { clearPersistence = true, passes = 2 } = {}) {
+  await page.evaluate(({ shouldClear, renderPasses }) => {
+    const app = globalThis.__JG1500_APP__
+    const pipeline = app.displayPipeline
+    if (!app.crt?.ok) throw new Error('Stable cursor visual render requires WebGL CRT')
+
+    // Mirror the VISUAL_TEST state pinning normally performed by RenderController,
+    // then render a fixed number of passes from a known phosphor history.
+    app.state.power = app.state.powerTarget
+    app.state.crt = app.state.crtTarget
+    app.state.degauss = 0
+    app.state.static = 0
+    app.state.warm = 1
+    app.state.time = 42
+    app.dirty = false
+
+    if (shouldClear) {
+      if (typeof pipeline?._clearPersistence !== 'function') {
+        throw new Error('DisplayPipeline persistence reset unavailable')
+      }
+      pipeline._clearPersistence()
+    }
+
+    for (let index = 0; index < renderPasses; index += 1) {
+      app.crt.render(app.state, false)
+    }
+    app.crt.gl?.finish?.()
+  }, { shouldClear: clearPersistence, renderPasses: passes })
 }
 
 async function captureCursorCrop(page, point) {
@@ -223,9 +254,10 @@ async function cursorCropDifference(page, before, after) {
 }
 
 async function assertFocusedCursorStateChange(page, point, mutate, label) {
+  await renderStableCursorFrame(page)
   const before = await captureCursorCrop(page, point)
   await mutate()
-  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  await renderStableCursorFrame(page)
   const after = await captureCursorCrop(page, point)
   const difference = await cursorCropDifference(page, before, after)
   expect(difference.changedPixels, `${label} must change the rendered cursor footprint`).toBeGreaterThan(8)
@@ -233,6 +265,8 @@ async function assertFocusedCursorStateChange(page, point, mutate, label) {
 }
 
 async function captureVisual(page, name) {
+  await renderStableCursorFrame(page)
+
   let pointer
   if (name === 'active-curved-boundary' || name === 'release') {
     const points = await visualGeometry(page)
@@ -292,9 +326,6 @@ async function prepareAbsorption(page, progress, pointName) {
     controller._absorb()
   }, progress)
 
-  // Cursor/tilt progression is frozen above; these RAFs only guarantee that
-  // the normal RenderController has composited the injected reaction state.
-  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
 }
 
 async function bootActive(page, pointName = 'center') {
