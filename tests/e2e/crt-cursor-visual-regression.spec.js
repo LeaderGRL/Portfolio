@@ -95,29 +95,49 @@ async function activate(page, point) {
   await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'CRT_ACTIVE')
 }
 
-async function freeze(page) {
-  await page.evaluate(() => {
+async function pinVisualGeometry(page, point = null) {
+  await page.evaluate(target => {
     const app = globalThis.__JG1500_APP__
     const controller = app.cursorController
-    const motion = controller.motion
+    const x = target?.x ?? controller.motion.x
+    const y = target?.y ?? controller.motion.y
 
-    // Visual baselines use an explicit pointer-derived chassis pose instead of
-    // sampling an in-flight tilt lerp. That makes projection/edge geometry
-    // independent of how many RAFs happened before Playwright reached freeze().
-    const px = Math.max(-1, Math.min(1, (motion.x / innerWidth) * 2 - 1))
-    const py = Math.max(-1, Math.min(1, (motion.y / innerHeight) * 2 - 1))
+    // Pin the visual-test chassis to an explicit pointer-derived pose and stop
+    // both animation loops before yielding to the browser compositor.
+    const px = Math.max(-1, Math.min(1, (x / innerWidth) * 2 - 1))
+    const py = Math.max(-1, Math.min(1, (y / innerHeight) * 2 - 1))
     const root = document.documentElement.style
     root.setProperty('--px', px.toFixed(3))
     root.setProperty('--py', py.toFixed(3))
+    controller.frame = () => {}
+    if (app.tilt) app.tilt.frame = () => {}
+  }, point)
+
+  // Let style/compositor state catch up before measuring transformed geometry.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+
+  await page.evaluate(target => {
+    const controller = globalThis.__JG1500_APP__.cursorController
+    const x = target?.x ?? controller.motion.x
+    const y = target?.y ?? controller.motion.y
 
     controller.refreshGeometry()
     controller.handlePointerMove({
-      clientX: motion.x,
-      clientY: motion.y,
+      clientX: x,
+      clientY: y,
       timeStamp: performance.now(),
       pointerType: controller.pointerType || 'mouse',
-      target: document.elementFromPoint(motion.x, motion.y),
+      target: document.elementFromPoint(x, y),
     })
+  }, point)
+}
+
+async function freeze(page) {
+  await pinVisualGeometry(page)
+
+  await page.evaluate(() => {
+    const app = globalThis.__JG1500_APP__
+    const controller = app.cursorController
 
     if (controller.state === 'CRT_ACTIVE') {
       // Normal active-state baselines must not inherit scheduling-dependent
@@ -132,11 +152,7 @@ async function freeze(page) {
       controller._updateDomCursor(progress, 'absorb')
       controller._absorb?.()
     }
-
-    controller.frame = () => {}
-    if (app.tilt) app.tilt.frame = () => {}
   })
-  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
 }
 
 async function waitForGpuHotspot(page, hotspotUv) {
@@ -344,25 +360,10 @@ for (const visualCase of [
   }],
   ['release', async page => {
     const points = await bootActive(page)
-    await page.evaluate(point => {
+    await pinVisualGeometry(page, points.release)
+    await page.evaluate(() => {
       const app = globalThis.__JG1500_APP__
       const controller = app.cursorController
-
-      // Snap the visual-test chassis to the pointer-derived pose, then rebuild
-      // projection and edge from the same sample before staging Release.
-      const px = Math.max(-1, Math.min(1, (point.x / innerWidth) * 2 - 1))
-      const py = Math.max(-1, Math.min(1, (point.y / innerHeight) * 2 - 1))
-      const root = document.documentElement.style
-      root.setProperty('--px', px.toFixed(3))
-      root.setProperty('--py', py.toFixed(3))
-      controller.refreshGeometry()
-      controller.handlePointerMove({
-        clientX: point.x,
-        clientY: point.y,
-        timeStamp: performance.now(),
-        pointerType: 'mouse',
-        target: document.elementFromPoint(point.x, point.y),
-      })
 
       if (controller.state !== 'CRT_ACTIVE') throw new Error(`Expected CRT_ACTIVE before Release, got ${controller.state}`)
       controller.recompose = null
@@ -370,17 +371,14 @@ for (const visualCase of [
       controller.seed = null
       controller._resetReaction?.()
       controller._renderActiveRepresentation(0, 0)
-      controller.frame = () => {}
-      if (app.tilt) app.tilt.frame = () => {}
 
       const now = performance.now()
       controller._startRelease(now)
       controller.release.startedAtMs = now - 60
       controller._frameRelease(now)
       controller._release(now)
-    }, points.release)
+    })
     await expect(page.locator('#tube')).toHaveAttribute('data-crt-cursor-state', 'RELEASING')
-    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
   }],
   ['crt-off-active', async page => {
     await bootActive(page)
