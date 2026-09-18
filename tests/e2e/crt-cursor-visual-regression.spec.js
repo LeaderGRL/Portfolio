@@ -100,21 +100,30 @@ async function freeze(page) {
     const app = globalThis.__JG1500_APP__
     const controller = app.cursorController
 
-    // Settle the chassis first, while the real controller can still refresh
-    // against the resulting perspective. Then rerender the current cursor
-    // representation from that fresh projection before freezing both loops.
+    // Settle the chassis first, then rebuild both projection and pointer-edge
+    // geometry against that exact transform before freezing either loop.
     if (app.tilt?.frame) {
       app.tilt.frame()
       app.tilt.frame()
     }
     controller.refreshGeometry()
+    const motion = controller.motion
+    controller.handlePointerMove({
+      clientX: motion.x,
+      clientY: motion.y,
+      timeStamp: motion.timeMs ?? performance.now(),
+      pointerType: controller.pointerType || 'mouse',
+      target: document.elementFromPoint(motion.x, motion.y),
+    })
 
     if (controller.state === 'CRT_ACTIVE') {
-      const gpu = app.crt.getCursorState()
-      controller._renderActiveRepresentation(
-        gpu.compression || 0,
-        gpu.recompositionStrength || 0,
-      )
+      // Normal active-state baselines must not inherit scheduling-dependent
+      // Snap recomposition/recoil. Dedicated cases stage those effects later.
+      controller.recompose = null
+      controller.recoil = null
+      controller.seed = null
+      controller._resetReaction?.()
+      controller._renderActiveRepresentation(0, 0)
     } else if (controller.state === 'ABSORBING') {
       const progress = controller.absorption?.progress || 0
       controller._updateDomCursor(progress, 'absorb')
@@ -299,20 +308,25 @@ for (const visualCase of [
   ['click-impulse', async page => {
     const points = await bootActive(page)
     await freeze(page)
+    // Prove the cursor's own click/compression rendering first, with glass
+    // reaction still neutral, so source warping cannot satisfy this assertion.
     await assertFocusedCursorStateChange(page, points.center, () => page.evaluate(() => {
-      const app = globalThis.__JG1500_APP__
-      const controller = app.cursorController
-      app.crt.setCursorState({
+      globalThis.__JG1500_APP__.crt.setCursorState({
         compression: 0.13,
         hoverIntensity: 0.48,
         clickImpulse: 0.52,
       })
+    }), 'click impulse')
+    // The approved full baseline still includes the coupled local glass pulse.
+    await page.evaluate(() => {
+      const app = globalThis.__JG1500_APP__
+      const controller = app.cursorController
       controller._applyReaction(controller._placement(), {
         strength: 0.14,
         submergedStrength: 0.08,
         recoilStrength: 0.04,
       }, 'interaction')
-    }), 'click impulse')
+    })
   }],
   ['release', async page => {
     const points = await bootActive(page)
@@ -335,11 +349,26 @@ for (const visualCase of [
         app.tilt.frame()
       }
       controller.refreshGeometry()
+      // Re-sample the same pointer after the transform settles so signed
+      // distance and inward normal match the refreshed projection.
+      dispatchEvent(new PointerEvent('pointermove', {
+        clientX: point.x,
+        clientY: point.y,
+        pointerType: 'mouse',
+        bubbles: true,
+        isPrimary: true,
+      }))
+
+      if (controller.state !== 'CRT_ACTIVE') throw new Error(`Expected CRT_ACTIVE before Release, got ${controller.state}`)
+      controller.recompose = null
+      controller.recoil = null
+      controller.seed = null
+      controller._resetReaction?.()
+      controller._renderActiveRepresentation(0, 0)
       controller.frame = () => {}
       if (app.tilt) app.tilt.frame = () => {}
 
       const now = performance.now()
-      if (controller.state !== 'CRT_ACTIVE') throw new Error(`Expected CRT_ACTIVE before Release, got ${controller.state}`)
       controller._startRelease(now)
       controller.release.startedAtMs = now - 60
       controller._frameRelease(now)
