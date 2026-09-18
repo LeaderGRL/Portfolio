@@ -291,6 +291,10 @@ async function prepareAbsorption(page, progress, pointName) {
     controller._updateDomCursor(value, 'absorb')
     controller._absorb()
   }, progress)
+
+  // Cursor/tilt progression is frozen above; these RAFs only guarantee that
+  // the normal RenderController has composited the injected reaction state.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
 }
 
 async function bootActive(page, pointName = 'center') {
