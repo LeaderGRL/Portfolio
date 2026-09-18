@@ -18,7 +18,19 @@ async function bootCursorPage(page) {
     const app = globalThis.__JG1500_APP__
     return Boolean(app && app.reveal >= app.revealTarget)
   })).toBe(true)
+
+  // Cursor visual baselines use one explicit neutral chassis pose. Real
+  // perspective/tilt composition is covered independently by the hotspot E2E;
+  // keeping tilt fixed here prevents test geometry from depending on boot RAFs.
+  await page.evaluate(() => {
+    const app = globalThis.__JG1500_APP__
+    const root = document.documentElement.style
+    root.setProperty('--px', '0.000')
+    root.setProperty('--py', '0.000')
+    if (app.tilt) app.tilt.frame = () => {}
+  })
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  await page.evaluate(() => globalThis.__JG1500_APP__.cursorController.refreshGeometry())
 }
 
 async function requireGpuCursor(page) {
@@ -96,23 +108,16 @@ async function activate(page, point) {
 }
 
 async function pinVisualGeometry(page, point = null) {
-  await page.evaluate(target => {
+  await page.evaluate(() => {
     const app = globalThis.__JG1500_APP__
     const controller = app.cursorController
-    const x = target?.x ?? controller.motion.x
-    const y = target?.y ?? controller.motion.y
 
-    // Pin the visual-test chassis to an explicit pointer-derived pose and stop
-    // both animation loops before yielding to the browser compositor.
-    const px = Math.max(-1, Math.min(1, (x / innerWidth) * 2 - 1))
-    const py = Math.max(-1, Math.min(1, (y / innerHeight) * 2 - 1))
-    const root = document.documentElement.style
-    root.setProperty('--px', px.toFixed(3))
-    root.setProperty('--py', py.toFixed(3))
+    // Chassis tilt is already pinned to the neutral visual-test pose at boot.
+    // Freeze cursor/render progression before refreshing geometry below.
     controller.frame = () => {}
     if (app.tilt) app.tilt.frame = () => {}
     if (app.renderController) app.renderController.frame = () => {}
-  }, point)
+  })
 
   // Let style/compositor state catch up before measuring transformed geometry.
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
